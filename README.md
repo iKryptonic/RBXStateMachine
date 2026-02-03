@@ -38,15 +38,15 @@ This framework enforces a clean separation of concerns through four core compone
 ## 🚀 Quick Installation
 
 1.  Sync this repository into your project using **Rojo**.
-2.  Maintain the required folder hierarchy for components:
+2.  Standard Roblox hierarchy for components (required by Factory):
     ```text
-    ReplicatedStorage/FSM_Components
+    ReplicatedStorage
     ├── Entity/
     └── StateMachine/
     ```
 3.  Initialize on both Server and Client:
     ```lua
-    local FSM = require(ReplicatedStorage.Packages.RBXStateMachine)
+    local FSM = require(ReplicatedStorage.RBXStateMachine)
     FSM.Orchestrator:RegisterComponents()
     ```
 

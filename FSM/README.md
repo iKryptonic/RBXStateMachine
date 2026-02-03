@@ -732,41 +732,41 @@ fsm:AddSubMachine("SubTask", CleaningJob, {
 })
 ```
 
-#### `Orchestrator:PoolEntity(entityId)`
+#### `Orchestrator.PoolEntity(entityId)`
 Deactivates an entity and adds it to an internal pool for later reuse. This is more efficient than `Destroy` for frequently spawned objects.
 - **entityId**: `string`
 
-#### `Orchestrator:GetPooledEntity(params)`
+#### `Orchestrator.GetPooledEntity(params)`
 Retrieves an entity from the pool if available, otherwise creates a new one.
 - **params**: Same as `CreateEntity`.
 
-#### `Orchestrator:SendCommand(entityId, command, ...)`
+#### `Orchestrator.SendCommand(entityId, command, ...)`
 (Client Only) Sends a command to the server for a specific entity.
 - **entityId**: `string`
 - **command**: `string`
 - **...**: Variable arguments.
 
-#### `Orchestrator:RegisterCommandHandler(entityId, command, handler)`
+#### `Orchestrator.RegisterCommandHandler(entityId, command, handler)`
 (Server Only) Registers a listener for commands sent from the client.
 - **entityId**: `string`
 - **command**: `string`
 - **handler**: `function(player, ...any)`
 
-#### `Orchestrator:RegisterEventBus(name)`
+#### `Orchestrator.RegisterEventBus(name)`
 Creates a new local event bus (Signal).
 - **name**: `string`
 - **Returns**: `Signal` object.
 
-#### `Orchestrator:FireEventBus(name, ...)`
+#### `Orchestrator.FireEventBus(name, ...)`
 Fires a local event bus by name.
 
-#### `Orchestrator:AwaitEventBus(name, timeout?)`
+#### `Orchestrator.AwaitEventBus(name, timeout?)`
 Yields the current thread until an event bus with the specified name is registered.
 - **name**: `string`
 - **timeout**: `number?` (seconds)
 - **Returns**: `Signal` object or `nil` if timed out.
 
-#### `Orchestrator:RetryStateMachine(id)`
+#### `Orchestrator.RetryStateMachine(id)`
 Destroys and recreates a StateMachine by its ID, preserving its current `Context`.
 
 #### `fsm:Manage(object)`
@@ -967,7 +967,7 @@ The `Orchestrator` provides a built-in event bus system for decoupled communicat
 
 ```lua
 -- Register a bus
-local bus = Orchestrator:RegisterEventBus("GlobalAlert")
+local bus = Orchestrator.RegisterEventBus("GlobalAlert")
 
 -- Subscribe
 bus:Connect(function(msg)
@@ -975,10 +975,10 @@ bus:Connect(function(msg)
 end)
 
 -- Fire from anywhere
-Orchestrator:FireEventBus("GlobalAlert", "Invasion started!")
+Orchestrator.FireEventBus("GlobalAlert", "Invasion started!")
 
 -- Yield for registration (useful for race conditions)
-local bus = Orchestrator:AwaitEventBus("GlobalAlert", 5)
+local bus = Orchestrator.AwaitEventBus("GlobalAlert", 5)
 ```
 
 For networked events, you can use the `SendCommand` / `RegisterCommandHandler` pattern or regular `RemoteEvents`.
