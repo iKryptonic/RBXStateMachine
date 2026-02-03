@@ -1,8 +1,10 @@
 # Architecture
 
-This framework integrates the Brain, Body, Pulse, and Nervous System of your project into a single, high-performance lifecycle.
+This framework integrates the **Brain**, **Body**, **Pulse**, and **Nervous System** of your project into a single, high-performance lifecycle.
 
-## The 4 Pillars
+---
+
+## 🏗️ The 4 Pillars
 
 | Component | Layer | Role | Analog |
 | :--- | :--- | :--- | :--- |
@@ -11,46 +13,82 @@ This framework integrates the Brain, Body, Pulse, and Nervous System of your pro
 | **BaseEntity** | Data | State authority and Instance proxy | The Body |
 | **Scheduler** | Timing | Async execution and frame budgeting | The Pulse |
 
-## System Bootstrapping (Initialization)
+```mermaid
+graph TD
+    subgraph "Nervous System"
+        O[Orchestrator]
+    end
 
-Everything begins with the **Orchestrator**. Upon game start, the Orchestrator performs a “Discovery” phase:
+    subgraph "The Pulse"
+        S[Scheduler]
+    end
 
-1. It scans your folders for Entity and StateMachine modules.
-2. It injects the Scheduler, Logger, and Signal into the shared global space.
-3. It creates a network bridge (RemoteFunctions) so that the Server can talk to a debug console on the Client.
+    subgraph "The Agent"
+        FSM[BaseStateMachine]
+        E[BaseEntity]
+        I[Roblox Instance]
+    end
 
-## The Spawning Flow (Creation)
+    O -->|Spawns| FSM
+    O -->|Spawns| E
+    FSM -->|Controls| E
+    E -->|Wraps| I
+    S -->|Drives| FSM
+    S -->|DataStore Cycle| O
+```
 
-When spawning objects, the systems work in a “Body-First, Brain-Second” sequence:
+---
 
-1. **Entity Creation**: `Orchestrator.CreateEntity` creates a proxy for the physical model. It enforces a strict Schema.
-2. **Brain Creation**: `Orchestrator.CreateStateMachine` is created to control that entity.
-3. **The Link**: The Orchestrator passes the Entity into the Brain's Context. The Brain now has a Body to control.
+## 🛰️ System Bootstrapping (Initialization)
 
-## The Runtime Loop (Execution)
+Everything begins with the **Orchestrator**. Upon game start, the Orchestrator performs a **Discovery** phase:
 
-1. **Decision (Brain)**: The FSM or BT decides on an action.
-2. **Instruction (Brain -> Body)**: The FSM sets schema fields on the Entity.
-3. **Validation (Body)**: The Entity checks the Schema and stages the value.
-4. **Transaction (Commit)**: The FSM calls `Entity:UpdateEntity()`.
-5. **Execution (Pulse)**: The Scheduler enforces a frame budget to avoid spikes.
+1.  **Registry Compile**: Scans your folders for Entity and StateMachine registry modules.
+2.  **Global Injection**: Injects the Scheduler, Logger, and Signal into the `shared` namespace.
+3.  **Bridge Creation**: Creates the network bridge (Remotes) for replication and the Service Manager.
 
-## Architecture Concepts
+> [!IMPORTANT]
+> `Orchestrator:RegisterComponents()` must be called on both the Server and Client for shared modules to correctly resolve class names.
 
-1. **StateMachine**: The controller that manages the current state, transitions, and lifecycle.
-2. **Context**: A shared table (`fsm.Context`) used to store data accessible by all states.
-3. **Entity Pattern**: The FSM should handle logic (decisions), while an external Entity class handles mechanisms (visuals, physics, tweens).
-4. **Sub-Machine**: A child FSM running inside a state of a parent FSM.
+---
 
-## Best Practices
+## 🧬 The Spawning Flow (Creation)
 
-1. Use `fsm.Context` instead of globals.
-2. Use priorities: UI FSMs at `Render`, background AI at `Low`.
-3. Always use `self:Manage(...)` for cleanup.
-4. Avoid recursive self-transitions inside `OnEnter` without a delay/condition.
-5. Keep `ApplyChanges` context-safe: it may run on server (commit) and on client (replication).
+When spawning objects, the systems work in a **Body-First, Brain-Second** sequence:
 
-Client-only visuals in `ApplyChanges` should be guarded:
+1.  **Body Creation**: `Orchestrator.CreateEntity` creates a proxy for the physical model and enforces a strict Schema.
+2.  **Brain Creation**: `Orchestrator.CreateStateMachine` is created to control that entity.
+3.  **The Link**: The Orchestrator passes the Entity into the Brain's **Context**. The Brain now has a Body to control.
+
+---
+
+## ⚡ The Runtime Loop (Execution)
+
+1.  **Decision (Brain)**: The FSM or BT decides on an action.
+2.  **Instruction (Brain -> Body)**: The FSM sets schema fields on the Entity (e.g., `self.Entity.IsOpen = true`).
+3.  **Validation (Body)**: The Entity checks the Schema and stages the value in `Pending`.
+4.  **Transaction (Commit)**: The FSM calls `self.Entity:UpdateEntity()`.
+5.  **Execution (Pulse)**: The Scheduler ensures the update logic stays within the **Frame Budget**.
+
+> [!TIP]
+> Always use `self:Manage(obj)` inside your FSMs and Entities to ensure memory leaks are avoided during destruction.
+
+---
+
+## 📖 Architecture Concepts
+
+*   **StateMachine**: The high-level controller managing states and transitions.
+*   **Context**: A shared table (`fsm.Context`) used to store shared data.
+*   **Entity Pattern**: Separates logic (decisions) from mechanism (visuals/physics).
+*   **Sub-Machine**: Allows nesting complexity by running an FSM as a state of another FSM.
+
+---
+
+## ✅ Best Practices
+
+1.  **Use `fsm.Context`** instead of globals.
+2.  **Prioritize tasks**: Use `Render` for high-frequency UI/Visuals and `Low` for background AI.
+3.  **Guard Visuals**: Use `RunService:IsClient()` inside `ApplyChanges` for purely cosmetic updates.
 
 ```lua
 local RunService = game:GetService("RunService")
@@ -59,6 +97,6 @@ function MyEntity:ApplyChanges(changes)
     if not RunService:IsClient() then
         return
     end
-    -- visual-only application here
+    -- Apply visual-only changes (Tweens, ParticleEmitters, etc.)
 end
 ```

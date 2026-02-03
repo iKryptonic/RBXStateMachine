@@ -1,7 +1,24 @@
-* [Home](Home.md)
-* [Getting Started](Getting-Started.md)
-* [Registration Guide](Registration-Guide.md)
-* [Quick Start](Quick-Start.md)
-* [Architecture](Architecture.md)
-* [API Reference](API-Reference.md)
-* [Tests](Tests.md)
+### Basics
+* [Home](Home)
+* [Getting Started](Getting-Started)
+* [Quick Start](Quick-Start)
+
+---
+
+### Core Guides
+* [Architecture](Architecture)
+* [Registration Guide](Registration-Guide)
+* [Tests](Tests)
+
+---
+
+### API Reference
+* [Cheatsheet](API-Reference)
+* [Orchestrator](API-Orchestrator)
+* [StateMachine](API-BaseStateMachine)
+* [Entity](API-BaseEntity)
+* [Scheduler](API-Scheduler)
+* [Logger](API-Logger)
+* [Signal](API-Signal)
+* [BehaviorTree](API-BehaviorTree)
+* [Persistence](API-EntityPersistence)

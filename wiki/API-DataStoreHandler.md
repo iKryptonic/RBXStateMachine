@@ -8,9 +8,9 @@ Thin wrapper around `DataStoreService` with throttling, optional retries, and op
 
 Use `DataStoreHandler.get(...)` when you want a single place to manage datastore access patterns and error handling. It provides:
 
-- Best-effort throttling for write-heavy operations.
-- Optional retries for transient datastore failures.
-- Optional read caching for hot keys.
+- **Built-in Throttling**: Automatically enforces a **7-second cooldown** per key for write operations (`Set`, `Update`, `Increment`, `Remove`) to prevent `6-second` limit errors.
+- **Automatic Retries**: Optional exponential backoff for transient Roblox DataStore failures.
+- **Read Caching**: Optional TTL-based caching for frequent `GetAsync` calls.
 
 This is used by `EntityPersistence` (and therefore by Orchestrator persistence) to store entity state.
 

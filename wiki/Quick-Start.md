@@ -4,15 +4,16 @@ This quick start uses the **Factory + Registry + Implementation module** workflo
 
 ## 0) Roblox hierarchy
 
-Create this structure:
+Create this structure in `ReplicatedStorage`:
 
-- `ReplicatedStorage/SharedModules/Orchestrator` (this repo’s Orchestrator package)
-- `ReplicatedStorage/Entity/EntityRegistry`
-- `ReplicatedStorage/Entity/SpinningPartEntity`
-- `ReplicatedStorage/StateMachine/StateMachineRegistry`
-- `ReplicatedStorage/StateMachine/SpinJob`
+*   `SharedModules/Orchestrator`
+*   `Entity/EntityRegistry`
+*   `Entity/SpinningPartEntity`
+*   `StateMachine/StateMachineRegistry`
+*   `StateMachine/SpinJob`
 
-Also create a Part in `Workspace` named `SpinPart`.
+> [!NOTE]
+> Also create a Part in `Workspace` named **SpinPart** for this demo.
 
 ## 1) EntityRegistry
 

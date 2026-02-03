@@ -8,10 +8,12 @@ This repo is written for Roblox and is designed around a **Factory + Registry** 
 
 At runtime, `Orchestrator:RegisterComponents()`:
 
-1. Creates `shared.FSM` (and injects Logger/Signal/Scheduler modules into `shared`).
-2. Requires the internal Factory (bundled inside Orchestrator).
-3. Compiles your registered Entity/StateMachine definitions into classes.
-4. Exposes compiled classes in `shared.Entity` and `shared.StateMachine`.
+1.  **Shared Initialization**: Creates `shared.FSM` and injects Logger, Signal, and Scheduler.
+2.  **Factory Compilation**: Compiles registry definitions into classes.
+3.  **Namespace Exposure**: Exposes classes in `shared.Entity` and `shared.StateMachine`.
+
+> [!IMPORTANT]
+> The Factory expects a specific folder structure in `ReplicatedStorage`. Ensure your folders are named exactly as shown below.
 
 ### Minimal Roblox hierarchy (recommended)
 
@@ -68,7 +70,7 @@ Important: this framework's built-in networking is **observability + server→cl
 
 ### Terminology
 
-This project uses **“StateMachine”** as the runtime core class. Some gameplay code calls these **“Jobs”** (e.g. `DoorJob`).
+This project uses “StateMachine” as the runtime core class. Some gameplay code calls these “Jobs” (e.g. `DoorJob`).
 
 - **Registration**: the current implementation compiles definitions from `ReplicatedStorage/Entity/EntityRegistry` and `ReplicatedStorage/StateMachine/StateMachineRegistry`.
 - **Naming**: treat “Jobs” as a naming convention only; registration is driven by the registry tables.

@@ -39,6 +39,45 @@ Why use Entities instead of raw Instances?
 | `Manage` | `(obj: any): any` | Registers an object (Instance/Connection) for cleanup. |
 | `Destroy` | `(): ()` | Cleans up the Entity and its managed resources. |
 
+### ⚡ The `UpdateEntity` Lifecycle
+
+`UpdateEntity()` is transactional. Changes are not applied to the "official" data or replicated until you call it.
+
+1.  **Stage**: You set `entity.Health = 100`. The value is stored in a `Pending` table.
+2.  **Commit**: You call `entity:UpdateEntity()`.
+3.  **Validate**: The framework checks if the entity is valid and not locked by someone else.
+4.  **Authoritative Save**: `Data` is updated with `Pending` values.
+5.  **Visual Sync**: `ApplyChanges(changes)` is called.
+6.  **Broadcast**: (Server) Replicated fields are sent to clients.
+
+> [!NOTE]
+> `UpdateEntity` returns `false` if:
+> - The entity is destroyed (`IsValid == false`).
+> - The entity is locked by another `callerId`.
+> - There are no pending changes.
+> - The entity is "immutable" (subclass didn't override `ApplyChanges`).
+
+---
+
+### 🔒 Locking (Concurrency)
+
+Use `AcquireLock(id)` if you want to ensure no other system mutates your entity while you're performing a multi-step operation (like a long animation or a sequenced trade).
+
+```lua
+if entity:AcquireLock("AnimationSystem") then
+   entity.IsAnimating = true
+   entity:UpdateEntity("AnimationSystem")
+   
+   task.wait(2)
+   
+   entity.IsAnimating = false
+   entity:UpdateEntity("AnimationSystem")
+   entity:ReleaseLock("AnimationSystem")
+end
+```
+
+---
+
 Notes:
 
 - `UpdateEntity(...)` will fast-fail (and log) if there are no pending changes, if the entity is destroyed, if the caller doesn’t hold the lock (when locked), or if the entity is “immutable” (i.e. `ApplyChanges` was not overridden / made mutable).

@@ -39,18 +39,78 @@ Signals/events (these are `Signal` instances from this library):
 - `fsm.Cancelled:Fire()`
 - `fsm.StateChanged:Fire(newState: string, oldState: string?)`
 
-Internal (advanced; callable but intended for runtime use):
+### 🧠 State Types
 
-- `_Update(dt: number): ()` — tick invoked by the shared Heartbeat loop.
-- `_Teardown(): ()` — stops the machine and runs cleanup.
+#### 1. Function State (Simple)
+Best for fire-and-forget or instant logic.
+```lua
+fsm:AddState("Idle", function(fsm, arg1)
+    print("Entered Idle with", arg1)
+    fsm.State = "Patrol" -- Immediate transition
+end)
+```
 
-**Priorities:** `Render (1)`, `High (2)`, `Medium (5)`, `Low (10)`, `Background (30)`.
+#### 2. StateObject (Advanced)
+Best for logic that needs to run every frame or handle complex entry/exit.
+```lua
+fsm:AddState("Patrol", {
+    OnEnter = function(self, fsm) 
+        fsm.WaitSpan = 5 -- Stay here for 5s
+    end,
+    OnHeartbeat = function(self, fsm, dt)
+        -- Move towards next waypoint
+    end,
+    OnLeave = function(self, fsm)
+        -- Cleanup navigation paths
+    end,
+    Transitions = {
+        { TargetState = "Chase", Condition = function(fsm) return fsm.CanSeePlayer end }
+    }
+})
+```
 
-Transition rules:
+---
 
-- If `validStates` is provided (registry/class), `AddState` and `ChangeState` will reject unknown state names.
-- If a state was registered with a non-empty `validOutcomes` list, transitions out of that state are validated against the list.
-- Setting `fsm.State = "SomeState"` triggers `ChangeState({ Name = "SomeState" })` via `__newindex`.
+### ⏳ The `WaitSpan` System
+
+`fsm.WaitSpan` is a built-in timer for state transitions. 
+
+- When you set `fsm.WaitSpan = 5`, the machine will **block** all state transitions for 5 seconds.
+- Once the timer expires, the machine evaluates its next move (e.g., an automatic transition).
+- `WaitSpan` is automatically reset to `0` whenever `ChangeState` is successfully called.
+
+---
+
+### 🔗 Sub-Machines (HFSM)
+
+Use `AddSubMachine` to delegate logic to another class. The parent FSM will "pause" its own logic and wait for the child to finish.
+
+```lua
+fsm:AddSubMachine("Cleaning", RobotCleaningJob, {
+    InitialState = "Mop",
+    Transitions = {
+        OnCompleted = "Recharge", -- If sub-fsm calls :Finish()
+        OnFailed = "ErrorState",    -- If sub-fsm calls :Fail()
+    },
+    StoreReference = "ActiveJob" -- Access child via fsm.ActiveJob
+})
+```
+
+---
+
+### ⚖️ Priorities
+
+Defines how often `_Update(dt)` runs. Lower values = higher frequency.
+
+| Level | Value | Usage |
+| :--- | :--- | :--- |
+| **Render** | 1 | UI, Smooth Camera, Visual Effects |
+| **High** | 2 | Fast-paced combat AI |
+| **Medium** | 5 | Standard NPC behavior (Default) |
+| **Low** | 10 | Background environment logic |
+| **Background**| 30 | Telemetry, infrequent polling |
+
+---
 
 ### Extend vs new
 

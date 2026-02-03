@@ -47,6 +47,37 @@ Common patterns:
 | `AwaitEventBus` | `(name: string, timeout: number?): Signal?` | Yields until an event bus is registered or timeout is reached. |
 | `StartServiceManagerAPI` | `(): ()` | (Server) Public wrapper for starting the remote ServiceManager API (used by tests/manual startup). |
 
+### 📡 Event Bus (Decoupling)
+
+The Event Bus allows modules to communicate without needing direct `require` references. This is excellent for global events like `OnMatchStarted` or `OnWeatherChanged`.
+
+```lua
+-- Subscriber Module
+local bus = Orchestrator:AwaitEventBus("MatchEvents")
+bus:Connect(function(status)
+    print("Match status changed:", status)
+end)
+
+-- Publisher Module
+Orchestrator:FireEventBus("MatchEvents", "Started")
+```
+
+---
+
+### 🏊 Entity Pooling
+
+Pooling is essential for high-performance games where objects (bullets, effects, temporary NPCs) are created and destroyed frequently.
+
+1.  **Pool**: Call `Orchestrator:PoolEntity(id)`. This deactivates the entity and moves it to an internal stack.
+2.  **Reuse**: Call `Orchestrator:GetPooledEntity({ EntityClass = "MyBullet", ... })`. 
+    - If a bullet is in the pool, it is **reset and reactivated**.
+    - If the pool is empty, a **new** bullet is created.
+
+> [!TIP]
+> Use `PoolEntity` instead of `DeleteEntity` for any object that will likely be spawned again soon.
+
+---
+
 ## Client vs Server behavior
 
 `RegisterComponents()` is safe to call on both layers; it runs different initialization stages depending on `RunService:IsServer()` vs `RunService:IsClient()`.

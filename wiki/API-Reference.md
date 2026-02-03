@@ -17,6 +17,9 @@ This project is built around a **Factory + Registry** workflow:
 - `Orchestrator:RegisterComponents()` compiles those definitions into classes and exposes them as `shared.Entity.*` and `shared.StateMachine.*`.
 - You then (optionally) require “implementation modules” to attach methods like `ApplyChanges()` and `RegisterStates()`.
 
+> [!TIP]
+> Use the implementation modules to add behavior that only runs after the classes have been compiled by the Factory.
+
 ---
 
 ## ✅ Registration Guide (Quick)
@@ -153,6 +156,9 @@ Think of the Orchestrator as the “runtime kernel” of this package:
 - It wires up server → client replication for entity state, plus a request/command layer for client → server calls.
 
 In most games, you will call `Orchestrator:RegisterComponents()` during your startup/bootstrap and then interact with the Orchestrator for all creation/destruction.
+
+> [!IMPORTANT]
+> Authoritative changes should only be made on the **Server**. Clients will automatically receive updates for schema fields marked with `Replicate = true`.
 
 Common patterns:
 

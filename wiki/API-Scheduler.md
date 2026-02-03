@@ -42,8 +42,11 @@ Internal (advanced; used by the scheduler runtime):
 
 ### ⚖️ Task Fairness (Aging)
 
-To prevent **Priority Starvation**, the Scheduler implements an aging mechanism:
+To prevent **Priority Starvation** (where high-priority tasks block low-priority ones forever), the Scheduler uses an **Aging Factor**:
 
-- **Frame Budget**: Limits task launches to a specific duration.
-- **Aging Factor**: Deferred tasks gain an effective priority boost.
-- **FIFO tie-breaker**: Same effective priority executes in `NextRun` order.
+- **Frame Budget**: Default is `0.002` (2ms). If total execution time in a frame exceeds this, remaining tasks are deferred.
+- **Aging**: Every time a task is deferred, its "Effective Priority" increases.
+- **Tie-breaker**: If multiple tasks have the same priority, the one with the earliest `NextRun` (longest wait) runs first.
+
+> [!TIP]
+> You can tune the budget at runtime via `shared.FSM.Scheduler.Settings.FrameBudget = 0.005`.
