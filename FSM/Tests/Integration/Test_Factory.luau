@@ -49,7 +49,7 @@ function Test_Factory.Run()
 		end)
 		t:Assert(okLoad, "LoadSubclasses should not error")
 
-		if install.Cleanup then install.Cleanup() end
+		if install.Cleanup then install.OnCleanup() end
 	end)
 
 	return tester:PrintSummary()

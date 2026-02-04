@@ -24,7 +24,7 @@ function DummyEntity:ApplyChanges(changes)
 	end
 end
 
-function DummyEntity:Cleanup() end
+function DummyEntity:OnCleanup() end
 
 function DummyEntity:SetValue(value: number, label: string?)
 	self.Value = value

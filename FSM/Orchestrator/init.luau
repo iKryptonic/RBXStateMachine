@@ -700,7 +700,7 @@ local function SetSharedVariables()
 		StateMachines = StateMachines,
 		Entities = Entities,
 		Orchestrator = Orchestrator,
-		Scheduler = Scheduler.new(),
+		Scheduler = Scheduler.new(Settings.Scheduler),
 		BehaviorTree = BehaviorTree,
 		Logger = Logger,
 		Settings = Settings.FSMSettings,

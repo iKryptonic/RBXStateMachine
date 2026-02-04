@@ -62,7 +62,7 @@ function Test_Orchestrator_ServiceManager.Run()
 		})
 		function PersistEntity:GetContext() return {} end
 		function PersistEntity:ApplyChanges(_) end
-		function PersistEntity:Cleanup() end
+		function PersistEntity:OnCleanup() end
 
 		local part = Instance.new("Part")
 		part.Parent = workspace
