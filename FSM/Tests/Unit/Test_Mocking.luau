@@ -3,7 +3,7 @@
 -- @Author iKrypto
 -- @Description Unit tests demonstrating mock/spying usage.
 
-local TestBase = require(script:FindFirstChild("TestBase") :: any)
+local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
 local Mocker = require(script.Parent:WaitForChild("Mocks"):WaitForChild("Mocker") :: any)
 local EntityPersistence = require(game:FindFirstChild("EntityPersistence", true) :: any)
 
@@ -60,7 +60,7 @@ function Test_Mocking.Run()
 		local result = dependency:Send({ Id = "ABC" })
 		t:AssertEquals(result, "ABC", "Mock should return stubbed value")
 		t:AssertEquals(spy.CallCount, 1, "Mock should capture call count")
-		t:AssertEquals(spy.Calls[1][1].Id, "ABC", "Mock should capture payload")
+		t:AssertEquals(spy.Calls[1][2].Id, "ABC", "Mock should capture payload")
 
 		mocker:RestoreAll()
 	end)

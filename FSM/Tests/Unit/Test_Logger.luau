@@ -4,7 +4,7 @@
 -- @Description Unit tests for the Logger module.
 
 local Logger = require(game:FindFirstChild("Logger", true) :: any)
-local TestBase = require(script:FindFirstChild("TestBase") :: any)
+local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
 
 local Test_Logger = {}
 

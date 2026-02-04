@@ -657,8 +657,13 @@ function Orchestrator.AwaitEventBus(name: string, timeout: number?): any?
 			return nil
 		end
 
-		-- Wait for next registration
-		EventBusRegistered:Wait()
+		-- Calculate remaining time and wait with timeout
+		local remainingTime = timeout and (timeout - elapsed) or math.huge
+		if remainingTime > 0 then
+			task.wait(math.min(0.1, remainingTime))
+		else
+			return nil
+		end
 	end
 
 	return EventBuses[name]

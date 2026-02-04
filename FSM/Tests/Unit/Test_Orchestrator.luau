@@ -7,7 +7,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Orchestrator = require(game:FindFirstChild("Orchestrator", true) :: any)
 local BaseEntity = require(game:FindFirstChild("BaseEntity", true) :: any)
 local BaseStateMachine = require(game:FindFirstChild("BaseStateMachine", true) :: any)
-local TestBase = require(script:FindFirstChild("TestBase") :: any)
+local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
 
 local Test_Orchestrator = {}
 
@@ -26,11 +26,13 @@ function Test_Orchestrator.Run()
 	local DummyEntity = BaseEntity.Extend({ Name = "DummyEntity", Schema = { Val = { Type = "number" } } })
 	function DummyEntity:ApplyChanges(changes) end
 	function DummyEntity:GetContext() return {} end
+	function DummyEntity:Cleanup() end
 	
 	local DummyFSM = BaseStateMachine.Extend({ className = "DummyFSM", validStates = {"Idle"} })
 	function DummyFSM:RegisterStates()
 		self:AddState("Idle", function() end)
 	end
+	function DummyFSM:OnCleanup() end
 
 	tester:RunTest("CreateEntity", function(t)
 		local part = Instance.new("Part")

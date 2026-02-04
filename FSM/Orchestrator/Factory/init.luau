@@ -81,6 +81,23 @@ function Factory.GetAll(typeName: string): any
 end
 
 --[[
+    Load all LoadableSubclasses
+]]
+function Factory.LoadSubclasses()
+	if not next(LoadableSubclasses) then return end
+
+	for _, Subclass in pairs(LoadableSubclasses) do
+		if not Subclass or not Subclass.Parent then continue end
+		
+		local success, result = pcall(require, Subclass)
+		if not success then
+			warn(string.format("[Factory] Failed to require '%s': %s", Subclass.Name, tostring(result)))
+		end
+	end
+	table.clear(LoadableSubclasses) 
+end
+
+--[[
     Compiles a raw definition into a proper subclass using the base's .Extend method.
 ]]
 local function Compile(typeName: string, name: string, classDef: any)
@@ -97,31 +114,37 @@ local function Compile(typeName: string, name: string, classDef: any)
     return config.Base.Extend(classDef)
 end
 
---[[
-    Load all LoadableSubclasses
-]]
-function Factory.LoadSubclasses()
-    if not next(LoadableSubclasses) then return end
-
-    for _, Subclass in pairs(LoadableSubclasses) do
-        local success, result = pcall(require, Subclass)
-        if not success or type(result) ~= "table" then
-            warn(string.format("[Factory] Failed to require '%s': %s", Subclass:GetFullName(), tostring(result)))
+local function CompileAll()
+    for typeName, config in pairs(TYPES) do
+        if not CompiledClasses[typeName] then
+            CompiledClasses[typeName] = {}
+        else
+            table.clear(CompiledClasses[typeName])
         end
 
-        print(string.format("[Factory] Loaded subclass '%s'", Subclass.Name))
+        if config.Base and config.Registry then
+            for className, classDef in pairs(config.Registry) do
+                local success, result = pcall(Compile, typeName, className, classDef)
+                if success then
+                    CompiledClasses[typeName][className] = result
+                else
+                    warn(string.format("[Factory] Failed to compile %s '%s': %s", typeName, className, tostring(result)))
+                end
+            end
+        end
     end
-    LoadableSubclasses = {};
+end
+
+--[[
+    Reloads all registries and recompiles classes.
+]]
+function Factory.Reload()
+	Factory.LoadSubclasses()
+	CompileAll()
 end
 
 -- Initialization: Process all registries
-for typeName, config in pairs(TYPES) do
-    if config.Base and config.Registry then
-        for className, classDef in pairs(config.Registry) do
-            CompiledClasses[typeName][className] = Compile(typeName, className, classDef)
-        end
-    end
-end
+CompileAll()
 
 if next(CompiledClasses.Entity) == nil and next(CompiledClasses.StateMachine) == nil then
     warn("[Factory] No classes compiled. Ensure ReplicatedStorage.Entities/EntityRegistry and ReplicatedStorage.StateMachines/StateMachineRegistry exist.")

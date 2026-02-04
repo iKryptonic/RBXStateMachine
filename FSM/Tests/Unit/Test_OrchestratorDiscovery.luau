@@ -4,7 +4,7 @@
 -- @Description Unit tests for Orchestrator discovery scanning and auto-registration.
 
 local ServerStorage = game:GetService("ServerStorage")
-local TestBase = require(script:FindFirstChild("TestBase") :: any)
+local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
 local Fixtures = require(script.Parent:WaitForChild("Fixtures"):WaitForChild("Setup") :: any)
 
 local Test_OrchestratorDiscovery = {}

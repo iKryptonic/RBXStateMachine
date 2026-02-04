@@ -4,7 +4,7 @@
 -- @Description Unit tests for Signal implementation.
 
 local Signal = require(game:FindFirstChild("Signal", true) :: any)
-local TestBase = require(script:FindFirstChild("TestBase") :: any)
+local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
 
 local Test_Signal = {}
 

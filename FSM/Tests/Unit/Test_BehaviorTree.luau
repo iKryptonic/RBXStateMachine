@@ -4,7 +4,7 @@
 -- @Description Unit tests for Behavior Tree component.
 
 local BT = require(game:FindFirstChild("BehaviorTree", true) :: any)
-local TestBase = require(script:FindFirstChild("TestBase") :: any)
+local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
 
 local Test_BehaviorTree = {}
 

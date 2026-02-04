@@ -71,21 +71,29 @@ function Setup.Install(): InstallResult
 	if createdEntityFolder then table.insert(createdFolders, entityFolder) end
 	if createdSMFolder then table.insert(createdFolders, smFolder) end
 
-	cloneIfMissing(entityFolder, "EntityRegistry", entityRegistry, created)
+	-- Install dummy entity and FSM modules
 	cloneIfMissing(entityFolder, "DummyEntity", dummyEntity, created)
-	cloneIfMissing(smFolder, "StateMachineRegistry", stateMachineRegistry, created)
 	cloneIfMissing(smFolder, "DummyFSM", dummyFSM, created)
 
-	local function cleanup()
-		for _, inst in ipairs(created) do
-			if inst and inst.Parent then
-				inst:Destroy()
-			end
+	-- Merge fixture definitions into existing registries
+	local existingEntityRegistry = entityFolder:FindFirstChild("EntityRegistry")
+	local existingStateMachineRegistry = smFolder:FindFirstChild("StateMachineRegistry")
+	
+	if existingEntityRegistry then
+		local fixtureEntityDefs = require(entityRegistry)
+		local existingEntityDefs = require(existingEntityRegistry)
+		-- Merge fixture definitions into existing registry
+		for key, value in pairs(fixtureEntityDefs) do
+			existingEntityDefs[key] = value
 		end
-		for _, folder in ipairs(createdFolders) do
-			if folder and folder.Parent then
-				folder:Destroy()
-			end
+	end
+	
+	if existingStateMachineRegistry then
+		local fixtureStateMachineDefs = require(stateMachineRegistry)
+		local existingStateMachineDefs = require(existingStateMachineRegistry)
+		-- Merge fixture definitions into existing registry
+		for key, value in pairs(fixtureStateMachineDefs) do
+			existingStateMachineDefs[key] = value
 		end
 	end
 
@@ -93,7 +101,14 @@ function Setup.Install(): InstallResult
 		Ok = true,
 		EntityFolder = entityFolder,
 		StateMachineFolder = smFolder,
-		Cleanup = cleanup,
+		Cleanup = function()
+			for _, inst in ipairs(created) do
+				inst:Destroy()
+			end
+			for _, folder in ipairs(createdFolders) do
+				folder:Destroy()
+			end
+		end,
 	}
 end
 

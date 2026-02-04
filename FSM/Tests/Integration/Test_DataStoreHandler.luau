@@ -3,7 +3,7 @@
 -- @Author iKrypto
 -- @Description Coverage/integration tests for DataStoreHandler wrapper behavior (throttling, retry config, basic API).
 
-local TestBase = require(script:FindFirstChild("TestBase") :: any)
+local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
 local DataStoreHandler = require(game:FindFirstChild("DataStoreHandler", true) :: any)
 
 local Test_DataStoreHandler = {}

@@ -193,9 +193,11 @@ function BaseEntity.new(params: { Name: string, Instance: Instance, OwnerId: str
 		Name = entityName or "BaseEntity" 
 	}
 
-	privateProperties.InstanceDestroyedConn = params.Instance.AncestryChanged:Connect(function(_, parent)
-		if not parent then BaseEntity.Destroy(proxy::any) end
-	end)
+	if params.Instance and (params.Instance :: any).AncestryChanged then
+		privateProperties.InstanceDestroyedConn = (params.Instance :: any).AncestryChanged:Connect(function(_, parent)
+			if not parent then BaseEntity.Destroy(proxy::any) end
+		end)
+	end
 
 	ActiveEntities[proxy::any] = true
 	return setmetatable(proxy, mt)

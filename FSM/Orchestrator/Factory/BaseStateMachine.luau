@@ -233,22 +233,24 @@ function BaseStateMachine.Extend(extensionParams: {className: string, validState
 			end
 		}
 
-		-- Register states by calling the subclass's RegisterStates method
-		if Subclass.RegisterStates then
-			Subclass.RegisterStates(newInstance)
-		else
-			-- If not implemented, log a warning
-			newInstance.Logger:Log
-			{ 
-				Level = "WARN", 
-				Message = string.format("Subclass '%s' did not implement 'RegisterStates'. No states registered.", extensionParams.className or "UnnamedClass"),
-				OperationId = newInstance.Id 
-			}
-		end
-		return (setmetatable(newInstance :: any, instanceMetatable) :: any)
-	end
+		-- A. SETUP METATABLE FIRST
+        local finalInstance = setmetatable(newInstance :: any, instanceMetatable) :: any
 
-	return Subclass
+        -- B. NOW REGISTER STATES (Object now recognizes overrides)
+        if finalInstance.RegisterStates then
+            finalInstance:RegisterStates() 
+        else
+            finalInstance.Logger:Log({ 
+                Level = "WARN", 
+                Message = string.format("Subclass '%s' did not implement 'RegisterStates'.", extensionParams.className),
+                OperationId = finalInstance.Id 
+            })
+        end
+
+        return finalInstance
+    end
+
+    return Subclass
 end
 
 --[[

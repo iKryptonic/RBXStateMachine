@@ -92,7 +92,7 @@ function EntityPersistence.new(config: Types.PersistenceConfig): Types.EntityPer
 			return encodePayload(data, metadata)
 		end)
 		if not ok then
-			return false, "SerializeFailed: " .. tostring(payloadOrErr)
+			return false, "SerializeFailed"
 		end
 
 		local success, _, err = ds:SetAsync(makeKey(config.KeyPrefix, key), payloadOrErr)

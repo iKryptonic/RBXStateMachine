@@ -3,7 +3,7 @@
 -- @Author iKrypto
 -- @Description Coverage/integration tests for Factory compilation and retrieval.
 
-local TestBase = require(script:FindFirstChild("TestBase") :: any)
+local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
 local Fixtures = require((script.Parent :: any):WaitForChild("Fixtures"):WaitForChild("Setup") :: any)
 
 local Test_Factory = {}
@@ -19,6 +19,7 @@ function Test_Factory.Run()
 		end
 
 		local Factory = require(game:FindFirstChild("Factory", true) :: any)
+		Factory.Reload()
 
 		local entities = Factory.GetAll("Entity")
 		local sms = Factory.GetAll("StateMachine")

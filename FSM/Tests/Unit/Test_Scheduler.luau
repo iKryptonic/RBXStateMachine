@@ -5,7 +5,7 @@
 
 local RunService = game:GetService("RunService")
 local SchedulerModule = require(game:FindFirstChild("Scheduler", true) :: any)
-local TestBase = require(script:FindFirstChild("TestBase") :: any)
+local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
 
 local Test_Scheduler = {}
 

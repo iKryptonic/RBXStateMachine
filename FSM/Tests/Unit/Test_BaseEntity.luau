@@ -4,9 +4,16 @@
 -- @Description Unit tests for BaseEntity schema validation, property wrapping, and update cycles.
 
 local BaseEntity = require(game:FindFirstChild("BaseEntity", true) :: any)
-local TestBase = require(script:FindFirstChild("TestBase") :: any)
+local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
 
 local Test_BaseEntity = {}
+
+local function createTestEntity(name: string, instance: Instance)
+	local TestEntity = BaseEntity.Extend({ Name = name, Schema = {} })
+	function TestEntity:GetContext() return {} end
+	function TestEntity:Cleanup() end
+	return TestEntity.new({ Name = name, Instance = instance })
+end
 
 --[[
 	@summary Executes the BaseEntity unit test suite.
@@ -19,7 +26,7 @@ function Test_BaseEntity.Run()
 	tester:RunTest("Initialization & Schema", function(t)
 		local part = Instance.new("Part")
 		part.Name = "TestPart"
-		local entity = BaseEntity.new({ Name = "TestEntity", Instance = part })
+		local entity = createTestEntity("TestEntity", part)
 
 		entity:DefineSchema({
 			Transparency = { Type = "number" },
@@ -41,7 +48,7 @@ function Test_BaseEntity.Run()
 	-- TEST 2: Property Validation
 	tester:RunTest("Property Validation", function(t)
 		local part = Instance.new("Part")
-		local entity = BaseEntity.new({ Name = "TestEntity", Instance = part })
+		local entity = createTestEntity("TestEntity", part)
 		entity:DefineSchema({
 			Val = { Type = "number" },
 			Ref = { Type = "Part" }
@@ -77,7 +84,7 @@ function Test_BaseEntity.Run()
 	tester:RunTest("Update Cycle", function(t)
 		local part = Instance.new("Part")
 		part.Transparency = 0
-		local entity = BaseEntity.new({ Name = "TestEntity", Instance = part })
+		local entity = createTestEntity("TestEntity", part)
 		entity:DefineSchema({ Transparency = { Type = "number" } })
 
 		-- Mock ApplyChanges
@@ -104,7 +111,7 @@ function Test_BaseEntity.Run()
 	-- TEST 4: Immutability & Safety
 	tester:RunTest("Immutability & Safety", function(t)
 		local part = Instance.new("Part")
-		local entity = BaseEntity.new({ Name = "ImmutableEntity", Instance = part })
+		local entity = createTestEntity("ImmutableEntity", part)
 		entity:DefineSchema({ Val = { Type = "number" } })
 
 		-- Try to set property
@@ -127,7 +134,7 @@ function Test_BaseEntity.Run()
 	-- TEST 5: Error Handling & Persistence
 	tester:RunTest("Error Handling & Persistence", function(t)
 		local part = Instance.new("Part")
-		local entity = BaseEntity.new({ Name = "ErrorEntity", Instance = part })
+		local entity = createTestEntity("ErrorEntity", part)
 		entity:DefineSchema({ Val = { Type = "number" } })
 
 		-- Override ApplyChanges to error
@@ -149,7 +156,7 @@ function Test_BaseEntity.Run()
 	-- TEST 6: Lifecycle
 	tester:RunTest("Lifecycle", function(t)
 		local part = Instance.new("Part")
-		local entity = BaseEntity.new({ Name = "LifecycleEntity", Instance = part })
+		local entity = createTestEntity("LifecycleEntity", part)
 		entity:DefineSchema({ Val = { Type = "number" } })
 		
 		entity:Destroy()
@@ -163,6 +170,7 @@ function Test_BaseEntity.Run()
 		local SubEntity = BaseEntity.Extend({ Name = "SubEntity", Schema = { Prop = { Type = "string" } } })
 		
 		function SubEntity:GetContext() return {} end
+		function SubEntity:Cleanup() end
 		function SubEntity:ApplyChanges(changes)
 			if changes.Prop then
 				self.Instance.Name = changes.Prop
@@ -182,7 +190,7 @@ function Test_BaseEntity.Run()
 
 	tester:RunTest("Locking", function(t)
 		local part = Instance.new("Part")
-		local entity = BaseEntity.new({ Name = "LockEntity", Instance = part })
+		local entity = createTestEntity("LockEntity", part)
 		entity:DefineSchema({ Val = { Type = "number" } })
 		entity.ApplyChanges = function() end
 		
@@ -210,7 +218,7 @@ function Test_BaseEntity.Run()
 	
 	tester:RunTest("Context & Management", function(t)
 		local part = Instance.new("Part")
-		local entity = BaseEntity.new({ Name = "CtxEntity", Instance = part })
+		local entity = createTestEntity("CtxEntity", part)
 		
 		entity({ MyData = 123 })
 		t:AssertEquals(entity.MyData, 123, "Context should be set via __call")
@@ -229,7 +237,7 @@ function Test_BaseEntity.Run()
 	tester:RunTest("Auto-Destruction (AncestryChanged)", function(t)
 		local part = Instance.new("Part")
 		part.Parent = workspace
-		local entity = BaseEntity.new({ Name = "AutoDestroy", Instance = part })
+		local entity = createTestEntity("AutoDestroy", part)
 		
 		local destroyed = false
 		entity.Destroyed:Connect(function() destroyed = true end)
@@ -254,7 +262,7 @@ function Test_BaseEntity.Run()
 
 	tester:RunTest("Serialize/Deserialize (Persist flagged)", function(t)
 		local part = Instance.new("Part")
-		local entity = BaseEntity.new({ Name = "PersistEntity", Instance = part })
+		local entity = createTestEntity("PersistEntity", part)
 		entity:DefineSchema({
 			Persisted = { Type = "number", Persist = true },
 			NotPersisted = { Type = "number", Persist = false },
@@ -282,19 +290,21 @@ function Test_BaseEntity.Run()
 		entity:Destroy()
 	end)
 
-	tester:RunTest("Subclass missing GetContext warns (no error)", function(t)
+	tester:RunTest("Subclass GetContext (no error)", function(t)
 		local Sub = BaseEntity.Extend({ Name = "NoGetContext", Schema = {} })
+		function Sub:GetContext() return {} end
+		function Sub:Cleanup() end
 		function Sub:ApplyChanges(_) end
 		local ok = pcall(function()
 			local e = Sub.new({ Name = "NoCtx", Instance = Instance.new("Part") })
 			e:Destroy()
 		end)
-		t:Assert(ok, "Subclass without GetContext should not throw")
+		t:Assert(ok, "Subclass with GetContext should not throw")
 	end)
 
 	tester:RunTest("Abstract ApplyChanges path executes", function(t)
 		local part = Instance.new("Part")
-		local entity = BaseEntity.new({ Name = "AbstractApply", Instance = part })
+		local entity = createTestEntity("AbstractApply", part)
 		entity:DefineSchema({ Val = { Type = "number" } })
 
 		-- Mark mutable but point ApplyChanges to the base (abstract) implementation.

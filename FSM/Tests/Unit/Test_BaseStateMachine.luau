@@ -5,7 +5,7 @@
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local BaseStateMachine = require(game:FindFirstChild("BaseStateMachine", true))
-local TestBase = require(script:FindFirstChild("TestBase"))
+local TestBase = require(script.Parent:FindFirstChild("TestBase"))
 
 local Test_BaseStateMachine = {}
 
@@ -191,6 +191,7 @@ function Test_BaseStateMachine.Run()
 		function SubFSM:RegisterStates()
 			self:AddState("A", function() end)
 		end
+		function SubFSM:OnCleanup() end
 		
 		local fsm = SubFSM.new({ Id = "Sub1" })
 		t:AssertEquals(tostring(fsm):match("SubFSM"), "SubFSM", "ToString should contain class name")
@@ -206,6 +207,7 @@ function Test_BaseStateMachine.Run()
 			self:AddState("ChildStart", function(fsm) fsm.State = "ChildEnd" end, {"ChildEnd"})
 			self:AddState("ChildEnd", function(fsm) fsm:Finish() end)
 		end
+		function ChildFSM:OnCleanup() end
 		
 		local ParentFSM = BaseStateMachine.Extend({ className = "ParentFSM", validStates = {"ParentStart", "ParentNext"} })
 		function ParentFSM:RegisterStates()
@@ -215,6 +217,7 @@ function Test_BaseStateMachine.Run()
 			})
 			self:AddState("ParentNext", function(fsm) fsm:Finish() end)
 		end
+		function ParentFSM:OnCleanup() end
 		
 		local fsm = ParentFSM.new({ Id = "HFSM" })
 		fsm:Start({ State = "ParentStart" })
@@ -227,6 +230,7 @@ function Test_BaseStateMachine.Run()
 	tester:RunTest("Legacy Cleanup", function(t)
 		local fsm = BaseStateMachine.new({ Id = "Legacy", Name = "LegacyFSM", ValidStates = {"A", "B"} })
 		local cleaned = false
+		function fsm:OnCleanup() end
 		
 		fsm:AddState("A", function()
 			return function() cleaned = true end
@@ -242,6 +246,7 @@ function Test_BaseStateMachine.Run()
 	
 	tester:RunTest("Explicit Fail/Cancel", function(t)
 		local fsm = BaseStateMachine.new({ Id = "FailFSM", Name = "FailFSM", ValidStates = {"A"} })
+		function fsm:OnCleanup() end
 		fsm:AddState("A", function() end)
 		fsm:Start({ State = "A" })
 		
@@ -254,6 +259,7 @@ function Test_BaseStateMachine.Run()
 		t:AssertEquals(fsm.IsActive, false, "Fail should stop FSM")
 		
 		local fsm2 = BaseStateMachine.new({ Id = "CancelFSM", Name = "CancelFSM", ValidStates = {"A"} })
+		function fsm2:OnCleanup() end
 		fsm2:AddState("A", function() end)
 		fsm2:Start({ State = "A" })
 		
@@ -271,6 +277,8 @@ function Test_BaseStateMachine.Run()
 	tester:RunTest("Priority Time-Slicing", function(t)
 		local highPrio = BaseStateMachine.new({ Id = "High", Name = "HighPrio", Priority = 1 })
 		local lowPrio = BaseStateMachine.new({ Id = "Low", Name = "LowPrio", Priority = 5 })
+		function highPrio:OnCleanup() end
+		function lowPrio:OnCleanup() end
 		
 		local highCount, lowCount = 0, 0
 		
@@ -297,6 +305,7 @@ function Test_BaseStateMachine.Run()
 		function ChildFSM:RegisterStates()
 			self:AddState("Running", function() end)
 		end
+		function ChildFSM:OnCleanup() end
 		
 		-- 1. Parent Cancel -> Child Cancel
 		local ParentFSM = BaseStateMachine.Extend({ className = "ParentFSM", validStates = {"SubState"} })
@@ -307,6 +316,7 @@ function Test_BaseStateMachine.Run()
 				StoreReference = "ChildRef"
 			})
 		end
+		function ParentFSM:OnCleanup() end
 		
 		local parent = ParentFSM.new({ Id = "Parent1" })
 		parent:Start({ State = "SubState" })
@@ -351,6 +361,7 @@ function Test_BaseStateMachine.Run()
 			})
 			self:AddState("Recovered", function() end)
 		end
+		function ParentFSM_Handled:OnCleanup() end
 		
 		local parent3 = ParentFSM_Handled.new({ Id = "Parent3" })
 		parent3:Start({ State = "SubState" })
@@ -452,6 +463,7 @@ function Test_BaseStateMachine.Run()
 		function ChildFSM:RegisterStates()
 			self:AddState("Run", function() end)
 		end
+		function ChildFSM:OnCleanup() end
 		
 		-- Case A: Default Failure Propagation
 		local ParentA = BaseStateMachine.Extend({ className = "ParentA", validStates = {"Sub"} })
@@ -462,6 +474,7 @@ function Test_BaseStateMachine.Run()
 				StoreReference = "Child"
 			})
 		end
+		function ParentA:OnCleanup() end
 		local fsmA = ParentA.new({ Id = "A" })
 		local failedA = false
 		fsmA.Failed:Connect(function() failedA = true end)
@@ -484,6 +497,7 @@ function Test_BaseStateMachine.Run()
 			})
 			self:AddState("Recover", function() end)
 		end
+		function ParentB:OnCleanup() end
 		local fsmB = ParentB.new({ Id = "B" })
 		fsmB:Start({ State = "Sub" })
 		
