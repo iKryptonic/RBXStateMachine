@@ -483,5 +483,3 @@ function FSMsPage.Create(ServiceManager: any, deps: Deps)
 
 	return page
 end
-
-return FSMsPage

@@ -9,9 +9,6 @@
 	@deprecated This legacy controller is retained for regression testing only.
 	Use the new FSM/Entity pattern: FSM/LogsPageFSM.luau + Entity/LogsPageEntity.luau
 ]]
-
-local RS = game:GetService("ReplicatedStorage")
-
 export type Deps = {
 	EnsureToolbar: (Instance) -> Instance,
 	CreateSearchBox: (Instance, string?, (string) -> ()) -> Instance,

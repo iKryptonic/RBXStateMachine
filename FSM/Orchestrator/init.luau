@@ -33,12 +33,10 @@ local function ValidateRequest(context: string)
 		if context == "Server" and not RunService:IsServer() then
 			Orchestrator.Logger:Log({ Level = "ERROR", Message =  Strings.Error.ServerRequestErrorMessage })
 			error(Strings.Error.ServerRequestErrorMessage)
-			return false
 		end
 		if context == "Client" and not RunService:IsClient() then
 			Orchestrator.Logger:Log({ Level = "ERROR", Message =  Strings.Error.ClientRequestErrorMessage })
 			error(Strings.Error.ClientRequestErrorMessage)
-			return false
 		end
 		return true
 	end
@@ -89,7 +87,7 @@ function Orchestrator.RetryStateMachine(stateMachineId: string)
 
 	local context = oldSM.Context
 	local name = oldSM.Name
-	local class = Core.Factory.Registry.GetStateMachine(name) -- Resolve via shared for retry
+	local class = Core.Factory.Get("StateMachine", name) -- Resolve class definition for retry
 
 	if not class then return end
 
