@@ -565,6 +565,65 @@ function Test_BaseStateMachine.Run()
 		-- The main check here is that no error occurred during the wait.
 	end)
 
+	-- TEST 14: InitialState used when Start called without State param
+	tester:RunTest("InitialState default on Start", function(t)
+		local fsm = BaseStateMachine.new({
+			Id = "InitStateTest",
+			Name = "InitStateFSM",
+			ValidStates = {"Alpha", "Beta"},
+			InitialState = "Alpha"
+		})
+		function fsm:OnCleanup() end
+
+		fsm:AddState("Alpha", function() end, {"Beta"})
+		fsm:AddState("Beta", function() end, {})
+
+		-- Start WITHOUT passing a State — should use InitialState
+		fsm:Start({})
+		t:AssertEquals(fsm.State, "Alpha", "Should start in InitialState when no State param given")
+
+		fsm:Destroy()
+	end)
+
+	-- TEST 15: InitialState defaults to first ValidState
+	tester:RunTest("InitialState defaults to first ValidState", function(t)
+		local fsm = BaseStateMachine.new({
+			Id = "DefaultInitState",
+			Name = "DefaultInitFSM",
+			ValidStates = {"First", "Second"},
+		})
+		function fsm:OnCleanup() end
+
+		fsm:AddState("First", function() end, {"Second"})
+		fsm:AddState("Second", function() end, {})
+
+		-- Start without State — should default to first ValidState
+		fsm:Start({})
+		t:AssertEquals(fsm.State, "First", "Should default to first ValidState")
+
+		fsm:Destroy()
+	end)
+
+	-- TEST 16: Extended FSM InitialState via class definition
+	tester:RunTest("Extended FSM InitialState", function(t)
+		local ExtFSM = BaseStateMachine.Extend({
+			className = "ExtInitFSM",
+			validStates = {"Setup", "Run"},
+			InitialState = "Setup",
+		})
+		function ExtFSM:RegisterStates()
+			self:AddState("Setup", function() end, {"Run"})
+			self:AddState("Run", function() end)
+		end
+		function ExtFSM:OnCleanup() end
+
+		local fsm = ExtFSM.new({ Id = "ExtInit1" })
+		fsm:Start({}) -- No State given
+		t:AssertEquals(fsm.State, "Setup", "Extended FSM should use class-level InitialState")
+
+		fsm:Destroy()
+	end)
+
 	return tester:PrintSummary()
 end
 

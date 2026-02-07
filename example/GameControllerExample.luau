@@ -18,19 +18,19 @@ local Door1 = Orchestrator.CreateEntity({
 	}
 })
 
-if not Door1 then warn("Failed to create Door1 entity.") return end
+if not Door1 then warn("Failed to create Door1 entity.") return else print(Door1) end
 -- Create the Job
 -- We pass a single table with the Job's Class, a unique ID, and arguments for the constructor
 local openJob = Orchestrator.CreateStateMachine({
-	StateMachineClass = "DoorJob",
-	StateMachineId = script.Name .. " DoorJob " .. tick(),
+	StateMachineClass = "DoorStateMachine",
+	StateMachineId = script.Name .. " DoorStateMachine " .. tick(),
 	Context = { 
 		DoorEntity = Door1,
 		DesiredState = "Open"
 	}
 })
 
-if not openJob then warn("Failed to create DoorJob.") return end
+if not openJob then warn("Failed to create DoorStateMachine.") return else print(openJob) end
 
 -- Hook up events (Optional)
 openJob.Completed:Connect(function()
@@ -39,15 +39,15 @@ openJob.Completed:Connect(function()
 	task.wait(1)
 
 	local closeJob = Orchestrator.CreateStateMachine({
-		StateMachineClass = "DoorJob",
-		StateMachineId = script.Name .. " DoorJob " .. tick(),
+		StateMachineClass = "DoorStateMachine",
+		StateMachineId = script.Name .. " DoorStateMachine " .. tick(),
 		Context = { 
 			DoorEntity = Door1,
 			DesiredState = "Close"
 		}
 	})
 
-	if not closeJob then return end
+	if not closeJob then return else print(closeJob) end
 
 	closeJob:Start { State = "Validate" }
 
@@ -62,4 +62,4 @@ openJob.Failed:Connect(function(reason)
 end)
 
 -- Start the Logic
-openJob:Start { State = "Validate" }
+openJob:Start({ State = "Validate" })
