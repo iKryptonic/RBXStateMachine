@@ -216,8 +216,8 @@ end
 local function CompileModule(child: ModuleScript, typeName: string, classBase: any)
 	local success, result = pcall(require, child)
 	if success and type(result) == "table" then
-		if result.StaticInit then
-			result.StaticInit(Utility)
+		if result.Initialize then
+			result.Initialize(Utility)
 		end
 		
 		-- Resolve storage key
