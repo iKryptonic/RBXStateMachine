@@ -131,13 +131,13 @@ function Test_Orchestrator.Run()
 		-- Ensure API is started
 		Orchestrator.StartServiceManagerAPI()
 		
-		local remote = ReplicatedStorage:FindFirstChild("ServiceManagerRemote")
+		local remote = ReplicatedStorage:FindFirstChild("OrchestratorFunction")
 		if not remote or not remote:IsA("RemoteFunction") then
 			-- Skip if not running in a server context where remotes are created
-			return 
+			return
 		end
-		
-		t:Assert(remote ~= nil, "ServiceManagerRemote should exist")
+
+		t:Assert(remote ~= nil, "OrchestratorFunction remote should exist")
 	end)
 
 	tester:RunTest("Pooling & Reuse", function(t)

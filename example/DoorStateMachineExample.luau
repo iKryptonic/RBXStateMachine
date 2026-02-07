@@ -1,13 +1,19 @@
 --!strict
--- DoorJobExample.lua
--- Example implementation of an DoorJob using the StateMachine and DoorEntity.
-local DoorJob = shared.StateMachine and (shared.StateMachine :: any).DoorJob
+-- DoorStateMachineExample.lua
+-- Example implementation of an DoorStateMachine using the StateMachine and DoorEntity.
+
+local DoorStateMachine = {
+	Name = "DoorStateMachine",
+	ValidStates = { "Validate", "CreatingMessage", "Opening", "Closing", "Completed", "Failed" },
+	TerminalStates = { "Completed", "Failed" },
+	InitialState = "Validate",
+}
 
 --[[
-	@summary Registers states and transitions for the DoorJob.
+	@summary Registers states and transitions for the DoorStateMachine.
 	@return ()
 ]]
-function DoorJob:RegisterStates()
+function DoorStateMachine:RegisterStates()
 
 	-- STATE: VALIDATE
 	-- Check if we can actually open this door
@@ -38,7 +44,7 @@ function DoorJob:RegisterStates()
 		-- Create a message GUI to inform the user
 		local messageGui = Instance.new("BillboardGui")
 		messageGui.Size = UDim2.new(0, 200, 0, 50)
-		messageGui.Adornee = fsm.DoorEntity.Instance:FindFirstChild("DoorPart")
+		messageGui.Adornee = fsm.DoorEntity and fsm.DoorEntity.Instance and fsm.DoorEntity.Instance:FindFirstChild("DoorPart")
 		messageGui.AlwaysOnTop = true
 
 		local textLabel = Instance.new("TextLabel")
@@ -48,6 +54,15 @@ function DoorJob:RegisterStates()
 		textLabel.TextScaled = true
 		textLabel.Text = "Processing..."
 		textLabel.Parent = messageGui
+
+		if not workspace.CurrentCamera then
+			self:Log
+			{
+				Level = "ERROR", 
+				Message = "Camera not found, using Hint instead." 
+			}
+			fsm.State = "Failed"
+		end
 
 		messageGui.Parent = workspace.CurrentCamera
 
@@ -62,16 +77,16 @@ function DoorJob:RegisterStates()
 			Message = tostring(fsm.State) .. " Door" 
 		}
 		fsm.State = fsm.Context.DesiredState == "Open" and "Opening" or "Closing"
-	end, { "Opening", "Closing" })
+	end, { "Opening", "Closing", "Failed" })
 
 	-- STATE: OPENING
 	self:AddState("Opening", function(fsm)
 		fsm.Context.Hint.Text = "Door is opening..."
 
-		if not fsm.DoorEntity.IsOpen then
+		if fsm.DoorEntity and not fsm.DoorEntity.IsOpen then
 			fsm.Context.Hint.Parent = workspace;
 			local OpenDoorResult = fsm.DoorEntity:Open()
-			
+
 			if not OpenDoorResult then
 				fsm.State = "Failed"
 			end
@@ -84,10 +99,10 @@ function DoorJob:RegisterStates()
 	self:AddState("Closing", function(fsm)
 		fsm.Context.Hint.Text = "Door is closing..."
 
-		if fsm.DoorEntity.IsOpen then
+		if fsm.DoorEntity and fsm.DoorEntity.IsOpen then
 			fsm.Context.Hint.Parent = workspace;
 			local CloseDoorResult = fsm.DoorEntity:Close()
-			
+
 			if not CloseDoorResult then
 				fsm.State = "Failed"
 			end
@@ -120,11 +135,11 @@ end
 	@summary Cleans up the job when it is destroyed.
 	@return ()
 ]]
-function DoorJob:OnCleanup()
+function DoorStateMachine:OnCleanup()
 	-- reset the status light to neutral.
 	if self.DoorEntity and self.DoorEntity.Instance then
 		self.DoorEntity:Reset()
 	end
 end
 
-return DoorJob
+return DoorStateMachine

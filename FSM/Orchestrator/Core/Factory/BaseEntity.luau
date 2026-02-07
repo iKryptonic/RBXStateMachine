@@ -174,10 +174,20 @@ function BaseEntity.new(params: { Name: string, Instance: Instance, OwnerId: str
 
 	proxy.Instance = params.Instance
 	proxy._privateProperties = privateProperties
+<<<<<<< HEAD
 	proxy._logger = Logger.new
 	{ 
 		Name = params.Name or "BaseEntity" 
 	}
+=======
+	proxy._logger = privateProperties._logger
+
+	-- @description Returns the raw data of the entity. Allows for quick lookups without using __index.
+	-- @return { [string]: any } - The raw data of the entity.
+	proxy.GetRawData = function()
+		return privateProperties.Data
+	end
+>>>>>>> master
 
 	-- @description Returns the raw data of the entity. Allows for quick lookups without using __index.
 	-- @return { [string]: any } - The raw data of the entity.

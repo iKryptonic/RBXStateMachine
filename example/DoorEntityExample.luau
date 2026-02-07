@@ -3,13 +3,28 @@
 -- Entity class for Door objects, handling visual and domain logic.
 
 local RunService = game:GetService("RunService")
-local DoorEntity = shared.Entity and (shared.Entity :: any).DoorEntity
-
-export type DoorEntity = typeof(DoorEntity.new({ Instance = Instance.new("Model") }))
 local TweenService = game:GetService("TweenService")
 
+local DoorEntity = {
+	Name = "DoorEntity",
+	Replication = {
+		Enabled = true,
+		RateLimit = 60,
+	},
+	Schema = {
+		IsOpen = { Type = "boolean", Replicate = true, Description = "True = Open, False = Closed" },
+		Locked = { Type = "boolean", Replicate = true, Description = "Part is locked" },
+		Color  = { Type = "Color3", Replicate = true,  Description = "Status light color" },
+		_lockUI = { Type = "Instance" },
+		_hinge = { Type = "BasePart" },
+		_door = { Type = "BasePart" },
+		_closedCFrame = { Type = "CFrame" },
+		_statusLight = { Type = "BasePart" },
+	},
+}
+
 --[[
-	@summary Initializes this entity's context (cached parts, initial state).
+	@description Initializes this entity's context (cached parts, initial state).
 	@param params { [any]: any }
 	@return ()
 ]]
@@ -41,7 +56,7 @@ end
 -- Visual Logic
 -- This only runs when the FSM calls :UpdateEntity()
 --[[
-	@summary Applies pending property changes to the door model (visual updates).
+	@description Applies pending property changes to the door model (visual updates).
 	@param changes { [string]: any }
 	@return ()
 ]]
@@ -88,7 +103,7 @@ end
 -- Domain Logic
 -- Encapsulates the business rules for the entity
 --[[
-	@summary Opens the door and commits changes.
+	@description Opens the door and commits changes.
 	@return boolean
 ]]
 function DoorEntity:Open()
@@ -99,7 +114,7 @@ function DoorEntity:Open()
 end
 
 --[[
-	@summary Closes the door and commits changes.
+	@description Closes the door and commits changes.
 	@return boolean
 ]]
 function DoorEntity:Close()
@@ -110,7 +125,7 @@ function DoorEntity:Close()
 end
 
 --[[
-	@summary Resets the door to a neutral state and commits changes.
+	@description Resets the door to a neutral state and commits changes.
 	@return boolean
 ]]
 function DoorEntity:Reset()

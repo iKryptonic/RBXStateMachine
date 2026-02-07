@@ -78,7 +78,7 @@ When spawning objects, the systems work in a "Body-First, Brain-Second" sequence
 
 ## Installation & Project Layout
 
-This repo is written for Roblox and is designed around a **Factory + Registry** workflow.
+This repo is written for Roblox and is designed around a **Factory + Auto-Discovery** workflow.
 
 At runtime, `Orchestrator:RegisterComponents()`:
 
@@ -92,19 +92,17 @@ At runtime, `Orchestrator:RegisterComponents()`:
 - `ReplicatedStorage/SharedModules`
     - `Orchestrator` (ModuleScript **with children**, taken from this repo’s `FSM/Orchestrator` folder)
 - `ReplicatedStorage/Entity`
-    - `EntityRegistry` (ModuleScript, returns a table)
-    - `DoorEntity` (optional ModuleScript, attaches behavior to the compiled class)
-    - `SpinningPartEntity` (optional ModuleScript, attaches behavior)
+    - `DoorEntity` (ModuleScript per Entity class)
+    - `SpinningPartEntity` (ModuleScript per Entity class)
 - `ReplicatedStorage/StateMachine`
-    - `StateMachineRegistry` (ModuleScript, returns a table)
-    - `DoorJob` (optional ModuleScript, attaches behavior)
-    - `SpinJob` (optional ModuleScript, attaches behavior)
+    - `DoorStateMachine` (ModuleScript per StateMachine class)
+    - `SpinStateMachine` (ModuleScript per StateMachine class)
 
 Notes:
 
 - Folder names are **singular** (`Entity` / `StateMachine`) because the bundled Factory looks up `ReplicatedStorage:FindFirstChild("Entity")` and `ReplicatedStorage:FindFirstChild("StateMachine")`.
-- Your `*Registry` modules are the **source of truth** for class definitions.
-- The optional `DoorEntity` / `DoorJob` modules are where you attach methods like `ApplyChanges()` and `RegisterStates()`.
+- Each Entity/StateMachine is a standalone ModuleScript that defines and returns a class via `BaseEntity.Extend()` / `BaseStateMachine.Extend()`.
+- The optional method modules attach behavior like `ApplyChanges()` and `RegisterStates()` to the compiled class tables.
 
 Then, at runtime:
 
@@ -125,7 +123,7 @@ Then, at runtime:
 
 ```lua
 -- Installation/bootstrapping example:
--- RegisterComponents compiles registries and initializes shared globals.
+-- RegisterComponents compiles class modules and initializes shared globals.
 Orchestrator:RegisterComponents()
 
 -- Configure the shared Scheduler instance (frame-budgeted task runner).
@@ -157,21 +155,19 @@ extraScheduler:Start()
 
 Orchestrator creates the following remotes in `ReplicatedStorage` (server creates them; client `WaitForChild`s them):
 
-- `ServiceManagerRemote` (`RemoteFunction`): request/response for sync, console commands, and management actions
-- `ServiceManagerEvent` (`RemoteEvent`): server-to-client notifications (entity created, state changes, etc.)
-- `EntityUpdateRemote` (`RemoteEvent`): server-to-client entity replication updates
-- `EntityCommandRemote` (`RemoteEvent`): client-to-server command bus
+- `OrchestratorFunction` (`RemoteFunction`): request/response for sync, console commands, and management actions
+- `OrchestratorEvent` (`RemoteEvent`): server-to-client notifications (entity created, state changes, etc.)
+- `EntityUpdateEvent` (`RemoteEvent`): server-to-client entity replication updates
+- `EntityCommandEvent` (`RemoteEvent`): client-to-server command bus
 
-Important: this framework's built-in networking is **observability + server→client replication**. It also includes a **Command Pattern** for client→server input; see the Orchestrator section for `SendCommand` and `RegisterCommandHandler`.
+Important: this framework's built-in networking is **observability + server→client replication**. It also includes a **Command Pattern** for client→server input; see the Orchestrator section for `ServerCommandEntity` and `RegisterEntityCommand`.
 
 ### Terminology
 
-This project uses **“StateMachine”** as the runtime core class. Some gameplay code calls these **“Jobs”** (e.g. `DoorJob`).
+This project uses **"StateMachine"** as the runtime core class.
 
-- **Registration**: the current implementation compiles definitions from `ReplicatedStorage/Entity/EntityRegistry` and `ReplicatedStorage/StateMachine/StateMachineRegistry`.
-- **Naming**: treat “Jobs” as a naming convention only; registration is driven by the registry tables.
-
-Ensure your naming is consistent. “Job” is just a convention for StateMachine class names (e.g., `DoorJob`); the actual registration mechanism is the registry tables under `ReplicatedStorage/StateMachine`.
+- **Registration**: the current implementation auto-discovers Entity and StateMachine modules from `ReplicatedStorage/Entity/` and `ReplicatedStorage/StateMachine/` folders.
+- **Naming**: be consistent. Class names (e.g., `DoorStateMachine`) match the ModuleScript names in the folders.
 
 ## Registration Guide (Entities & StateMachines)
 
@@ -181,16 +177,16 @@ This section is the canonical guide for registering and implementing Entities an
 
 You can use any of these (they can be mixed):
 
-1. **Factory + Registries (recommended)**: put definitions in `EntityRegistry` / `StateMachineRegistry`, call `Orchestrator:RegisterComponents()`, and use `shared.Entity.*` / `shared.StateMachine.*`.
-2. **String-based lookup**: pass a string name to `Orchestrator.CreateEntity({ EntityClass = "DoorEntity", ... })` or `Orchestrator.CreateStateMachine({ StateMachineClass = "DoorJob", ... })` after registration.
+1. **Factory + Auto-Discovery (recommended)**: put class modules in `ReplicatedStorage/Entity/` and `ReplicatedStorage/StateMachine/` folders, call `Orchestrator:RegisterComponents()`, and use `shared.Entity.*` / `shared.StateMachine.*`.
+2. **String-based lookup**: pass a string name to `Orchestrator.CreateEntity({ EntityClass = "DoorEntity", ... })` or `Orchestrator.CreateStateMachine({ StateMachineClass = "DoorStateMachine", ... })` after registration.
 3. **Manual classes**: create classes via `BaseEntity.Extend` / `BaseStateMachine.Extend` and pass the class table directly to `CreateEntity` / `CreateStateMachine` (no registry needed).
 
-### 1) Register an Entity (Factory + Registry)
+### 1) Register an Entity (Factory Auto-Discovery)
 
-Create a registry entry in `ReplicatedStorage/Entity/EntityRegistry`.
+Create a ModuleScript in `ReplicatedStorage/Entity/`.
 
 ```lua
--- EntityRegistry example: this is the source-of-truth for an Entity class template.
+-- Entity definition example: this is the source-of-truth for an Entity class template.
 -- Orchestrator:RegisterComponents() compiles this into shared.Entity.SpinningPartEntity.
 return {
     SpinningPartEntity = {
@@ -207,7 +203,7 @@ return {
 }
 ```
 
-What the Entity registry controls:
+What the Entity definition controls:
 
 - `Name`: class name
 - `Schema`: what properties can be set on the entity proxy (type-checked)
@@ -279,16 +275,16 @@ Key “gotchas”:
 - `UpdateEntity()` will error-log and return `false` if `ApplyChanges` was never overridden (the entity is considered “immutable”).
 - If you want cached instance references, use `GetContext()` + schema entries for those fields.
 
-### 3) Register a StateMachine (Factory + Registry)
+### 3) Register a StateMachine (Factory Auto-Discovery)
 
-Create a registry entry in `ReplicatedStorage/StateMachine/StateMachineRegistry`.
+Create a ModuleScript in `ReplicatedStorage/StateMachine/`.
 
 ```lua
--- StateMachineRegistry example: defines the StateMachine class template.
--- Orchestrator:RegisterComponents() compiles this into shared.StateMachine.SpinJob.
+-- StateMachine definition example: defines the StateMachine class template.
+-- Orchestrator:RegisterComponents() compiles this into shared.StateMachine.SpinStateMachine.
 return {
-    SpinJob = {
-        className = "SpinJob",
+    SpinStateMachine = {
+        className = "SpinStateMachine",
         validStates = { "Idle", "Spin" },
         terminalStates = { },
         context = {
@@ -299,7 +295,7 @@ return {
 }
 ```
 
-What the StateMachine registry controls:
+What the StateMachine definition controls:
 
 - `className`: class name
 - `validStates` / `terminalStates`: transition safety + auto-finish behavior
@@ -308,15 +304,15 @@ What the StateMachine registry controls:
 
 ### 4) Implement a StateMachine properly (Attach RegisterStates)
 
-Create `ReplicatedStorage/StateMachine/SpinJob`:
+Create `ReplicatedStorage/StateMachine/SpinStateMachine`:
 
 ```lua
 -- StateMachine implementation module example:
 -- This attaches RegisterStates/OnCleanup (and any helpers) to the compiled class.
-assert(shared.StateMachine and shared.StateMachine.SpinJob, "Call Orchestrator:RegisterComponents() before requiring SpinJob")
-local SpinJob = shared.StateMachine.SpinJob
+assert(shared.StateMachine and shared.StateMachine.SpinStateMachine, "Call Orchestrator:RegisterComponents() before requiring SpinStateMachine")
+local SpinStateMachine = shared.StateMachine.SpinStateMachine
 
-function SpinJob:RegisterStates()
+function SpinStateMachine:RegisterStates()
     self:AddState("Idle", {
         OnEnter = function(_, fsm)
             if fsm.Entity then
@@ -338,13 +334,13 @@ function SpinJob:RegisterStates()
     }, { "Idle" })
 end
 
-function SpinJob:OnCleanup()
+function SpinStateMachine:OnCleanup()
     if self.Entity then
         self.Entity:SetSpinning(false, 0)
     end
 end
 
-return SpinJob
+return SpinStateMachine
 ```
 
 ### 5) Create instances (class table vs string)
@@ -361,10 +357,10 @@ local entity = Orchestrator.CreateEntity({
     Context = { Instance = workspace.SpinPart },
 })
 
--- Option B: string lookup (uses compiled registry)
+-- Option B: string lookup (uses compiled classes)
 local fsm = Orchestrator.CreateStateMachine({
-    StateMachineClass = "SpinJob",
-    StateMachineId = "SpinJob_01",
+    StateMachineClass = "SpinStateMachine",
+    StateMachineId = "SpinStateMachine_01",
     Context = { Entity = entity },
 })
 
@@ -373,7 +369,7 @@ fsm:Start({ State = "Idle" })
 
 ### 6) Manual (no-registry) registration
 
-If you don’t want registries, you can build classes directly and pass them to Orchestrator:
+If you don't want auto-discovery, you can build classes directly and pass them to Orchestrator:
 
 ```lua
 -- Manual/no-registry example:
@@ -386,9 +382,9 @@ local SharedModules = ReplicatedStorage:WaitForChild("SharedModules")
 local Orchestrator = require(SharedModules:WaitForChild("Orchestrator"))
 
 -- Require bases from inside Orchestrator’s package (paths depend on how you mounted the repo)
--- Typical layout: ReplicatedStorage/SharedModules/Orchestrator/Factory/BaseEntity & BaseStateMachine
-local BaseEntity = require(SharedModules.Orchestrator:WaitForChild("Factory"):WaitForChild("BaseEntity"))
-local BaseStateMachine = require(SharedModules.Orchestrator:WaitForChild("Factory"):WaitForChild("BaseStateMachine"))
+-- Typical layout: ReplicatedStorage/SharedModules/Orchestrator/Core/Factory/BaseEntity & BaseStateMachine
+local BaseEntity = require(SharedModules.Orchestrator:WaitForChild("Core"):WaitForChild("Factory"):WaitForChild("BaseEntity"))
+local BaseStateMachine = require(SharedModules.Orchestrator:WaitForChild("Core"):WaitForChild("Factory"):WaitForChild("BaseStateMachine"))
 
 local MyEntity = BaseEntity.Extend({
     Name = "MyEntity",
@@ -432,26 +428,24 @@ Use this mode for tests, prototypes, or games that prefer module-local definitio
 
 ## Quick Start
 
-This quick start uses the **Factory + Registry + Implementation module** workflow.
+This quick start uses the **Factory + Auto-Discovery** workflow.
 
 ### 0) Roblox hierarchy
 
 Create this structure:
 
-- `ReplicatedStorage/SharedModules/Orchestrator` (this repo’s Orchestrator package)
-- `ReplicatedStorage/Entity/EntityRegistry`
+- `ReplicatedStorage/SharedModules/Orchestrator` (this repo's Orchestrator package)
 - `ReplicatedStorage/Entity/SpinningPartEntity`
-- `ReplicatedStorage/StateMachine/StateMachineRegistry`
-- `ReplicatedStorage/StateMachine/SpinJob`
+- `ReplicatedStorage/StateMachine/SpinStateMachine`
 
 Also create a Part in `Workspace` named `SpinPart`.
 
-### 1) EntityRegistry
+### 1) Entity Definition
 
-`ReplicatedStorage/Entity/EntityRegistry`:
+`ReplicatedStorage/Entity/SpinningPartEntity` (definition):
 
 ```lua
--- Quick Start registry example:
+-- Quick Start Entity definition example:
 -- Define an entity template; Orchestrator compiles it into shared.Entity.SpinningPartEntity.
 return {
     SpinningPartEntity = {
@@ -512,16 +506,16 @@ end
 return SpinningPartEntity
 ```
 
-### 3) StateMachineRegistry
+### 3) StateMachine Definition
 
-`ReplicatedStorage/StateMachine/StateMachineRegistry`:
+`ReplicatedStorage/StateMachine/SpinStateMachine` (definition):
 
 ```lua
--- Quick Start StateMachine registry example:
--- Defines the StateMachine template compiled into shared.StateMachine.SpinJob.
+-- Quick Start StateMachine definition example:
+-- Defines the StateMachine template compiled into shared.StateMachine.SpinStateMachine.
 return {
-    SpinJob = {
-        className = "SpinJob",
+    SpinStateMachine = {
+        className = "SpinStateMachine",
         validStates = { "Idle", "Spin" },
         terminalStates = { },
         context = { },
@@ -532,15 +526,15 @@ return {
 
 ### 4) StateMachine implementation
 
-`ReplicatedStorage/StateMachine/SpinJob`:
+`ReplicatedStorage/StateMachine/SpinStateMachine`:
 
 ```lua
 -- Quick Start StateMachine implementation:
 -- RegisterStates is where you define your named states and transitions.
-assert(shared.StateMachine and shared.StateMachine.SpinJob, "Call Orchestrator:RegisterComponents() before requiring SpinJob")
-local SpinJob = shared.StateMachine.SpinJob
+assert(shared.StateMachine and shared.StateMachine.SpinStateMachine, "Call Orchestrator:RegisterComponents() before requiring SpinStateMachine")
+local SpinStateMachine = shared.StateMachine.SpinStateMachine
 
-function SpinJob:RegisterStates()
+function SpinStateMachine:RegisterStates()
     self:AddState("Idle", function(fsm)
         -- Drive the entity (body) from the FSM (brain).
         fsm.Entity:SetSpinning(false, 0)
@@ -555,7 +549,7 @@ function SpinJob:RegisterStates()
     end, { "Idle" })
 end
 
-return SpinJob
+return SpinStateMachine
 ```
 
 ### 5) Server bootstrap
@@ -564,7 +558,7 @@ return SpinJob
 
 ```lua
 -- Quick Start (server) bootstrap example:
--- This runs on the server, compiles registries, attaches implementations, then spawns the runtime instances.
+-- This runs on the server, compiles class modules, attaches implementations, then spawns the runtime instances.
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SharedModules = ReplicatedStorage:WaitForChild("SharedModules")
 
@@ -573,7 +567,7 @@ Orchestrator:RegisterComponents()
 
 -- Attach implementations (must happen AFTER RegisterComponents)
 require(ReplicatedStorage:WaitForChild("Entity"):WaitForChild("SpinningPartEntity"))
-require(ReplicatedStorage:WaitForChild("StateMachine"):WaitForChild("SpinJob"))
+require(ReplicatedStorage:WaitForChild("StateMachine"):WaitForChild("SpinStateMachine"))
 
 shared.FSM.Scheduler:Start()
 
@@ -586,8 +580,8 @@ local entity = Orchestrator.CreateEntity({
 })
 
 local fsm = Orchestrator.CreateStateMachine({
-    StateMachineClass = "SpinJob",
-    StateMachineId = "SpinJob_01",
+    StateMachineClass = "SpinStateMachine",
+    StateMachineId = "SpinStateMachine_01",
     Context = { Entity = entity },
 })
 
@@ -689,7 +683,7 @@ This framework primarily constructs machines via `BaseStateMachine.Extend(...).n
 
 Use `BaseStateMachine.Extend(definition)` when you want a **reusable, named StateMachine class**:
 
-- Works with this project’s **Factory + Registry** model (registries compile into `shared.StateMachine.*`).
+- Works with this project's **Factory + Auto-Discovery** model (class modules compile into `shared.StateMachine.*`).
 - Gives you a place to attach behavior once: `MyFSM:RegisterStates()`, `MyFSM:OnCleanup()`, helpers, etc.
 - Ensures consistent defaults per class (`className`, `validStates`, `terminalStates`, `Priority`).
 
@@ -740,13 +734,13 @@ Deactivates an entity and adds it to an internal pool for later reuse. This is m
 Retrieves an entity from the pool if available, otherwise creates a new one.
 - **params**: Same as `CreateEntity`.
 
-#### `Orchestrator.SendCommand(entityId, command, ...)`
+#### `Orchestrator.ServerCommandEntity(entityId, command, ...)`
 (Client Only) Sends a command to the server for a specific entity.
 - **entityId**: `string`
 - **command**: `string`
 - **...**: Variable arguments.
 
-#### `Orchestrator.RegisterCommandHandler(entityId, command, handler)`
+#### `Orchestrator.RegisterEntityCommand(entityId, command, handler)`
 (Server Only) Registers a listener for commands sent from the client.
 - **entityId**: `string`
 - **command**: `string`
@@ -981,7 +975,7 @@ Orchestrator.FireEventBus("GlobalAlert", "Invasion started!")
 local bus = Orchestrator.AwaitEventBus("GlobalAlert", 5)
 ```
 
-For networked events, you can use the `SendCommand` / `RegisterCommandHandler` pattern or regular `RemoteEvents`.
+For networked events, you can use the `ServerCommandEntity` / `RegisterEntityCommand` pattern or regular `RemoteEvents`.
 
 Common approaches in your game code:
 
@@ -1218,14 +1212,14 @@ This is vital for client-server communication. Instead of the FSM handling raw I
 ```lua
 -- Command pattern (client) example:
 -- Client sends an intent; server validates and performs the authoritative state change.
-Orchestrator.SendCommand("Jet_01", "ToggleGear")
+Orchestrator.ServerCommandEntity("Jet_01", "ToggleGear")
 ```
 
 **Implementation (Server):**
 ```lua
 -- Command pattern (server) example:
 -- Server handles the command for a specific entity/job and updates authoritative state.
-Orchestrator.RegisterCommandHandler("Jet_01", "ToggleGear", function(player)
+Orchestrator.RegisterEntityCommand("Jet_01", "ToggleGear", function(player)
     local fsm = Orchestrator.GetStateMachine("Jet_FSM_01")
     if fsm.State == "Landed" then
         fsm.State = "Takeoff"
@@ -1431,14 +1425,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SharedModules = ReplicatedStorage:WaitForChild("SharedModules")
 local BaseStateMachine = require(SharedModules:WaitForChild("BaseStateMachine"))
 
-local DoorJob = BaseStateMachine.Extend({
-    className = "DoorJob",
+local DoorStateMachine = BaseStateMachine.Extend({
+    className = "DoorStateMachine",
     validStates = { "Idle", "Opening", "Open" },
     terminalStates = { "Open" },
     Priority = BaseStateMachine.Priorities.Medium,
 })
 
-function DoorJob:RegisterStates()
+function DoorStateMachine:RegisterStates()
     self:AddState("Idle", function(fsm)
         -- Delay the next transition attempt
         fsm.WaitSpan = 0.25
@@ -1463,7 +1457,7 @@ function DoorJob:RegisterStates()
 end
 
 -- Usage
-local fsm = DoorJob.new({
+local fsm = DoorStateMachine.new({
     StateMachineId = "Door_01",
     -- Add any context keys directly on this table
     DoorId = "Door_01",
@@ -1647,7 +1641,7 @@ Schema entries are tables and the core requires at minimum:
 
 Additional keys can be used by higher-level systems. For example, Orchestrator replication checks:
 
-- `Replicate`: boolean? (if true, changes to this key may be sent via `EntityUpdateRemote`)
+- `Replicate`: boolean? (if true, changes to this key may be sent via `EntityUpdateEvent`)
 - `Persist`: boolean? (if true, the property is saved to DataStore if the entity is created with `Persistent = true`)
 
 ### Persistence Setup
@@ -1861,7 +1855,7 @@ end
 Replication is **opt-in per field**.
 
 - Orchestrator builds an update packet by iterating `changes` and including only keys whose schema entry has `Replicate = true`.
-- That packet is broadcast to all clients on `EntityUpdateRemote`.
+- That packet is broadcast to all clients on `EntityUpdateEvent`.
 
 This means:
 
@@ -1870,7 +1864,7 @@ This means:
 
 #### When to replicate fields (and when not to)
 
-Setting `Replicate = true` is a design decision: you’re choosing to send that field’s updates server → client via `EntityUpdateRemote`.
+Setting `Replicate = true` is a design decision: you’re choosing to send that field’s updates server → client via `EntityUpdateEvent`.
 
 ##### Good candidates for replication
 
@@ -1952,7 +1946,7 @@ Schema = {
 
 #### Replication-safe data (what values are acceptable)
 
-`EntityUpdateRemote` sends **raw values**; it does not sanitize or transform them.
+`EntityUpdateEvent` sends **raw values**; it does not sanitize or transform them.
 
 There is no intermediate encode/decode layer for replication packets. If you need to replicate complex nested structures, you should explicitly serialize to a replication-safe representation (commonly a `string` payload) and decode on the client.
 
@@ -2106,8 +2100,8 @@ This avoids edge cases where a replicated boolean can get “stuck true” or wh
 
 This repo uses two different “networking paths”:
 
-- **Telemetry/sync**: `ServiceManagerRemote:InvokeServer("GetSyncData")` returns a sanitized snapshot (functions replaced, deep tables truncated).
-- **Replication**: `EntityUpdateRemote` broadcasts raw property updates (only schema keys with `Replicate = true`).
+- **Telemetry/sync**: `OrchestratorFunction:InvokeServer("GetSyncData")` returns a sanitized snapshot (functions replaced, deep tables truncated).
+- **Replication**: `EntityUpdateEvent` broadcasts raw property updates (only schema keys with `Replicate = true`).
 
 The snapshot path is designed for debug/inspection. The replication path is designed for keeping client-side entities visually in sync.
 
@@ -2981,15 +2975,15 @@ The Orchestrator is the Central Nervous System of the framework. It serves as a 
 
 ##### `Orchestrator:RegisterComponents()`
 
-Initializes the framework and compiles your registered classes into the shared registries.
+Initializes the framework and compiles your class modules into the shared tables.
 
 What it does (current implementation):
 
 1. Creates `shared.FSM` (and assigns `shared.Logger`, `shared.Signal`, and a `shared.FSM.Scheduler` instance).
 2. Requires the bundled Factory (shipped inside Orchestrator).
 3. Reads definitions from:
-    - `ReplicatedStorage/Entity/EntityRegistry`
-    - `ReplicatedStorage/StateMachine/StateMachineRegistry`
+    - Entity modules from `ReplicatedStorage/Entity/`
+    - StateMachine modules from `ReplicatedStorage/StateMachine/`
 4. Compiles those definitions into classes via `BaseEntity.Extend(...)` and `BaseStateMachine.Extend(...)`.
 5. Populates `shared.Entity` and `shared.StateMachine` with the compiled classes.
 
@@ -2998,7 +2992,7 @@ Important: `RegisterComponents()` compiles **definitions**, but it does not auto
 Client behavior (current implementation): calling `RegisterComponents()` on the client will also:
 
 - call `Orchestrator.InitClientListeners()`
-- invoke `ServiceManagerRemote:InvokeServer("RequestEntitySnapshot")` to seed existing entities
+- invoke `OrchestratorFunction:InvokeServer("RequestEntitySnapshot")` to seed existing entities
 
 Manual control note:
 
@@ -3098,7 +3092,7 @@ The server also triggers the creation of remotes and emits server-to-client even
 
 - `Orchestrator.InitClientListeners()`
 
-This wires `ServiceManagerEvent` and `EntityUpdateRemote` listeners and applies updates to client-side entities.
+This wires `OrchestratorEvent` and `EntityUpdateEvent` listeners and applies updates to client-side entities.
 
 ### Client Bootstrapping (LocalScript example)
 
@@ -3144,11 +3138,11 @@ Server:
 2. `entity.StateUpdated` fires with the committed `changes` table.
 3. Orchestrator receives that event and calls `Orchestrator.HandleReplication(entityId, changes, entity:GetValidProperties())`.
 4. `HandleReplication` builds an `updatePacket` containing only keys where `schema[key].Replicate == true`.
-5. Orchestrator broadcasts `EntityUpdateRemote:FireAllClients(entityId, updatePacket)`.
+5. Orchestrator broadcasts `EntityUpdateEvent:FireAllClients(entityId, updatePacket)`.
 
 Client:
 
-1. `EntityUpdateRemote.OnClientEvent` receives `(entityId, updatePacket)`.
+1. `EntityUpdateEvent.OnClientEvent` receives `(entityId, updatePacket)`.
 2. Orchestrator finds the local entity via `Orchestrator.GetEntity(entityId)`.
 3. It writes packet values directly into `entity._privateProperties.Data`.
 4. It calls `entity:ApplyChanges(updatePacket)` to update visuals.
@@ -3161,7 +3155,7 @@ Design implications:
 
 Replication transport (current implementation):
 
-- Uses `RemoteEvent`s (`EntityUpdateRemote` and `ServiceManagerEvent`) and a `RemoteFunction` (`ServiceManagerRemote`).
+- Uses `RemoteEvent`s (`EntityUpdateEvent` and `OrchestratorEvent`) and a `RemoteFunction` (`OrchestratorFunction`).
 - It does not use Attributes or ValueObjects.
 - BaseEntity does not automatically replicate by itself; replication happens because Orchestrator listens to `entity.StateUpdated` on the server and then emits RemoteEvents.
 
@@ -3169,20 +3163,20 @@ Replication transport (current implementation):
 
 The framework provides a built-in Command Pattern to allow clients to request authoritative changes on the server.
 
-#### `Orchestrator.SendCommand(entityId, command, ...)`
+#### `Orchestrator.ServerCommandEntity(entityId, command, ...)`
 (Client-only) Sends a command to the server for a specific entity.
 
 ```lua
 -- On Client
-Orchestrator.SendCommand("Door_01", "Open", "Keycard_01")
+Orchestrator.ServerCommandEntity("Door_01", "Open", "Keycard_01")
 ```
 
-#### `Orchestrator.RegisterCommandHandler(entityId, command, handler)`
+#### `Orchestrator.RegisterEntityCommand(entityId, command, handler)`
 (Server-only) Registers logic to handle a client command.
 
 ```lua
 -- On Server
-Orchestrator.RegisterCommandHandler("Door_01", "Open", function(player, keyUsed)
+Orchestrator.RegisterEntityCommand("Door_01", "Open", function(player, keyUsed)
     local door = Orchestrator.GetEntity("Door_01")
     if keyUsed == "Keycard_01" then
         door.IsOpen = true
@@ -3223,8 +3217,8 @@ Keep commands replication-safe (primitive values), and never trust the client to
 
 Orchestrator also exposes a `RemoteFunction` API intended for telemetry and debugging:
 
-- RemoteFunction: `ServiceManagerRemote`
-- RemoteEvent: `ServiceManagerEvent`
+- RemoteFunction: `OrchestratorFunction`
+- RemoteEvent: `OrchestratorEvent`
 
 Request types handled on the server include:
 
@@ -3235,24 +3229,24 @@ Request types handled on the server include:
 - `"Scheduler"`: forwards actions into Scheduler (if present)
 - `"RequestEntitySnapshot"`: returns enough data for clients to spawn existing entities and seed `Data`
 
-Security note: `ServiceManagerRemote` does not enforce an admin check by default. If you ship this in a live game, add an authorization gate.
+Security note: `OrchestratorFunction` does not enforce an admin check by default. If you ship this in a live game, add an authorization gate.
 
 Production guidance (strongly recommended):
 
-- Treat `ServiceManagerRemote` as a **debug backdoor** until proven otherwise.
+- Treat `OrchestratorFunction` as a **debug backdoor** until proven otherwise.
 - Gate every request type by authorization (user allowlist, group rank, private server owner, etc.) and consider disabling entirely outside Studio.
 - Assume any client can attempt to call it; never expose write actions (UpdateSettings / ConsoleCommand / Scheduler actions) without checks.
 
 If you build an admin panel, also rate-limit these requests to avoid accidental performance issues.
 
-Example (gate ServiceManagerRemote without modifying the framework):
+Example (gate OrchestratorFunction without modifying the framework):
 
 ```lua
 -- ServerScriptService: run after Orchestrator:RegisterComponents() (so OnServerInvoke is set)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local ServiceManagerRemote = ReplicatedStorage:WaitForChild("ServiceManagerRemote")
-local original = ServiceManagerRemote.OnServerInvoke
+local OrchestratorFunction = ReplicatedStorage:WaitForChild("OrchestratorFunction")
+local original = OrchestratorFunction.OnServerInvoke
 
 local ADMIN_USER_IDS = {
     [12345678] = true,
@@ -3262,7 +3256,7 @@ local function isAdmin(player)
     return ADMIN_USER_IDS[player.UserId] == true
 end
 
-ServiceManagerRemote.OnServerInvoke = function(player, requestType, ...)
+OrchestratorFunction.OnServerInvoke = function(player, requestType, ...)
     if not isAdmin(player) then
         return nil
     end
@@ -3348,10 +3342,10 @@ Example (client debug poll loop):
 ```lua
 -- StarterPlayerScripts (admin-only UI / debug)
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServiceManagerRemote = ReplicatedStorage:WaitForChild("ServiceManagerRemote")
+local OrchestratorFunction = ReplicatedStorage:WaitForChild("OrchestratorFunction")
 
 local function Refresh()
-    local sync = ServiceManagerRemote:InvokeServer("GetSyncData")
+    local sync = OrchestratorFunction:InvokeServer("GetSyncData")
     if not sync or not sync.FSM then return end
 
     for id, sm in pairs(sync.FSM.StateMachines or {}) do
@@ -3461,7 +3455,7 @@ Pattern: Remote Observability.
 
 Use Case: Creating a "Commander Mode" map.
 
-Implementation: Use `ServiceManagerRemote:InvokeServer("GetSyncData")` to get a snapshot of active StateMachines/Entities plus Scheduler telemetry (if `shared.FSM.Scheduler` is set).
+Implementation: Use `OrchestratorFunction:InvokeServer("GetSyncData")` to get a snapshot of active StateMachines/Entities plus Scheduler telemetry (if `shared.FSM.Scheduler` is set).
 
 Note: the snapshot is sanitized (functions replaced, deep tables truncated) so it can be sent over remotes safely.
 
@@ -3472,9 +3466,9 @@ Example (single snapshot pull):
 ```lua
 -- Client (admin-only): get snapshot on demand
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local ServiceManagerRemote = ReplicatedStorage:WaitForChild("ServiceManagerRemote")
+local OrchestratorFunction = ReplicatedStorage:WaitForChild("OrchestratorFunction")
 
-local sync = ServiceManagerRemote:InvokeServer("GetSyncData")
+local sync = OrchestratorFunction:InvokeServer("GetSyncData")
 print(sync and sync.FSM and sync.FSM.History)
 ```
 
