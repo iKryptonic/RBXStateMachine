@@ -1,7 +1,14 @@
 --!strict
-
--- Runtime/Pages/ConsolePage.luau
--- Extracted Console page controller.
+--[[
+	@Name ConsolePage
+	@Author iKrypto
+	@Description Console page controller. Provides a developer CLI with a custom
+	scroll engine (viewport + content offsetting), tokenizer, command registry
+	with tab-completion, output formatting, and input history navigation.
+	
+	@deprecated This legacy controller is retained for regression testing only.
+	Use the new FSM/Entity pattern: FSM/ConsolePageFSM.luau + Entity/ConsolePageEntity.luau
+]]
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -14,8 +21,14 @@ export type Deps = {
 }
 
 local ConsolePage = {}
-local ConsolePage = {}
 
+--[[
+	@description Factory that creates the Console page with a full CLI: viewport,
+	custom scrollbar, command system, autocomplete, and input handling.
+	@param ServiceManager any -- The root ServiceManager instance.
+	@param deps Deps -- Injected dependencies (EscapeRichText, COLORS).
+	@return any -- A page table with Container, Tab, Constants, Connections, UpdateFunction.
+]]
 function ConsolePage.Create(ServiceManager: any, deps: Deps)
 	local owner = Players.LocalPlayer
 	if not owner then
@@ -39,11 +52,24 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 	-- --------------------------------------------------------------------------------
 	-- HELPERS
 	-- --------------------------------------------------------------------------------
+	--[[
+		@description Wraps text in a rich-text font tag with the given Color3.
+		@param text string -- The text to colorize.
+		@param col Color3 -- The RGB color.
+		@return string -- Rich-text formatted string.
+	]]
 	local function color(text: string, col: Color3)
 		local r, g, b = math.floor(col.R * 255), math.floor(col.G * 255), math.floor(col.B * 255)
 		return string.format('<font color="rgb(%d,%d,%d)">%s</font>', r, g, b, text)
 	end
 
+	--[[
+		@description Recursively formats a table into a multiline indented string
+		with rich-text colored keys.
+		@param tbl any -- The table (or value) to format.
+		@param indent number? -- Current indentation level (default 0).
+		@return string -- Formatted string representation.
+	]]
 	local function formatTable(tbl: any, indent: number?): string
 		indent = indent or 0
 		local result = ""
@@ -63,9 +89,6 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 		return result
 	end
 
-	-- --------------------------------------------------------------------------------
-	-- UI OUTPUT
-	-- --------------------------------------------------------------------------------
 	-- --------------------------------------------------------------------------------
 	-- UI OUTPUT
 	-- --------------------------------------------------------------------------------
@@ -135,6 +158,11 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 				uiList.Parent = SuggestionsFrame
 			end
 
+			--[[
+				@description Destroys all TextLabel children from the console Content
+				frame and resets the line counter.
+				@return ()
+			]]
 			local function clearConsole()
 				this.Constants.LineCount = 0
 				for _, item in Content:GetChildren() do
@@ -173,6 +201,11 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 			local dragStartY = 0
 			local startScrollY = 0
 
+			--[[
+				@description Returns the Y-axis content height from the UIListLayout
+				or the Content frame's AbsoluteSize.
+				@return number
+			]]
 			local function getContentHeight(): number
 				if ListLayout then
 					return ListLayout.AbsoluteContentSize.Y
@@ -180,10 +213,19 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 				return Content.AbsoluteSize.Y
 			end
 
+			--[[
+				@description Returns the viewport frame's absolute Y size.
+				@return number
+			]]
 			local function getViewportHeight(): number
 				return Viewport.AbsoluteSize.Y
 			end
 			
+			--[[
+				@description Clamps scroll position, applies Content offset, and updates
+				the custom scrollbar thumb size and position.
+				@return ()
+			]]
 			local function updateVisuals()
 				local contentH = getContentHeight()
 				local viewportH = getViewportHeight()
@@ -216,6 +258,12 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 				end
 			end
 			
+			--[[
+				@description Sets the scroll position and updates visuals. Determines
+				whether auto-follow-tail is active based on proximity to bottom.
+				@param val number -- Desired scroll offset.
+				@return ()
+			]]
 			local function setScroll(val: number)
 				currentScrollY = val
 				updateVisuals()
@@ -223,6 +271,10 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 				;(this.Constants :: any).FollowTail = followTail
 			end
 
+			--[[
+				@description Returns true if within 20px of the maximum scroll.
+				@return boolean
+			]]
 			local function isNearBottom(): boolean
 				local contentH = getContentHeight()
 				local viewportH = getViewportHeight()
@@ -230,6 +282,11 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 				return (maxScroll - currentScrollY) < 20
 			end
 
+			--[[
+				@description Asynchronously scrolls to the bottom of the console by
+				hooking layout changes and deferring a frame.
+				@return ()
+			]]
 			local function snapToBottomAsync()
 				local finished = false
 				local conn: any = nil
@@ -306,6 +363,14 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 			end))
 
 			-- Line Renderer
+			--[[
+				@description Creates a new TextLabel line in the console with color
+				based on output type (0=Prompt, 1=Success, 2=Warning, 3=Error).
+				Auto-scrolls if near bottom.
+				@param text string -- The line text (may include rich text).
+				@param outputType number? -- Color type indicator.
+				@return ()
+			]]
 			local function writeLine(text: string, outputType: number?)
 				local shouldAutoScroll = followTail or isNearBottom()
 				local lineLabel = ServiceManager.GUI.References.ConsoleLineReference:Clone()
@@ -334,6 +399,14 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 				end
 			end
 
+			--[[
+				@description Logs multiline text into the console, optionally escaping
+				rich text. Handles smart auto-scroll.
+				@param text string -- The message to log.
+				@param typeVal number? -- Log level / color type.
+				@param raw boolean? -- If true, skip HTML escaping.
+				@return ()
+			]]
 			local function log(text: string, typeVal: number?, raw: boolean?)
 				-- Smart Scroll Logic
 				local isAtBottom = isNearBottom()
@@ -356,10 +429,26 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 			-- --------------------------------------------------------------------------------
 			local Registry = {}
 			
+			--[[
+				@description Registers a console command with name, description, group,
+				action function, and optional tab-completion function.
+				@param name string -- Command keyword.
+				@param desc string -- Human-readable description.
+				@param group string -- Grouping label (Core, Scheduler, FSM).
+				@param fn (args: {string}, flags: {[string]: any}) -> string? -- Action.
+				@param completion ((args: {string}, currentToken: string) -> {string})? -- Tab-complete.
+				@return ()
+			]]
 			local function register(name: string, desc: string, group: string, fn: (args: {string}, flags: {[string]: any}) -> string?, completion: ((args: {string}, currentToken: string) -> {string})?)
 				Registry[name] = { Description = desc, Group = group, Action = fn, Completion = completion }
 			end
 
+			--[[
+				@description Tokenizes a command-line input string. Supports quoted strings,
+				escape characters, and trailing-space detection for autocomplete.
+				@param input string -- Raw user input.
+				@return {string} -- Array of tokens.
+			]]
 			local function tokenize(input: string): {string}
 				local tokens = {}
 				local currentToken = ""
@@ -398,6 +487,12 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 				return tokens
 			end
 
+			--[[
+				@description Parses a command-line string into positional args and a
+				flag table. Flags start with `-`.
+				@param input string -- Raw user input.
+				@return {string}, {[string]: any} -- Args array and flags map.
+			]]
 			local function parse(input: string)
 				local rawTokens = tokenize(input)
 				-- Remove the empty trailing token if it exists (it's for autocomplete only)
@@ -548,6 +643,12 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 			-- --------------------------------------------------------------------------------
 			-- INPUT HANDLING
 			-- --------------------------------------------------------------------------------
+			--[[
+				@description Executes a console command: adds to history, echoes input,
+				parses tokens, runs the registered action or falls back to server.
+				@param text string -- Raw user input.
+				@return ()
+			]]
 			local function execute(text: string)
 				if text:match("^%s*$") then return end
 				
@@ -591,6 +692,11 @@ function ConsolePage.Create(ServiceManager: any, deps: Deps)
 			end
 			
 			-- Autocomplete
+			--[[
+				@description Updates the autocomplete suggestions UI based on the
+				current input text, matching command names or sub-command completions.
+				@return ()
+			]]
 			local function updateSuggestions()
 				local text = InputBox.Text
 				local tokens = tokenize(text)

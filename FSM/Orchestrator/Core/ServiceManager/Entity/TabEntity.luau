@@ -25,6 +25,11 @@ local COLORS = {
 	Hover = Color3.fromRGB(60, 60, 60),
 }
 
+--[[
+	@description Extracts the tab name and frame GUI reference from creation params.
+	@param params any -- Entity creation parameters containing Context table.
+	@return table -- The resolved context with TabName and TabFrame.
+]]
 function TabEntity:GetContext(params: any)
 	return {
 		TabName = params.Context and params.Context.TabName,
@@ -32,6 +37,9 @@ function TabEntity:GetContext(params: any)
 	}
 end
 
+--[[
+	@description Initializes tab state, caches button/indicator GUI references, and applies initial visuals.
+]]
 function TabEntity:Initialize()
 	self.IsActive = false
 	self.IsEnabled = true
@@ -47,6 +55,9 @@ function TabEntity:Initialize()
 	self:Log({ Level = "INFO", Message = string.format("TabEntity initialized: %s", self.TabName or "Unknown") })
 end
 
+--[[
+	@description Marks the tab as active and refreshes its visual appearance.
+]]
 function TabEntity:Activate()
 	if not self.IsActive then
 		self.IsActive = true
@@ -54,6 +65,9 @@ function TabEntity:Activate()
 	end
 end
 
+--[[
+	@description Marks the tab as inactive and refreshes its visual appearance.
+]]
 function TabEntity:Deactivate()
 	if self.IsActive then
 		self.IsActive = false
@@ -61,6 +75,9 @@ function TabEntity:Deactivate()
 	end
 end
 
+--[[
+	@description Enables the tab, allowing interaction, and refreshes visuals.
+]]
 function TabEntity:Enable()
 	if not self.IsEnabled then
 		self.IsEnabled = true
@@ -68,6 +85,9 @@ function TabEntity:Enable()
 	end
 end
 
+--[[
+	@description Disables the tab, preventing interaction, and refreshes visuals.
+]]
 function TabEntity:Disable()
 	if self.IsEnabled then
 		self.IsEnabled = false
@@ -75,6 +95,9 @@ function TabEntity:Disable()
 	end
 end
 
+--[[
+	@description Tweens button background/text color and indicator visibility based on active/enabled state.
+]]
 function TabEntity:ApplyVisuals()
 	if not self.Button then return end
 	
@@ -102,6 +125,9 @@ function TabEntity:ApplyVisuals()
 	end
 end
 
+--[[
+	@description Connects MouseEnter/MouseLeave events on the tab button for hover color transitions.
+]]
 function TabEntity:SetupHoverEffects()
 	if not self.Button then return end
 	
@@ -122,6 +148,10 @@ function TabEntity:SetupHoverEffects()
 	end))
 end
 
+--[[
+	@description Applies state changes and triggers a visual update if IsActive or IsEnabled changed.
+	@param changes { [string]: any } -- Key-value pairs of changed fields.
+]]
 function TabEntity:ApplyChanges(changes: { [string]: any })
 	local needsVisualUpdate = false
 	

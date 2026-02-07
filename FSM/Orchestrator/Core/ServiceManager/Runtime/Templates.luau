@@ -1,6 +1,10 @@
 --!strict
--- Templates
--- Provides stable access to UI template instances and safe cloning.
+--[[
+	@Name Templates
+	@Author iKrypto
+	@Description Provides stable references to UI template Instances stored in the
+	References folder, along with a type-safe Clone helper.
+]]
 
 export type Templates = {
 	TaskCardReference: TextButton,
@@ -13,6 +17,12 @@ export type Templates = {
 
 local TemplatesModule = {}
 
+--[[
+	@description Constructs a Templates object from the given References folder.
+	Waits for each child by name and casts to the expected type.
+	@param referencesFolder Folder -- The folder containing template Instances.
+	@return Templates -- A table of references with a :Clone() helper.
+]]
 function TemplatesModule.new(referencesFolder: Folder): Templates
 	local t = {
 		TaskCardReference = referencesFolder:WaitForChild("TaskCardReference") :: TextButton,

@@ -12,6 +12,11 @@ local ModeToggleFSM = {
 	}
 }
 
+--[[
+	@description Registers Client, Server, SwitchingToServer, and SwitchingToClient states.
+	Switching states clear all cached data, reset sync state, show a loading overlay,
+	and trigger an immediate fetch when switching to server mode.
+]]
 function ModeToggleFSM:RegisterStates()
 	
 	-- State: Client

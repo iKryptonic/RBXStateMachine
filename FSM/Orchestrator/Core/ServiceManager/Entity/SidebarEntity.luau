@@ -23,6 +23,11 @@ local COLORS = {
 	ServerMode = Color3.fromRGB(200, 50, 50),
 }
 
+--[[
+	@description Extracts the sidebar container and ServiceManager reference from creation params.
+	@param params any -- Entity creation parameters containing Context table.
+	@return table -- The resolved context with SidebarContainer and ServiceManager.
+]]
 function SidebarEntity:GetContext(params: any)
 	return {
 		SidebarContainer = params.Context and params.Context.SidebarContainer,
@@ -30,6 +35,9 @@ function SidebarEntity:GetContext(params: any)
 	}
 end
 
+--[[
+	@description Initializes sidebar state, caches button/label GUI references, and applies initial visuals.
+]]
 function SidebarEntity:Initialize()
 	self.Mode = "client"
 	self.ActiveService = "Scheduler"
@@ -50,6 +58,9 @@ function SidebarEntity:Initialize()
 	self:Log({ Level = "INFO", Message = "SidebarEntity initialized" })
 end
 
+--[[
+	@description Updates the mode toggle button text and color based on current client/server mode.
+]]
 function SidebarEntity:UpdateModeButton()
 	if not self.ModeToggleBtn then return end
 	
@@ -58,6 +69,9 @@ function SidebarEntity:UpdateModeButton()
 	self.ModeToggleBtn.BackgroundColor3 = isClient and COLORS.ClientMode or COLORS.ServerMode
 end
 
+--[[
+	@description Updates the service toggle button text (TASKS/FSM) and color.
+]]
 function SidebarEntity:UpdateServiceButton()
 	if not self.ServiceToggleBtn then return end
 	
@@ -66,6 +80,9 @@ function SidebarEntity:UpdateServiceButton()
 	self.ServiceToggleBtn.BackgroundColor3 = isScheduler and COLORS.Accent or COLORS.Warning
 end
 
+--[[
+	@description Updates the ping indicator label (shows ms value, OFFLINE, or ---).
+]]
 function SidebarEntity:UpdatePingLabel()
 	if not self.PingLabel then return end
 	
@@ -78,6 +95,10 @@ function SidebarEntity:UpdatePingLabel()
 	end
 end
 
+--[[
+	@description Applies granular state changes and batches the appropriate UI updates.
+	@param changes { [string]: any } -- Key-value pairs of changed fields.
+]]
 function SidebarEntity:ApplyChanges(changes: { [string]: any })
 	local needsModeUpdate = false
 	local needsServiceUpdate = false

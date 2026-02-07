@@ -19,6 +19,11 @@ local ServiceManagerClientEntity = {
 	}
 }
 
+--[[
+	@description Extracts the Orchestrator and ServiceManager references from creation params.
+	@param params any -- Entity creation parameters containing Context table.
+	@return table -- The resolved context with Orchestrator and ServiceManager.
+]]
 function ServiceManagerClientEntity:GetContext(params: any)
 	return {
 		Orchestrator = params.Context and params.Context.Orchestrator,
@@ -26,26 +31,34 @@ function ServiceManagerClientEntity:GetContext(params: any)
 	}
 end
 
+--[[
+	@description Initializes the client entity: registers sync callbacks, creates FSMs
+	(UIInitialization, TabNavigation, ModeToggle, Terminal, Connection),
+	hooks input, and schedules a recurring UI update task.
+]]
 function ServiceManagerClientEntity:Initialize()
-	-- Locate or Initialize ServiceManager
+	-- Guard: prevent double-initialization
+	if self._initialized then return end
+	self._initialized = true
+
 	local Orchestrator = self.Orchestrator
 	local ServiceManager = self.ServiceManager
-	
+
 	if not ServiceManager then
 		self:Log({ Level = "ERROR", Message = "Failed to load ServiceManager module." })
 		return
 	end
-	
+
 	-- Store reference
 	self.ServiceManager = ServiceManager
 	self.UIRefreshRate = 0.1  -- 10Hz updates
 	self.LastUIUpdate = 0
 
-	-- Initialize ServiceManager base structures (LEGACY - will be phased out)
-	if ServiceManager.Initialize then
-		ServiceManager:Initialize(Orchestrator)
-	end
-	
+	-- NOTE: init.luau's Initialize() is the primary entry point.
+	-- This entity is created at the end of that flow. Do NOT call
+	-- ServiceManager:Initialize(Orchestrator) here — it would cause
+	-- infinite recursion (init creates entity → entity calls init).
+
 	-- Initialize entity structure
 	ServiceManager.Entities = ServiceManager.Entities or {
 		Window = nil,
@@ -238,8 +251,8 @@ function ServiceManagerClientEntity:Initialize()
 		Context = {
 			CurrentTab = ServiceManager.ActivePage or "TaskList",
 			TargetTab = nil,
-			Pages = ServiceManager.Pages,  -- Set after Pages are created
-			TabEntities = ServiceManager.Entities.Tabs
+			Pages = ServiceManager.Pages,  -- Populated by init.luau before entity:Initialize()
+			TabEntities = ServiceManager.Entities and ServiceManager.Entities.Tabs or {}
 		}
 	})
 	self.TabNavigationFSM = TabNavigationFSM
@@ -309,6 +322,15 @@ function ServiceManagerClientEntity:Initialize()
 		end
 		
 		ModeToggleFSM.Context.ConnectionFSM = ConnectionFSM
+
+		-- Update TabNavigationFSM context with created entities
+		if ServiceManager.Entities.Tabs then
+			TabNavigationFSM.Context.TabEntities = ServiceManager.Entities.Tabs
+		end
+		-- Ensure Pages reference is current
+		if ServiceManager.Pages then
+			TabNavigationFSM.Context.Pages = ServiceManager.Pages
+		end
 	end)
 	
 	-- Input Handling: F7 toggle
@@ -317,30 +339,11 @@ function ServiceManagerClientEntity:Initialize()
 			TerminalFSM.Context.IsTogglePressed = true
 		end
 	end))
-	
-	-- Hook Tab Click Handlers (after Pages are created)
-	task.defer(function()
-		task.wait(0.3)  -- Wait for Pages to initialize
-		
-		for tabName, tabEntity in pairs(ServiceManager.Entities.Tabs or{}) do
-			if tabEntity.Button then
-				tabEntity:Manage(tabEntity.Button.MouseButton1Click:Connect(function()
-					if TabNavigationFSM.Context.CurrentTab ~= tabName then
-						TabNavigationFSM.Context.TargetTab = tabName
-					end
-				end))
-			end
-		end
-		
-		-- Hook Mode Toggle Button
-		local modeToggleBtn = ServiceManager.GUI.SidebarContainer and ServiceManager.GUI.SidebarContainer:FindFirstChild("ModeToggle")
-		if modeToggleBtn then
-			self:Manage(modeToggleBtn.MouseButton1Click:Connect(function()
-				local currentMode = ModeToggleFSM.Context.CurrentMode or "client"
-				ModeToggleFSM.Context.TargetMode = (currentMode == "client") and "server" or "client"
-			end))
-		end
-	end)
+
+	-- NOTE: Tab click handlers and mode toggle button are already hooked
+	-- by init.luau's HookTabButtons/Initialize. Those handlers delegate to
+	-- the FSMs (TabNavigationFSM, ModeToggleFSM) when they exist, falling
+	-- back to legacy inline code if they don't. No need to double-hook here.
 	
 	-- Schedule UI Update Task
 	if Orchestrator.Scheduler then
@@ -359,6 +362,10 @@ function ServiceManagerClientEntity:Initialize()
 	self:Log({ Level = "INFO", Message = "ServiceManager Client Entity Initialized (Logic v2)" })
 end
 
+--[[
+	@description Performs throttled (10 Hz) UI updates: refreshes sidebar and bottom bar
+	entities with live data from the ServiceManager.
+]]
 function ServiceManagerClientEntity:UpdateUI()
 	local now = os.clock()
 	if now - self.LastUIUpdate < self.UIRefreshRate then return end
@@ -417,12 +424,22 @@ function ServiceManagerClientEntity:UpdateUI()
 	end
 end
 
+--[[
+	@description Applies key-value state changes to the entity.
+	@param changes { [string]: any } -- Key-value pairs of changed fields.
+]]
 function ServiceManagerClientEntity:ApplyChanges(changes: { [string]: any })
 	for key, value in pairs(changes) do
 		self[key] = value
 	end
 end
 
+--[[
+	@description Cancels all owned FSMs (Terminal, Connection, UIInitialization, TabNavigation, ModeToggle).
+]]
+--[[
+	@description Cancels all owned FSMs (Terminal, Connection, UIInitialization, TabNavigation, ModeToggle).
+]]
 function ServiceManagerClientEntity:OnCleanup()
 	if self.TerminalFSM then self.TerminalFSM:Cancel() end
 	if self.ConnectionFSM then self.ConnectionFSM:Cancel() end

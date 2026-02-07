@@ -90,8 +90,10 @@ function PageInitializerFSM:RegisterStates()
 			end
 			
 			local entityCount = 0
+			local pages = serviceManager.Pages -- Optional legacy page controllers (deprecated)
 			
 			for pageName, refs in pairs(fsm.PageContainers) do
+				local pageController = pages and pages[pageName] -- Optional legacy fallback
 				local entitySuccess, entityResult = pcall(function()
 					return orchestrator.CreateEntity({
 						EntityClass = pageName .. "PageEntity",
@@ -101,6 +103,7 @@ function PageInitializerFSM:RegisterStates()
 							ViewContainer = refs.ViewFrame,
 							Container = refs.Container,
 							TabButton = refs.TabButton,
+							PageController = pageController,
 							COLORS = colors
 						}
 					})
@@ -127,15 +130,19 @@ function PageInitializerFSM:RegisterStates()
 			
 			local fsmCount = 0
 			
+			local pages = serviceManager.Pages -- Optional legacy page controllers (deprecated)
+			
 			for pageName, _ in pairs(fsm.PageContainers) do
 				-- Only create FSM if entity was created successfully
 				if serviceManager.PageEntities[pageName] then
+					local pageController = pages and pages[pageName]
 					local fsmSuccess, fsmResult = pcall(function()
 						return orchestrator.CreateStateMachine({
 							StateMachineClass = pageName .. "PageFSM",
 							StateMachineId = pageName .. "PageFSM",
 							Context = {
 								PageEntity = serviceManager.PageEntities[pageName],
+								PageController = pageController,
 								ServiceManager = serviceManager,
 								COLORS = colors
 							}
@@ -185,7 +192,7 @@ end
 	@description Cleanup handler
 	@return ()
 ]]
-function PageInitializerFSM:Cleanup()
+function PageInitializerFSM:OnCleanup()
 	self.PageContainers = nil
 end
 

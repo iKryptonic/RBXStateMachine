@@ -1,7 +1,14 @@
 --!strict
-
--- Runtime/Pages/HistoryPage.luau
--- Extracted History page controller.
+--[[
+	@Name HistoryPage
+	@Author iKrypto
+	@Description History page controller. Displays paginated, filterable
+	(Completed/Failed/Cancelled), sortable task execution history with a
+	details drill-down view showing duration, timestamp, and error output.
+	
+	@deprecated This legacy controller is retained for regression testing only.
+	Use the new FSM/Entity pattern: FSM/HistoryPageFSM.luau + Entity/HistoryPageEntity.luau
+]]
 
 export type Deps = {
 	EnsurePagination: (Instance, any, (() -> ())) -> Instance?,
@@ -13,6 +20,13 @@ export type Deps = {
 
 local HistoryPage = {}
 
+--[[
+	@description Factory that creates the History page with paginated list view,
+	status filters, search, sort, and details drill-down.
+	@param ServiceManager any -- The root ServiceManager instance.
+	@param deps Deps -- Injected dependencies (pagination, rich text, colors, templates).
+	@return any -- A page table with Container, Tab, Constants, Connections, UpdateFunction.
+]]
 function HistoryPage.Create(ServiceManager: any, deps: Deps)
 	local page: any = {
 		Container = ServiceManager.GUI.BodyContainer:WaitForChild("HistoryView"):WaitForChild("Container"),
@@ -80,6 +94,13 @@ function HistoryPage.Create(ServiceManager: any, deps: Deps)
 				end
 
 				local entry = this.Constants.SelectedEntry
+				--[[
+					@description Creates a key-value field row in the history details view.
+					@param titleText string -- The field label.
+					@param value any -- The field value.
+					@param hexColor string? -- Optional hex color for the value text.
+					@return ()
+				]]
 				local function addField(titleText: string, value: any, hexColor: string?)
 					local fieldRow = deps.TaskDataReference:Clone()
 					fieldRow.Parent = content
@@ -164,6 +185,12 @@ function HistoryPage.Create(ServiceManager: any, deps: Deps)
 			table.insert(this.Connections, searchConn)
 
 			-- Filter Buttons
+			--[[
+				@description Creates a filter toggle button for a history status category.
+				@param name string -- Filter category ("Completed", "Failed", "Cancelled").
+				@param color Color3 -- Button accent color.
+				@return ()
+			]]
 			local function createFilter(name: string, color: Color3)
 				local btn = Instance.new("TextButton")
 				btn.Text = name

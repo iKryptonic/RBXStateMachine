@@ -1,15 +1,26 @@
 --!strict
-
--- Runtime/ServiceProxy.luau
--- Creates service proxy tables that route calls to local services (client mode)
--- or to the server bridge (server mode).
+--[[
+	@Name ServiceProxy
+	@Author iKrypto
+	@Description Creates proxy tables that transparently route service calls
+	to local services (client mode) or to the server bridge (server mode).
+	Uses metatables so page controllers don't need to handle mode differences.
+]]
 
 local RS = game:GetService("ReplicatedStorage")
 
 local ServiceProxy = {}
 
-
-function ServiceProxy.Create(this: any, serviceName: string)
+--[[
+	@description Creates a mode-aware proxy for the named service.
+	In client mode, calls are routed to the real local service.
+	In server mode, calls are forwarded via Orchestrator.Request with
+	circuit breaker protection.
+	@param this any -- ServiceManager instance (provides Mode, Orchestrator, ServerData, Network).
+	@param serviceName string -- The service key ("Scheduler" or "FSM").
+	@return any -- A proxy table with __index routing.
+]]
+function ServiceProxy.Create(this: any, serviceName: string): any
 	local proxy = {}
 	local meta: any = {}
 

@@ -33,6 +33,9 @@ local NetworkRuntime = require(RunTimeFolder:WaitForChild("Network") :: any)
 local ServiceProxyRuntime = require(RunTimeFolder:WaitForChild("ServiceProxy") :: any)
 
 -- PagesFolder
+-- DEPRECATED: Legacy page controllers retained for regression testing.
+-- New FSM/Entity pattern: see FSM/*PageFSM.luau and Entity/*PageEntity.luau
+-- These will be invoked only as fallback when FSM/Entity pages are unavailable.
 local ConsolePage = require(PagesFolder:WaitForChild("ConsolePage") :: any)
 local SettingsPage = require(PagesFolder:WaitForChild("SettingsPage") :: any)
 local LogsPage = require(PagesFolder:WaitForChild("LogsPage") :: any)
@@ -73,12 +76,12 @@ local ServiceManager = {
 		["TabContainer"] = guiRefs.TabContainer,
 		["Title"] = guiRefs.Title,
 		["References"] = guiRefs.References,
-	};
+	}
 
 	Services = {
 		Scheduler = nil,
 		FSM = nil,
-	};
+	}
 
 	ServerData = {
 		Scheduler = {
@@ -109,13 +112,13 @@ local ServiceManager = {
 			History = {},
 			Logs = { History = {} },
 		}
-	};
+	}
 
-	ArchivedTasks = {};
-	ArchivedFSMs = {};
-	ArchivedEntities = {};
-	LastClientTasks = {};
-	LastEntities = {};
+	ArchivedTasks = {}
+	ArchivedFSMs = {}
+	ArchivedEntities = {}
+	LastClientTasks = {}
+	LastEntities = {}
 
 	ActiveService = "Scheduler",
 	ActivePage = nil,
@@ -130,7 +133,7 @@ local ServiceManager = {
 
 	-- Metadata Cache to preserve FSM structure across stateMachines of the same name
 	FSMMetadataCache = {} :: { [string]: { Graph: any?, ValidStates: any? } }
-};
+}
 
 local Templates = TemplatesModule.new(ServiceManager.GUI.References)
 local ObjectReferences = {
@@ -146,26 +149,57 @@ local ObjectReferences = {
 ServiceManager.Sidecar = SidecarModule.new()
 
 -- Back-compat convenience wrappers (additive; does not change existing behavior)
+
+--[[
+	@description Returns the Orchestrator module reference from the Sidecar.
+	@return any? -- The Orchestrator module, or nil if unavailable.
+]]
 function ServiceManager:GetOrchestrator()
 	return (self.Sidecar :: any):GetOrchestrator()
 end
 
+--[[
+	@description Returns the Factory module reference from the Sidecar.
+	@return any? -- The Factory module, or nil if unavailable.
+]]
 function ServiceManager:GetFactory()
 	return (self.Sidecar :: any):GetFactory()
 end
 
+--[[
+	@description Forwards a named request to the Sidecar's Request handler.
+	@param requestName string -- The name of the request to invoke.
+	@param ... any -- Variadic arguments passed through to the request handler.
+	@return any -- The result from the Sidecar request.
+]]
 function ServiceManager:Request(requestName: string, ...: any)
 	return (self.Sidecar :: any):Request(requestName, ...)
 end
 
+--[[
+	@description Returns the latest server sync payload from the Sidecar.
+	@return table? -- The server sync data table, or nil if not connected.
+]]
 function ServiceManager:GetServerSyncData()
 	return (self.Sidecar :: any):GetServerSyncData()
 end
 
+--[[
+	@description Creates a new entity via the Factory through the Sidecar.
+	@param classOrName any -- The entity class or registered name to instantiate.
+	@param params { EntityId: string?, Context: { [any]: any } } -- Creation parameters including optional ID and context.
+	@return any -- The newly created entity instance.
+]]
 function ServiceManager:CreateEntityFromFactory(classOrName: any, params: { EntityId: string?, Context: { [any]: any } })
 	return (self.Sidecar :: any):CreateEntity(classOrName, params)
 end
 
+--[[
+	@description Creates a new state machine via the Factory through the Sidecar.
+	@param classOrName any -- The FSM class or registered name to instantiate.
+	@param params { StateMachineId: string?, Context: { [any]: any }? } -- Creation parameters including optional ID and context.
+	@return any -- The newly created state machine instance.
+]]
 function ServiceManager:CreateStateMachineFromFactory(classOrName: any, params: { StateMachineId: string?, Context: { [any]: any }? })
 	return (self.Sidecar :: any):CreateStateMachine(classOrName, params)
 end
@@ -200,11 +234,13 @@ do
 end
 
 --[[
-	Creates a new Instance with the given properties.
-	@param ClassName string - The class name of the instance.
-	@param Properties table - A dictionary of properties to apply.
+	@description Creates a new Roblox Instance and applies the given property dictionary.
+	Parent is applied last to avoid premature replication.
+	@param className string -- The class name of the Instance to create.
+	@param properties { [string]: any } -- A dictionary of property names to values.
+	@return Instance -- The newly created and configured Instance.
 ]]
-local function Create(className, properties)
+local function Create(className: string, properties: { [string]: any }): Instance
 	local instance = Instance.new(className)
 	for propertyName, propertyValue in pairs(properties) do
 		if propertyName ~= "Parent" then
@@ -215,14 +251,29 @@ local function Create(className, properties)
 	return instance
 end
 
-local function Tween(instance, tweenProperties, durationSeconds)
+--[[
+	@description Creates and plays a Quad-Out tween on the given Instance.
+	@param instance Instance -- The Instance to tween.
+	@param tweenProperties { [string]: any } -- Property goals for the tween.
+	@param durationSeconds number? -- Duration in seconds (default 0.18).
+	@return Tween -- The playing Tween object.
+]]
+local function Tween(instance: Instance, tweenProperties: { [string]: any }, durationSeconds: number?): Tween
 	local info = TweenInfo.new(durationSeconds or 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local tween = TweenService:Create(instance, info, tweenProperties)
 	tween:Play()
 	return tween
 end
 
-local function SetLoadingOverlay(this, visible: boolean, text: string?)
+--[[
+	@description Shows or hides the loading overlay in the body container.
+	Used during context-switch transitions to mask stale data.
+	@param this any -- ServiceManager instance.
+	@param visible boolean -- Whether the overlay should be visible.
+	@param text string? -- Optional status message to display.
+	@return ()
+]]
+local function SetLoadingOverlay(this: any, visible: boolean, text: string?)
 	local overlay = this and this.GUI and this.GUI.BodyContainer and this.GUI.BodyContainer:FindFirstChild("LoadingOverlay")
 	if not overlay then
 		return
@@ -243,8 +294,12 @@ local function SetLoadingOverlay(this, visible: boolean, text: string?)
 	end
 end
 
--- Connection Management
-function ServiceManager:ClearConnections(connections)
+--[[
+	@description Disconnects all RBXScriptConnections in the given array and nils each slot.
+	@param connections { RBXScriptConnection }? -- Array of connections to clear.
+	@return ()
+]]
+function ServiceManager:ClearConnections(connections: { RBXScriptConnection }?)
 	if not connections then return end
 	for i, conn in next, connections do
 		if typeof(conn) == "RBXScriptConnection" then
@@ -254,8 +309,13 @@ function ServiceManager:ClearConnections(connections)
 	end
 end
 
--- UI Helpers
-local function EnsureToolbar(view)
+--[[
+	@description Ensures a horizontal toolbar Frame exists at the top of the given view.
+	Creates one if it does not already exist.
+	@param view Instance -- The parent view container.
+	@return Frame -- The existing or newly created toolbar.
+]]
+local function EnsureToolbar(view: Instance): Frame
 	local toolbar = view:FindFirstChild("Toolbar")
 	if not toolbar then
 		toolbar = Create("Frame", {Name="Toolbar", Size=UDim2.new(1,0,0,35), BackgroundTransparency=1, Parent=view})
@@ -264,8 +324,16 @@ local function EnsureToolbar(view)
 	return toolbar
 end
 
-local function CreateSearchBox(parent, initialText, callback)
-	if parent:FindFirstChild("Search") then return parent.Search end
+--[[
+	@description Creates a debounced search TextBox inside the given parent.
+	Returns the existing one if already present.
+	@param parent Instance -- Parent container (typically a toolbar).
+	@param initialText string? -- Pre-filled search text.
+	@param callback (text: string) -> () -- Debounced callback fired on text change.
+	@return TextBox -- The search input element.
+]]
+local function CreateSearchBox(parent: Instance, initialText: string?, callback: (string) -> ()): TextBox
+	if parent:FindFirstChild("Search") then return (parent :: any).Search end
 	local search = Create("TextBox", {
 		Name="Search", Size=UDim2.new(0,120,1,0), BackgroundColor3=Color3.fromRGB(30,30,30), TextColor3=Color3.new(1,1,1),
 		Font=Enum.Font.Gotham, TextSize=12, PlaceholderText="Search...", Text=initialText or "", Parent=parent
@@ -285,7 +353,16 @@ local function CreateSearchBox(parent, initialText, callback)
 	return search
 end
 
-local function CreateButton(parent, text, color, callback, width)
+--[[
+	@description Creates a styled TextButton with optional click callback.
+	@param parent Instance -- Parent container.
+	@param text string -- Button label text.
+	@param color Color3? -- Background color (defaults to DarkBG).
+	@param callback (() -> ())? -- Optional click handler.
+	@param width number? -- Button width in pixels (default 90).
+	@return TextButton -- The created button.
+]]
+local function CreateButton(parent: Instance, text: string, color: Color3?, callback: (() -> ())?, width: number?): TextButton
 	local btn = Create("TextButton", {
 		Text=text, Size=UDim2.new(0,width or 90,1,0), BackgroundColor3=color or COLORS.DarkBG,
 		TextColor3=Color3.new(1,1,1), Font=Enum.Font.GothamBold, TextSize=10, Parent=parent
@@ -295,7 +372,14 @@ local function CreateButton(parent, text, color, callback, width)
 	return btn
 end
 
-local function EnsurePagination(view, constants, updateFunc)
+--[[
+	@description Ensures pagination controls (Prev/Next buttons + page label) exist in the view.
+	@param view Instance -- The parent view container.
+	@param constants { Page: number, [string]: any } -- Shared state table containing `Page` index.
+	@param updateFunc () -> () -- Callback invoked when page changes.
+	@return Frame -- The controls container.
+]]
+local function EnsurePagination(view: Instance, constants: { Page: number }, updateFunc: () -> ()): Frame
 	local controls = view:FindFirstChild("Controls")
 	if not controls then
 		controls = Create("Frame", {Name="Controls", Size=UDim2.new(0.35, -5, 0, 30), Position=UDim2.new(0, 5, 1, -35), BackgroundTransparency=1, Parent=view})
@@ -313,7 +397,11 @@ local function EnsurePagination(view, constants, updateFunc)
 	return controls
 end
 
-local function CreateToastContainer()
+--[[
+	@description Ensures the toast notification container exists in the main frame.
+	@return Frame -- The toast container.
+]]
+local function CreateToastContainer(): Frame
 	local container = ServiceManager.GUI.MainFrame:FindFirstChild("ToastContainer")
 	if not container then
 		container = Create("Frame", {
@@ -325,7 +413,12 @@ local function CreateToastContainer()
 	return container
 end
 
-local function EscapeRichText(text: string)
+--[[
+	@description Escapes XML/HTML special characters for Roblox RichText rendering.
+	@param text string -- Raw text to sanitize.
+	@return string -- Escaped text safe for RichText labels.
+]]
+local function EscapeRichText(text: string): string
 	text = tostring(text)
 	text = text:gsub("&", "&amp;")
 	text = text:gsub("<", "&lt;")
@@ -333,7 +426,12 @@ local function EscapeRichText(text: string)
 	return text
 end
 
-local function ColorKey(color: Color3)
+--[[
+	@description Converts a Color3 to a "R,G,B" string key for theme lookup.
+	@param color Color3 -- The color to convert.
+	@return string -- Comma-separated RGB string (e.g. "25,25,25").
+]]
+local function ColorKey(color: Color3): string
 	return string.format("%d,%d,%d",
 		math.floor(color.R * 255 + 0.5),
 		math.floor(color.G * 255 + 0.5),
@@ -341,6 +439,12 @@ local function ColorKey(color: Color3)
 	)
 end
 
+--[[
+	@description Displays a temporary toast notification at the bottom of the ServiceManager UI.
+	Creates an animated frame that slides in, holds for 2 seconds, then fades out and self-destructs.
+	@param Message string -- The text to display in the toast.
+	@param Type string? -- Toast style: "Success", "Warning", "Error", or nil for accent color.
+]]
 function ServiceManager:Toast(Message, Type)
 	local Container = CreateToastContainer()
 	local Color = (Type == "Success" and COLORS.Success) or (Type == "Warning" and COLORS.Warning) or (Type == "Error" and COLORS.Error) or COLORS.Accent
@@ -388,15 +492,15 @@ local BottomBarMetadata = {
 				local dt = now - lastTime
 				lastTime = now
 				local ServerTick = dt > 0 and math.round(1 / dt) or 0
-				this.ObjectReference.Text = string.format("<font color='#888888'>[TICK]</font> <font color='#A0FFA0'>%d</font>", ServerTick);
+				this.ObjectReference.Text = string.format("<font color='#888888'>[TICK]</font> <font color='#A0FFA0'>%d</font>", ServerTick)
 			end,
 			ObjectReference = ServiceManager.GUI.BottomBarContainer:FindFirstChild("ServerTick"),
 		}
 	end)(),
 	["ServerTime"] = {
 		UpdateFunction = function(this)
-			local ServerTime = os.date("%I:%M:%S %p");
-			this.ObjectReference.Text = string.format("<font color='#888888'>[TIME]</font> %s", ServerTime);
+			local ServerTime = os.date("%I:%M:%S %p")
+			this.ObjectReference.Text = string.format("<font color='#888888'>[TIME]</font> %s", ServerTime)
 		end,
 		ObjectReference = ServiceManager.GUI.BottomBarContainer:FindFirstChild("ServerTime")
 	},
@@ -408,9 +512,9 @@ local BottomBarMetadata = {
 			local items = (ServiceManager.ActiveService == "Scheduler") and service.Tasks or service.StateMachines
 			if not items then return end
 
-			local count = 0; for _ in next, items do count += 1 end;
+			local count = 0; for _ in next, items do count += 1 end
 			local label = (ServiceManager.ActiveService == "Scheduler") and "[TASKS]" or "[JOBS]"
-			this.ObjectReference.Text = string.format("<font color='#888888'>%s</font> %d", label, count);
+			this.ObjectReference.Text = string.format("<font color='#888888'>%s</font> %d", label, count)
 		end,
 		ObjectReference = ServiceManager.GUI.BottomBarContainer:FindFirstChild("TaskCount")
 	},
@@ -421,16 +525,16 @@ local BottomBarMetadata = {
 				return
 			end
 			local scheduler = ServiceManager.Services.Scheduler
-			if not scheduler or ServiceManager.Mode ~= 'client' then return end;
-			local TaskQueue = scheduler.PerformanceManager:GetActiveTasks();
-			local Count = 0; for _ in next, TaskQueue do Count += 1 end;
-			this.ObjectReference.Text = string.format("<font color='#888888'>[RUNNING]</font> %d", Count);
+			if not scheduler or ServiceManager.Mode ~= 'client' then return end
+			local TaskQueue = scheduler.PerformanceManager:GetActiveTasks()
+			local Count = 0; for _ in next, TaskQueue do Count += 1 end
+			this.ObjectReference.Text = string.format("<font color='#888888'>[RUNNING]</font> %d", Count)
 		end,
 		ObjectReference = ServiceManager.GUI.BottomBarContainer:FindFirstChild("TaskQueue")
 	},
 	["UserInfo"] = {
 		UpdateFunction = function(this)
-			this.ObjectReference.Text = string.format("<font color='#888888'>[USER]</font> %s", Owner.Name:lower());
+			this.ObjectReference.Text = string.format("<font color='#888888'>[USER]</font> %s", Owner.Name:lower())
 		end,
 		ObjectReference = ServiceManager.GUI.BottomBarContainer:FindFirstChild("UserInfo")
 	}
@@ -446,6 +550,7 @@ local Pages = {
 		EnsureToolbar = EnsureToolbar,
 		CreateSearchBox = CreateSearchBox,
 		CreateButton = CreateButton,
+		Create = Create,
 		COLORS = COLORS,
 		TaskCardReference = ObjectReferences.TaskCardReference,
 		TaskDataReference = ObjectReferences.TaskDataReference,
@@ -520,6 +625,9 @@ for _, page in next, Pages do
 		end
 	end
 end
+
+-- Expose Pages on ServiceManager so Entity/FSM layer can bridge to legacy controllers.
+ServiceManager.Pages = Pages
 
 --------------------------------------------------------------------------------
 -- CORE METHODS
@@ -635,6 +743,21 @@ ServiceManager.HookTabButtons = function(this)
 			end)
 			btn.MouseButton1Click:Connect(function()
 				if this.ActivePage == Tab.Name then return end
+
+				-- If TabNavigationFSM is available, delegate to it
+				if this.FSMs and this.FSMs.TabNavigation then
+					this.FSMs.TabNavigation.Context.TargetTab = Tab.Name
+					-- Also update ActivePage so sidebar/bottombar stay consistent
+					this.ActivePage = Tab.Name
+					for _, tabFrame in next, this.GUI.TabContainer:GetChildren() do
+						if tabFrame:IsA("Frame") then
+							this:SetTabVisual(tabFrame, tabFrame.Name == this.ActivePage)
+						end
+					end
+					return
+				end
+
+				-- Legacy fallback: inline tab switching
 				local PrevPage = Pages[this.ActivePage]
 				if PrevPage then
 					for _, c in next, PrevPage.Connections do c:Disconnect() end
@@ -750,8 +873,8 @@ end
 ServiceManager.UpdateBottomBar = function(this)
 	for _, Metadata in next, BottomBarMetadata do
 		if Metadata.UpdateFunction and Metadata.ObjectReference then Metadata:UpdateFunction() end
-	end;
-end;
+	end
+end
 
 --[[
 	@description Sets UI connected/disconnected state and updates ping/labels.
@@ -842,7 +965,7 @@ end
 ]]
 ServiceManager.CreateServiceProxy = function(this, serviceName)
 	return ServiceProxyRuntime.Create(this, serviceName)
-end;
+end
 
 --[[
 	@description Shows/hides tabs based on the active service (Scheduler vs FSM).
@@ -983,6 +1106,10 @@ end
 	@return any -- this
 ]]
 ServiceManager.Initialize = function(this, InjectedOrchestrator)
+	-- Guard: prevent double-initialization (entity's Initialize could call back here)
+	if this._initialized then return this end
+	this._initialized = true
+
 	if InjectedOrchestrator then
 		this.Orchestrator = InjectedOrchestrator
 		this.Services.Scheduler = InjectedOrchestrator.Scheduler
@@ -1072,6 +1199,13 @@ ServiceManager.Initialize = function(this, InjectedOrchestrator)
 	local toggleBtn = this.GUI.SidebarContainer:FindFirstChild("ModeToggle")
 	if toggleBtn then
 		toggleBtn.MouseButton1Click:Connect(function()
+			-- If ModeToggleFSM is available, delegate to it
+			if this.FSMs and this.FSMs.ModeToggle then
+				local currentMode = this.FSMs.ModeToggle.Context.CurrentMode or "client"
+				this.FSMs.ModeToggle.Context.TargetMode = (currentMode == "client") and "server" or "client"
+				return
+			end
+			-- Legacy fallback: inline mode switching
 			local nextMode = (this.Mode == 'client') and 'server' or 'client'
 			this:SetMode(nextMode)
 		end)
@@ -1267,20 +1401,32 @@ ServiceManager.Initialize = function(this, InjectedOrchestrator)
 		end
 	end
 
-	for _, Page in next, Pages do if Page.Container then Page.Container.Parent.Visible = false end end;
-	this.ActivePage = "Console";
-	if Pages["Console"].Container then Pages["Console"].Container.Parent.Visible = true end;
+	for _, Page in next, Pages do if Page.Container then Page.Container.Parent.Visible = false end end
+	this.ActivePage = "Console"
+	if Pages["Console"].Container then Pages["Console"].Container.Parent.Visible = true end
 
-	this:HookTabButtons();
-	-- Initialize Client Entity
+	this:HookTabButtons()
+	-- Initialize Client Entity & FSM layer
+	local clientEntity = nil
 	if this.Orchestrator and this.Orchestrator.CreateEntity then
-		this.Orchestrator.CreateEntity({
+		clientEntity = this.Orchestrator.CreateEntity({
 			EntityClass = "ServiceManagerClientEntity",
 			-- We alias as SyncClient because the server (ServiceManagerHost) currently sends commands to "SyncClient".
 			-- This maintains backward compatibility without modifying the server code.
 			EntityId = "SyncClient",
 			Context = { ServiceManager = this, Orchestrator = this.Orchestrator }
 		})
+	end
+
+	-- Deferred: Initialize the entity after init.luau completes, so Pages/GUI are ready.
+	-- The entity creates UIInitializationFSM, TabNavigationFSM, ModeToggleFSM,
+	-- TerminalViewFSM, and ConnectionStateMachine in its Initialize().
+	if clientEntity then
+		task.defer(function()
+			if clientEntity.Initialize then
+				clientEntity:Initialize()
+			end
+		end)
 	end
 
 	-- Initialize Page Entities & FSMs via PageInitializerFSM (Phase 4 Integration)
@@ -1306,8 +1452,8 @@ ServiceManager.Initialize = function(this, InjectedOrchestrator)
 		TaskExecutionDelay = 0,
 	})
 	print("[ServiceManager] Scheduled ServiceManagerUpdate")
-	return this;
-end;
+	return this
+end
 
 --[[
 	@description Periodic UI update loop (tab refresh, archival logic, stats sync).
@@ -1320,54 +1466,93 @@ ServiceManager.Update = function(this)
 	this.LastUpdate = now
 
 	-- Context switch UX: hide stale data immediately and wait for new source.
-	if this.ContextSwitching then
-		local ready = false
-		if this.Mode == 'server' then
-			ready = (this.HasInitialSync == true)
-		else
-			local FSM = this.Orchestrator or shared.fsm
-			ready = (FSM ~= nil) and ((FSM.Scheduler ~= nil) or (FSM.StateMachines ~= nil) or (FSM.Entities ~= nil))
-		end
-		if ready or (this.ContextSwitchDeadline and os.clock() > this.ContextSwitchDeadline) then
-			this.ContextSwitching = false
-			this.ContextSwitchDeadline = nil
-			SetLoadingOverlay(this, false, nil)
-		else
-			SetLoadingOverlay(this, true, string.format("SWITCHING TO %s...", tostring(this.Mode):upper()))
+	this:_UpdateContextSwitch()
+
+	-- Archival / Sync
+	this:_ArchiveClientTasks()
+	this:_ArchiveFSMs()
+	this:_SyncFSMHistory()
+	this:_ArchiveEntities()
+	this:_SyncClientMode()
+
+	-- UI refresh
+	ServiceManager:UpdateSideBar()
+	ServiceManager:UpdateBottomBar()
+
+	if this.ActivePage and Pages[this.ActivePage] then
+		Pages[this.ActivePage]:UpdateFunction()
+	end
+end
+
+-- Update sub-routines (decomposed for clarity and future entity-driven migration)
+
+--[[
+	@description Checks whether a client/server context switch has completed.
+	Waits until the target mode's data is available or a deadline expires,
+	then hides the loading overlay.
+	@param this table -- The ServiceManager instance.
+]]
+ServiceManager._UpdateContextSwitch = function(this)
+	if not this.ContextSwitching then return end
+	local ready = false
+	if this.Mode == 'server' then
+		ready = (this.HasInitialSync == true)
+	else
+		local FSM = this.Orchestrator or shared.fsm
+		ready = (FSM ~= nil) and ((FSM.Scheduler ~= nil) or (FSM.StateMachines ~= nil) or (FSM.Entities ~= nil))
+	end
+	if ready or (this.ContextSwitchDeadline and os.clock() > this.ContextSwitchDeadline) then
+		this.ContextSwitching = false
+		this.ContextSwitchDeadline = nil
+		SetLoadingOverlay(this, false, nil)
+	else
+		SetLoadingOverlay(this, true, string.format("SWITCHING TO %s...", tostring(this.Mode):upper()))
+	end
+end
+
+--[[
+	@description Archives recurring client tasks that have been removed from the Scheduler.
+	Compares current Scheduler.Tasks against the last snapshot, marking disappeared
+	recurring tasks as archived. Also syncs local performance stats.
+	@param this table -- The ServiceManager instance.
+]]
+ServiceManager._ArchiveClientTasks = function(this)
+	if this.Mode ~= 'client' then return end
+	local FSM = this.Orchestrator or shared.fsm
+	if not (FSM and FSM.Scheduler) then return end
+
+	local current = FSM.Scheduler.Tasks
+	this.LastClientTasks = this.LastClientTasks or {}
+	for name, taskData in pairs(this.LastClientTasks) do
+		if taskData.IsRecurringTask and not current[name] then
+			taskData.IsArchived = true
+			this.ArchivedTasks[name] = taskData
 		end
 	end
+	for name, _ in pairs(current) do
+		if this.ArchivedTasks[name] then this.ArchivedTasks[name] = nil end
+	end
+	this.LastClientTasks = {}
+	for taskName, taskData in pairs(current) do
+		this.LastClientTasks[taskName] = taskData
+	end
 
-	-- Client Mode Archival Logic
-	if this.Mode == 'client' then
-		local FSM = this.Orchestrator or shared.fsm
-		if FSM and FSM.Scheduler then
-		local current = FSM.Scheduler.Tasks
-		this.LastClientTasks = this.LastClientTasks or {}
-		for name, task in pairs(this.LastClientTasks) do
-			if task.IsRecurringTask and not current[name] then
-				task.IsArchived = true
-				this.ArchivedTasks[name] = task
-			end
-		end
-		for name, _ in pairs(current) do
-			if this.ArchivedTasks[name] then this.ArchivedTasks[name] = nil end
-		end
-		this.LastClientTasks = {}
-		for taskName, taskData in pairs(current) do
-			this.LastClientTasks[taskName] = taskData
-		end
+	-- Sync local stats
+	if FSM.Scheduler.LastFrameStats then
+		this.ServerData.Scheduler.LastFrameStats = FSM.Scheduler.LastFrameStats
+	end
+	if FSM.Scheduler.TaskStats then
+		this.ServerData.Scheduler.PerformanceManager.Stats = FSM.Scheduler.TaskStats
+	end
+end
 
-		-- Sync local stats
-		if FSM.Scheduler and FSM.Scheduler.LastFrameStats then
-			this.ServerData.Scheduler.LastFrameStats = FSM.Scheduler.LastFrameStats
-		end
-		if FSM.Scheduler and FSM.Scheduler.TaskStats then
-			this.ServerData.Scheduler.PerformanceManager.Stats = FSM.Scheduler.TaskStats
-		end
-		end -- End FSM.Scheduler check
-	end -- End Client Mode check
-
-	-- FSM Archival Logic
+--[[
+	@description Archives state machines that have disappeared since the last update.
+	Preserves final state, graph, valid-states, and context for display in the
+	FSMs page. Also maintains FSMMetadataCache for graph recovery.
+	@param this table -- The ServiceManager instance.
+]]
+ServiceManager._ArchiveFSMs = function(this)
 	local currentStateMachines = {}
 	local FSM = this.Orchestrator or shared.fsm
 	if this.Mode == 'client' and FSM and FSM.StateMachines then
@@ -1379,10 +1564,7 @@ ServiceManager.Update = function(this)
 	this.LastStateMachines = this.LastStateMachines or {}
 	for id, stateMachine in pairs(this.LastStateMachines) do
 		if not currentStateMachines[id] then
-			-- StateMachine removed
 			local finalState = stateMachine.State or "Dead"
-
-			-- Attempt to resolve final state from history
 			local history = (this.Mode == 'client' and shared.fsm and shared.fsm.History) or (this.Mode == 'server' and this.ServerData.FSM.History)
 			if history then
 				for _, entry in ipairs(history) do
@@ -1394,29 +1576,20 @@ ServiceManager.Update = function(this)
 			if not graph and stateMachine._transitions then
 				graph = { Transitions = stateMachine._transitions }
 			end
-
 			local validStates = stateMachine.ValidStates or stateMachine.validStates
 
-			local archivedStateMachine = {
-				Name = stateMachine.Name,
-				State = finalState,
-				Id = id,
-				IsArchived = true,
-				Context = stateMachine.Context,
-				Graph = graph,
-				ValidStates = validStates
+			this.ArchivedFSMs[id] = {
+				Name = stateMachine.Name, State = finalState, Id = id, IsArchived = true,
+				Context = stateMachine.Context, Graph = graph, ValidStates = validStates,
 			}
-			this.ArchivedFSMs[id] = archivedStateMachine
 
-			-- Update Cache
 			if stateMachine.Name and (graph or validStates) then
 				this.FSMMetadataCache[stateMachine.Name] = {
 					Graph = graph or (this.FSMMetadataCache[stateMachine.Name] and this.FSMMetadataCache[stateMachine.Name].Graph),
-					ValidStates = validStates or (this.FSMMetadataCache[stateMachine.Name] and this.FSMMetadataCache[stateMachine.Name].ValidStates)
+					ValidStates = validStates or (this.FSMMetadataCache[stateMachine.Name] and this.FSMMetadataCache[stateMachine.Name].ValidStates),
 				}
 			end
 		else
-			-- Active stateMachine: Update Cache if it has structural data
 			local stateMachineData = currentStateMachines[id]
 			if stateMachineData.Name then
 				local graph = stateMachineData.Graph or (stateMachineData._transitions and { Transitions = stateMachineData._transitions })
@@ -1424,7 +1597,7 @@ ServiceManager.Update = function(this)
 				if graph or validStates then
 					this.FSMMetadataCache[stateMachineData.Name] = {
 						Graph = graph or (this.FSMMetadataCache[stateMachineData.Name] and this.FSMMetadataCache[stateMachineData.Name].Graph),
-						ValidStates = validStates or (this.FSMMetadataCache[stateMachineData.Name] and this.FSMMetadataCache[stateMachineData.Name].ValidStates)
+						ValidStates = validStates or (this.FSMMetadataCache[stateMachineData.Name] and this.FSMMetadataCache[stateMachineData.Name].ValidStates),
 					}
 				end
 			end
@@ -1434,77 +1607,84 @@ ServiceManager.Update = function(this)
 	for stateMachineId, stateMachineData in pairs(currentStateMachines) do
 		this.LastStateMachines[stateMachineId] = stateMachineData
 	end
+end
 
-	-- Update Archived FSMs with History (Fix for Server Mode latency)
+--[[
+	@description Cross-references the FSM history log with archived and current state machines.
+	Updates archived FSMs whose terminal state was missed, and reconstructs
+	entries for FSMs that completed before ServiceManager started (catch-up).
+	@param this table -- The ServiceManager instance.
+]]
+ServiceManager._SyncFSMHistory = function(this)
+	local currentStateMachines = {}
 	local FSM = this.Orchestrator or shared.fsm
+	if this.Mode == 'client' and FSM and FSM.StateMachines then
+		currentStateMachines = FSM.StateMachines
+	elseif this.Mode == 'server' and this.ServerData.FSM.StateMachines then
+		currentStateMachines = this.ServerData.FSM.StateMachines
+	end
+
 	local history = (this.Mode == 'client' and FSM and FSM.History) or (this.Mode == 'server' and this.ServerData.FSM.History)
-	if history then
-		for id, stateMachine in pairs(this.ArchivedFSMs) do
-			if stateMachine.State ~= "Completed" and stateMachine.State ~= "Failed" and stateMachine.State ~= "Cancelled" then
-				for _, entry in ipairs(history) do
-					if entry.Id == id then
-						stateMachine.State = entry.Status
-						stateMachine.Error = entry.Error
+	if not history then return end
+
+	-- Update archived FSMs with history (fix for server mode latency)
+	for id, stateMachine in pairs(this.ArchivedFSMs) do
+		if stateMachine.State ~= "Completed" and stateMachine.State ~= "Failed" and stateMachine.State ~= "Cancelled" then
+			for _, entry in ipairs(history) do
+				if entry.Id == id then
+					stateMachine.State = entry.Status
+					stateMachine.Error = entry.Error
+					break
+				end
+			end
+		end
+	end
+
+	-- Catch-up for state machines that finished before ServiceManager started
+	for _, entry in ipairs(history) do
+		if not currentStateMachines[entry.Id] and not this.ArchivedFSMs[entry.Id] then
+			local recoveredGraph, recoveredValidStates = nil, nil
+
+			if this.FSMMetadataCache[entry.Name] then
+				recoveredGraph = this.FSMMetadataCache[entry.Name].Graph
+				recoveredValidStates = this.FSMMetadataCache[entry.Name].ValidStates
+			end
+			if not recoveredGraph then
+				for _, existing in pairs(this.ArchivedFSMs) do
+					if existing.Name == entry.Name and existing.Graph then
+						recoveredGraph = existing.Graph
+						recoveredValidStates = existing.ValidStates
 						break
 					end
 				end
 			end
-		end
-	end
-
-	-- Sync from History (Catch-up for stateMachines that finished before ServiceManager started)
-	if history then
-		for _, entry in ipairs(history) do
-			if not currentStateMachines[entry.Id] and not this.ArchivedFSMs[entry.Id] then
-				-- Attempt Graph Recovery
-				local recoveredGraph = nil
-				local recoveredValidStates = nil
-
-				-- Try Cache First
-				if this.FSMMetadataCache[entry.Name] then
-					recoveredGraph = this.FSMMetadataCache[entry.Name].Graph
-					recoveredValidStates = this.FSMMetadataCache[entry.Name].ValidStates
-				end
-
-				-- Try existing archives fallback
-				if not recoveredGraph then
-					for _, existing in pairs(this.ArchivedFSMs) do
-						if existing.Name == entry.Name and existing.Graph then 
-							recoveredGraph = existing.Graph
-							recoveredValidStates = existing.ValidStates
-							break 
+			if not recoveredGraph then
+				for _, existing in pairs(currentStateMachines) do
+					if existing.Name == entry.Name then
+						local graphCandidate = existing.Graph or (existing._transitions and { Transitions = existing._transitions })
+						if graphCandidate then
+							recoveredGraph = graphCandidate
+							recoveredValidStates = existing.ValidStates or existing.validStates
+							break
 						end
 					end
 				end
-				-- Try active stateMachines fallback
-				if not recoveredGraph then
-					for _, existing in pairs(currentStateMachines) do
-						if existing.Name == entry.Name then
-							local graphCandidate = existing.Graph or (existing._transitions and { Transitions = existing._transitions })
-							if graphCandidate then 
-								recoveredGraph = graphCandidate
-								recoveredValidStates = existing.ValidStates or existing.validStates
-								break 
-							end
-						end
-					end
-				end
-
-				this.ArchivedFSMs[entry.Id] = {
-					Name = entry.Name,
-					State = entry.Status,
-					Id = entry.Id,
-					Error = entry.Error,
-					IsArchived = true,
-					Context = {}, -- Context is lost if we didn't catch it live
-					Graph = recoveredGraph,
-					ValidStates = recoveredValidStates
-				}
 			end
+
+			this.ArchivedFSMs[entry.Id] = {
+				Name = entry.Name, State = entry.Status, Id = entry.Id, Error = entry.Error,
+				IsArchived = true, Context = {}, Graph = recoveredGraph, ValidStates = recoveredValidStates,
+			}
 		end
 	end
+end
 
-	-- Entity Archival Logic
+--[[
+	@description Archives entities that have disappeared since the last update.
+	Preserves name, ID, and data snapshot for display in the Entities page.
+	@param this table -- The ServiceManager instance.
+]]
+ServiceManager._ArchiveEntities = function(this)
 	local currentEntities = {}
 	local FSM = this.Orchestrator or shared.fsm
 	if this.Mode == 'client' and FSM and FSM.Entities then
@@ -1516,40 +1696,27 @@ ServiceManager.Update = function(this)
 	this.LastEntities = this.LastEntities or {}
 	for id, entity in pairs(this.LastEntities) do
 		if not currentEntities[id] then
-			local archivedEntity = { Name = entity.Name or "Unknown", Id = id, IsArchived = true, Data = entity.Data }
-			this.ArchivedEntities[id] = archivedEntity
+			this.ArchivedEntities[id] = { Name = entity.Name or "Unknown", Id = id, IsArchived = true, Data = entity.Data }
 		end
 	end
 	this.LastEntities = {}
 	for entityId, entityData in pairs(currentEntities) do
 		this.LastEntities[entityId] = entityData
 	end
+end
 
-	if this.Mode == 'client' then
-		local FSM = this.Orchestrator or shared.fsm
-		if FSM then
-			-- Sync FSM data locally if exposed
-			if FSM.StateMachines then
-				this.ServerData.FSM.StateMachines = FSM.StateMachines
-			end
-			-- If FSM exposes logs/history in a standard way, sync them here:
-			-- this.ServerData.FSM.Logs.History = FSM.Logs or {}
-			-- this.ServerData.FSM.History = FSM.History or {}
-		end
+--[[
+	@description Mirrors the client-local FSM registry into ServerData so that
+	UI pages can read from a uniform data source regardless of mode.
+	@param this table -- The ServiceManager instance.
+]]
+ServiceManager._SyncClientMode = function(this)
+	if this.Mode ~= 'client' then return end
+	local FSM = this.Orchestrator or shared.fsm
+	if not FSM then return end
+	if FSM.StateMachines then
+		this.ServerData.FSM.StateMachines = FSM.StateMachines
 	end
+end
 
-	ServiceManager:UpdateSideBar();
-	ServiceManager:UpdateBottomBar();
-	local shouldUpdate = true
-	if this.Store then
-		-- In Client Mode, we don't have a dirty-checking mechanism for deep table changes (Tasks/History).
-		-- Since pages implement their own hashing/diffing, it is safe and correct to attempt an update every tick (10Hz).
-		shouldUpdate = true 
-		this.Store.Dirty = false
-	end
-	if shouldUpdate and this.ActivePage and Pages[this.ActivePage] then
-		Pages[this.ActivePage]:UpdateFunction();
-	end;
-end;
-
-return ServiceManager;
+return ServiceManager

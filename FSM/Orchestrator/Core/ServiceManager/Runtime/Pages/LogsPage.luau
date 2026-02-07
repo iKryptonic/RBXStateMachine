@@ -1,10 +1,14 @@
 --!strict
-
--- Runtime/Pages/LogsPage.luau
--- Extracted Logs page controller.
-
-local RS = game:GetService("ReplicatedStorage")
-
+--[[
+	@Name LogsPage
+	@Author iKrypto
+	@Description Logs page controller. Renders timestamped log entries from
+	the active service's Logger with INFO/WARN/ERROR level filters, search,
+	and clear functionality. Supports both client and server modes.
+	
+	@deprecated This legacy controller is retained for regression testing only.
+	Use the new FSM/Entity pattern: FSM/LogsPageFSM.luau + Entity/LogsPageEntity.luau
+]]
 export type Deps = {
 	EnsureToolbar: (Instance) -> Instance,
 	CreateSearchBox: (Instance, string?, (string) -> ()) -> Instance,
@@ -15,8 +19,15 @@ export type Deps = {
 }
 
 local LogsPage = {}
-local LogsPage = {}
 
+--[[
+	@description Factory that creates the Logs page. Renders log entries from the
+	active service's Logger with INFO/WARN/ERROR filters, search, and a clear button.
+	Supports FSM and Scheduler log sources in both client and server modes.
+	@param ServiceManager any -- The root ServiceManager instance.
+	@param deps Deps -- Injected dependencies (toolbar, search, buttons, colors, templates).
+	@return any -- A page table with Container, Tab, Constants, Connections, UpdateFunction.
+]]
 function LogsPage.Create(ServiceManager: any, deps: Deps)
 	local page: any = {
 		Container = ServiceManager.GUI.BodyContainer:WaitForChild("LogsView"):WaitForChild("Container"),
@@ -42,7 +53,14 @@ function LogsPage.Create(ServiceManager: any, deps: Deps)
 			local searchGui = search :: any
 			searchGui.LayoutOrder = -1
 
-			local function createFilterBtn(text: string, level: number, color: Color3)
+		--[[
+			@description Creates a filter toggle button for a specific log level.
+			@param text string -- Button label (INFO, WARN, ERROR).
+			@param level number -- Log level (1=INFO, 2=WARN, 3=ERROR).
+			@param color Color3 -- Button accent color.
+			@return ()
+		]]
+		local function createFilterBtn(text: string, level: number, color: Color3)
 				local btn = deps.CreateButton(toolbar, text, color, nil, 60)
 				local btnGui = btn :: any
 				btnGui.BackgroundTransparency = 0.5
@@ -85,6 +103,12 @@ function LogsPage.Create(ServiceManager: any, deps: Deps)
 			table.insert(this.Connections, clearConn)
 		end
 
+		--[[
+			@description Normalizes heterogeneous log entry formats into a uniform
+			{Type: number, Message: string, Time: number} array.
+			@param raw any -- Raw log history array from the Logger.
+			@return { {Type: number, Message: string, Time: number} }
+		]]
 		local function normalizeLogBuffer(raw: any)
 			local buffer = {}
 			for _, entry in ipairs(raw or {}) do

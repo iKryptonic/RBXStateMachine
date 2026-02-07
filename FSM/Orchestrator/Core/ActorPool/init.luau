@@ -1,22 +1,36 @@
+--[[
+	@Name ActorPool
+	@Author iKrypto
+	@Description Round-robin Actor worker pool that distributes pure-compute
+	jobs across multiple Actors for parallel execution. Uses a blocking
+	Submit() pattern — the caller yields until the worker replies.
+]]
 local ActorPool = {}
 ActorPool.__index = ActorPool
 
 export type Job = {
-    name: string,
-    input: any,
+	name: string,
+	input: any,
 }
 
 export type Result = {
-    ok: boolean,
-    output: any?,
-    error: string?,
+	ok: boolean,
+	output: any?,
+	error: string?,
 }
 
 type Pending = {
-    resolve: (Result) -> (),
-    createdAt: number,
+	resolve: (Result) -> (),
+	createdAt: number,
 }
 
+--[[
+	@description Creates a new ActorPool from the supplied worker Actors.
+	Each worker is bound to a "JobResult" message handler that resolves
+	the corresponding pending promise.
+	@param workers { Actor } -- Array of Actor instances to use as workers.
+	@return ActorPool -- The pool instance.
+]]
 function ActorPool.new(workers: { Actor })
     local self = setmetatable({}, ActorPool)
     self._workers = workers
@@ -43,11 +57,22 @@ function ActorPool.new(workers: { Actor })
     return self
 end
 
+--[[
+	@description Selects the next worker using round-robin scheduling.
+	@return Actor -- The chosen worker.
+]]
 function ActorPool:_pickWorker(): Actor
     self._rr = (self._rr % #self._workers) + 1
     return self._workers[self._rr]
 end
 
+--[[
+	@description Submits a job to the next available worker and blocks until
+	the result is received. The worker executes the named job function
+	in a parallel context and replies via "JobResult".
+	@param job Job -- { name: string, input: any } describing the work.
+	@return Result -- { ok: boolean, output: any?, error: string? }.
+]]
 function ActorPool:Submit(job: Job): Result
     self._nextId += 1
     local jobId = self._nextId

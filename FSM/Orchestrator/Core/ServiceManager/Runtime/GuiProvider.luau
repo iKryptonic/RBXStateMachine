@@ -1,6 +1,11 @@
 --!nocheck
--- GuiProvider
--- Responsible for locating or constructing the ServiceManager UI and returning stable references.
+--[[
+	@Name GuiProvider
+	@Author iKrypto
+	@Description Responsible for locating or constructing the ServiceManager UI
+	and returning stable GuiRefs. Tries existing GUI in PlayerGui first,
+	then falls back to building from the serialized module.
+]]
 
 local Players = game:GetService("Players")
 
@@ -17,6 +22,11 @@ export type GuiRefs = {
 
 local GuiProvider = {}
 
+--[[
+	@description Searches for a child Frame named "Main" under the given Instance.
+	@param start Instance? -- Starting point for the search.
+	@return Frame? -- The Main frame if found, otherwise nil.
+]]
 local function findMainFrom(start: Instance?): Frame?
 	if not start then return nil end
 	local main = start:FindFirstChild("Main")
@@ -26,6 +36,10 @@ local function findMainFrom(start: Instance?): Frame?
 	return nil
 end
 
+--[[
+	@description Returns the LocalPlayer's PlayerGui, blocking until available.
+	@return PlayerGui
+]]
 local function getPlayerGui(): PlayerGui
 	local player = Players.LocalPlayer
 	if not player then
@@ -34,6 +48,11 @@ local function getPlayerGui(): PlayerGui
 	return player:WaitForChild("PlayerGui") :: PlayerGui
 end
 
+--[[
+	@description Builds the ServiceManager UI from the Serialized_GUI module,
+	parents it to PlayerGui, and returns stable references.
+	@return GuiRefs -- A table of named GUI element references.
+]]
 local function buildUI(): GuiRefs
 	local parent = script.Parent
 	if not parent then
@@ -77,6 +96,13 @@ local function buildUI(): GuiRefs
 	return refs :: GuiRefs
 end
 
+--[[
+	@description Locates an existing ServiceManager GUI or builds one from scratch.
+	Checks near the module's script parent, then PlayerGui, then falls back
+	to full construction via buildUI().
+	@param scriptParent Instance? -- Optional starting search point.
+	@return GuiRefs -- Stable references to all critical UI frames.
+]]
 function GuiProvider.GetOrCreate(scriptParent: Instance?): GuiRefs
 	-- 1) Try to find a Main frame near where this module is stored (compat with old layout)
 	local main = findMainFrom(scriptParent)

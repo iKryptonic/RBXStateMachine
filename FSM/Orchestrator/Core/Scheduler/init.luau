@@ -81,12 +81,10 @@ do
 	function Scheduler.new(settings: any?)
 		local self = setmetatable({
 			Tasks = {},
-			TaskStats = {},
 			History = table.create(100),
 			_historyIndex = 1,
 			_heaps = {},
 			_running = {},
-			_connections = {},
 			_taskCount = 0, -- O(1) tracking
 			Settings = settings or {
 				FrameBudget = 0.005,
@@ -115,14 +113,12 @@ do
         t.CreationTime = os_clock()
 
         if self.Tasks[t.Name] then
-            -- If overwriting, we should ideally release the old one,
+            -- If overwriting, we should ideally release the old one, 
             -- but since it's in the Heap, lazy removal handles it.
-            self._taskCount -= 1
-            self.Tasks[t.Name] = nil
+            self.Tasks[t.Name] = nil 
         end
 
         self.Tasks[t.Name] = t
-        self._taskCount += 1
         if not self._heaps[t.Event] then self._heaps[t.Event] = {} end
         self:_heapPush(self._heaps[t.Event], t)
         
@@ -136,11 +132,9 @@ do
 	function Scheduler:Clear()
 		self.Tasks = {}
 		self._heaps = {}
-		self._taskCount = 0
 		self.History = {}
-		self._historyIndex = 1
 		self.LastFrameStats = { FrameTime = 0, TaskCount = 0, Budget = 0 }
-		if self.TaskStats then table.clear(self.TaskStats) end
+		table.clear(self.TaskStats)
 	end
 
 	--[[
@@ -455,9 +449,9 @@ do
 	end
 
 	function Scheduler:Start()
-		if self._connections.Heartbeat then return end
+		if self._running.Heartbeat then return end
 
-		local ValidStates =
+		local ValidStates = 
 		{
 			"Heartbeat",
 			"Stepped",
@@ -471,13 +465,13 @@ do
 		}
 
 		for _, state in ipairs(ValidStates) do
-			self._connections[state] = RunService[state]:Connect(function(dt)
+			self._running[state] = RunService[state]:Connect(function(dt)
 				self:Step(state)
 			end)
 		end
 		if RunService:IsClient() then
 			for _, state in ipairs(ClientStates) do
-				self._connections[state] = RunService[state]:Connect(function(dt)
+				self._running[state] = RunService[state]:Connect(function(dt)
 					self:Step(state)
 				end)
 			end

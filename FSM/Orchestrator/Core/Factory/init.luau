@@ -216,8 +216,8 @@ end
 local function CompileModule(child: ModuleScript, typeName: string, classBase: any)
 	local success, result = pcall(require, child)
 	if success and type(result) == "table" then
-		if result.Initialize then
-			result.Initialize(Utility)
+		if result.StaticInit then
+			result.StaticInit(Utility)
 		end
 		
 		-- Resolve storage key
@@ -288,6 +288,7 @@ function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Con
 	-- Check Pool
 	local pooled = Factory.Registry.GetPooledEntity(entityClassName)
 	if pooled then
+		local entityId = params.EntityId or game:GetService("HttpService"):GenerateGUID(false)
 		pooled._privateProperties.IsValid = true
 		table.clear(pooled._privateProperties.Data)
 		table.clear(pooled._privateProperties.Pending)
@@ -353,7 +354,7 @@ function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Con
 			local schema = newEntity:GetValidProperties()
 			
 			local entityReplication = newEntity.Definition and newEntity.Definition.Replication
-			if entityReplication and not entityReplication.Enabled then return end
+			if entityReplication and entityReplication.Enabled == (false or nil) then return end
 
 			local entityRateLimit = (entityReplication and entityReplication.RateLimit) or 0
 			

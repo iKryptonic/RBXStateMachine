@@ -13,6 +13,11 @@ local UIInitializationFSM = {
 	}
 }
 
+--[[
+	@description Registers the UI bootstrap state sequence: Uninitialized, ValidatingGUI,
+	CreatingEntities, HookingInput, Ready, and Error. Creates Window, Sidebar,
+	BottomBar, and Tab entities during the CreatingEntities phase.
+]]
 function UIInitializationFSM:RegisterStates()
 	
 	-- State: Uninitialized

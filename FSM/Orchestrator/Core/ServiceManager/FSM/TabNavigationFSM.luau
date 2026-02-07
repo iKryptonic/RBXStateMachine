@@ -14,6 +14,11 @@ local TabNavigationFSM = {
 	}
 }
 
+--[[
+	@description Registers Idle, CleaningPreviousPage, HidingPreviousPage, ShowingNewPage,
+	and UpdatingNewPage states. Handles tab entity activation/deactivation, transient
+	UI cleanup, and tween-based page slide transitions.
+]]
 function TabNavigationFSM:RegisterStates()
 	
 	-- State: Idle

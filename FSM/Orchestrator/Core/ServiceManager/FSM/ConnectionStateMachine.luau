@@ -25,6 +25,13 @@ local ConnectionStateMachine = {
 }
 
 -- Helpers
+--[[
+	@description Creates and plays a TweenService tween with Quad/Out easing.
+	@param instance Instance -- The instance to tween.
+	@param tweenProperties { [string]: any } -- The property goals.
+	@param durationSeconds number? -- Tween duration (default 0.18).
+	@return Tween -- The playing tween instance.
+]]
 local function defaultTween(instance: Instance, tweenProperties: {[string]: any}, durationSeconds: number?): any
 	local info = TweenInfo.new(durationSeconds or 0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 	local tween = TweenService:Create(instance :: any, info, tweenProperties)
@@ -34,33 +41,59 @@ end
 
 -- Methods
 
+--[[
+	@description Returns true if the ServiceManager is in server mode and should attempt a connection.
+	@return boolean
+]]
 function ConnectionStateMachine:ShouldConnect()
 	local SM = self.Context.ServiceManager
 	return SM and SM.Mode == "server"
 end
 
+--[[
+	@description Returns true if the initial sync has been completed successfully.
+	@return boolean
+]]
 function ConnectionStateMachine:IsConnected()
 	-- Check if we have successful initial sync
 	return self.Context.ServiceManager.HasInitialSync
 end
 
+--[[
+	@description Returns true if the failure count exceeds the reconnection threshold (3).
+	@return boolean
+]]
 function ConnectionStateMachine:ConnectionFailed()
 	return self.Failures > 3 -- Example threshold
 end
 
+--[[
+	@description Returns true if the replication mode is set to "poll".
+	@return boolean
+]]
 function ConnectionStateMachine:UsePolling()
 	return self.Context.ServiceManager.ReplicationMode == "poll"
 end
 
+--[[
+	@description Returns true if the replication mode is set to "event".
+	@return boolean
+]]
 function ConnectionStateMachine:UseEvent()
 	return self.Context.ServiceManager.ReplicationMode == "event"
 end
 
+--[[
+	@description Marks the network as connected (clears IsDisconnected flag).
+]]
 function ConnectionStateMachine:StartSyncListener()
 	local SM = self.Context.ServiceManager
 	SM.Network.IsDisconnected = false
 end
 
+--[[
+	@description Disconnects the sync event listener connection.
+]]
 function ConnectionStateMachine:StopSyncListener()
 	if self._conn then
 		self._conn:Disconnect()
@@ -68,6 +101,9 @@ function ConnectionStateMachine:StopSyncListener()
 	end
 end
 
+--[[
+	@description Starts a polling loop that periodically calls PerformFetch at the configured refresh rate.
+]]
 function ConnectionStateMachine:StartPollingLoop()
 	local SM = self.Context.ServiceManager
 	SM.Network.IsDisconnected = false
@@ -83,10 +119,18 @@ function ConnectionStateMachine:StartPollingLoop()
 	end)
 end
 
+--[[
+	@description Stops the active polling loop by clearing the polling flag.
+]]
 function ConnectionStateMachine:StopPollingLoop()
 	self._polling = false
 end
 
+--[[
+	@description Fetches sync data from the server with a circuit breaker pattern.
+	On success, updates ping, ingests data via ApplySyncData, and transitions to Connected/Polling.
+	On failure, increments failure count and opens the circuit breaker after 3 consecutive failures.
+]]
 function ConnectionStateMachine:PerformFetch()
 	local SM = self.Context.ServiceManager
 	local Orchestrator = self.Context.Orchestrator
@@ -141,6 +185,10 @@ function ConnectionStateMachine:PerformFetch()
 	end
 end
 
+--[[
+	@description Registers the Disconnected, Connecting, Connected, and Polling states
+	with their transition logic and heartbeat handlers.
+]]
 function ConnectionStateMachine:RegisterStates()
 	
 	-- STATE: Disconnected
@@ -217,6 +265,9 @@ function ConnectionStateMachine:RegisterStates()
 
 end
 
+--[[
+	@description Stops the sync listener and polling loop on FSM cleanup.
+]]
 function ConnectionStateMachine:OnCleanup()
 	self:StopSyncListener()
 	self:StopPollingLoop()

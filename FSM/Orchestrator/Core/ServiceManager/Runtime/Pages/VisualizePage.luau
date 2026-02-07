@@ -1,8 +1,14 @@
 --!strict
-
--- Runtime/Pages/VisualizePage.luau
--- Force-Directed Graph Visualizer for FSMs
--- Implements physics-based layout, interactive panning/zooming, and live state tracking.
+--[[
+	@Name VisualizePage
+	@Author iKrypto
+	@Description Force-directed graph visualizer for FSMs. Implements physics-based
+	layout (Coulomb repulsion + Hooke spring attraction), interactive panning/
+	zooming, node dragging, sidebar FSM list, and live state highlighting.
+	
+	@deprecated This legacy controller is retained for regression testing only.
+	Use the new FSM/Entity pattern: FSM/VisualizePageFSM.luau + Entity/VisualizePageEntity.luau
+]]
 
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -67,6 +73,13 @@ local MIN_ENERGY = 0.2
 
 local VisualizePage = {}
 
+--[[
+	@description Factory that creates the Visualize page with a force-directed
+	graph renderer, physics simulation, pan/zoom input, and FSM sidebar.
+	@param ServiceManager any -- The root ServiceManager instance.
+	@param ops Ops -- Injected dependencies (COLORS).
+	@return any -- A page table of type Page.
+]]
 function VisualizePage.Create(ServiceManager: any, ops: Ops)
 	local page: any = {
 		Container = (ServiceManager.GUI.BodyContainer:WaitForChild("VisualizeView"):WaitForChild("GraphContainer") :: Frame),
@@ -86,21 +99,29 @@ function VisualizePage.Create(ServiceManager: any, ops: Ops)
 
 	-- -- Utilities -- --
 
+	--[[
+		@description Converts a world-space position to screen-space UDim2
+		by applying zoom and pan transform.
+		@param constants GraphState -- Current graph state (Zoom, Pan).
+		@param pos Vector2 -- World-space position.
+		@return UDim2
+	]]
 	local function worldToScreen(constants: GraphState, pos: Vector2): UDim2
 		local scaled = (pos * constants.Zoom) + constants.Pan
 		return UDim2.fromOffset(scaled.X, scaled.Y)
 	end
-	
-	local function screenToWorld(constants: GraphState, pos: Vector2): Vector2
-		return (pos - constants.Pan) / constants.Zoom
-	end
-
-	local function getAngle(v1: Vector2, v2: Vector2): number
-		return math.atan2(v2.Y - v1.Y, v2.X - v1.X) * (180 / math.pi)
-	end
 
 	-- -- Physics Simulation -- --
 
+	--[[
+		@description Performs one physics simulation step. Applies Coulomb repulsion
+		between all node pairs (O(N²)), center gravity, Hooke's law spring
+		attraction on edges, then integrates velocity/position with damping.
+		Puts the simulation to sleep when total energy drops below MIN_ENERGY.
+		@param constants GraphState -- Mutable graph state.
+		@param dt number -- Delta time in seconds.
+		@return ()
+	]]
 	local function stepPhysics(constants: GraphState, dt: number)
 		-- 1. Apply Forces
 		for id, node in pairs(constants.Nodes) do
@@ -138,22 +159,22 @@ function VisualizePage.Create(ServiceManager: any, ops: Ops)
 			node.Force = force
 		end
 
-			-- Attraction (Springs)
-			for _, edge in ipairs(constants.Edges) do
-				local u = constants.Nodes[edge.Source]
-				local v = constants.Nodes[edge.Target]
-				if u and v then
-					local diff = v.Position - u.Position
-					local dist = diff.Magnitude
-					if dist > 0.01 then
-						local displacement = dist - SPRING_LENGTH
-						local force = diff.Unit * (displacement * SPRING_STIFFNESS)
+		-- Attraction (Springs)
+		for _, edge in ipairs(constants.Edges) do
+			local u = constants.Nodes[edge.Source]
+			local v = constants.Nodes[edge.Target]
+			if u and v then
+				local diff = v.Position - u.Position
+				local dist = diff.Magnitude
+				if dist > 0.01 then
+					local displacement = dist - SPRING_LENGTH
+					local force = diff.Unit * (displacement * SPRING_STIFFNESS)
 
-						if not u.IsDragging then u.Force += force end
-						if not v.IsDragging then v.Force -= force end
-					end
+					if not u.IsDragging then u.Force += force end
+					if not v.IsDragging then v.Force -= force end
 				end
 			end
+		end
 
 		-- 2. Integration
 		local totalEnergy = 0
@@ -181,26 +202,12 @@ function VisualizePage.Create(ServiceManager: any, ops: Ops)
 
 	-- -- Rendering -- --
 
-	local function drawLine(edge: Edge, constants: GraphState)
-		if not edge.Frame then return end
-		local u = constants.Nodes[edge.Source]
-		local v = constants.Nodes[edge.Target]
-		if not u or not v then return end
-
-		local startPos = worldToScreen(constants, u.Position)
-		local endPos = worldToScreen(constants, v.Position)
-		
-		local p1 = Vector2.new(startPos.X.Offset, startPos.Y.Offset)
-		local p2 = Vector2.new(endPos.X.Offset, endPos.Y.Offset)
-		local dist = (p2 - p1).Magnitude
-		local center = (p1 + p2) / 2
-		local angle = math.deg(math.atan2(p2.Y - p1.Y, p2.X - p1.X))
-
-		edge.Frame.Size = UDim2.fromOffset(dist, 2)
-		edge.Frame.Position = UDim2.fromOffset(center.X, center.Y)
-		edge.Frame.Rotation = angle
-	end
-
+	--[[
+		@description Updates the visual positions of all node and edge frames
+		based on the current graph state (zoom, pan, node positions).
+		@param this Page -- The page instance.
+		@return ()
+	]]
 	local function updateRender(this: Page)
 		local constants = this.Constants
 		local centerScreen = this.Container.AbsoluteSize / 2
@@ -238,6 +245,12 @@ function VisualizePage.Create(ServiceManager: any, ops: Ops)
 
 	-- -- Core Page Methods -- --
 
+	--[[
+		@description Disconnects all connections, stops the simulation, and
+		destroys all graph UI elements.
+		@param this Page -- The page instance.
+		@return ()
+	]]
 	page.Cleanup = function(this: Page)
 		ServiceManager:ClearConnections(this.Connections)
 		if this.SimConnection then
@@ -259,6 +272,13 @@ function VisualizePage.Create(ServiceManager: any, ops: Ops)
 		this.Constants.Running = false
 	end
 
+	--[[
+		@description Updates the visual highlighting of graph nodes. Tweens the
+		UIStroke of the current-state node to accent color and dims all others.
+		@param this Page -- The page instance.
+		@param currentState any -- The FSM's current state name.
+		@return ()
+	]]
 	page.UpdateNodes = function(this: Page, currentState: any)
 		local constants = this.Constants
 		local currentName = tostring(currentState)
@@ -279,7 +299,15 @@ function VisualizePage.Create(ServiceManager: any, ops: Ops)
 		end
 	end
 
-	local function BuildGraphData(this: Page, stateMachineId: string)
+	--[[
+		@description Extracts FSM topology (states/transitions), creates Node and
+		Edge objects with random initial positions, builds graph UI (node frames,
+		labels, badges for initial/terminal states, drag handles, edge lines).
+		@param this Page -- The page instance.
+		@param stateMachineId string -- The FSM to visualize.
+		@return boolean -- False if no data found, true on success.
+	]]
+	local function buildGraphData(this: Page, stateMachineId: string)
 		local fsmService = ServiceManager.Services.FSM
 		local stateMachineData = (fsmService and fsmService.StateMachines and fsmService.StateMachines[stateMachineId]) 
 			or ServiceManager.ArchivedFSMs[stateMachineId]
@@ -293,23 +321,11 @@ function VisualizePage.Create(ServiceManager: any, ops: Ops)
 			or {}
 
 
-		-- Debugging Initial State Detection
-		print("--- DEBUG VISUALIZER ---")
-		print("FSM ID:", stateMachineId)
-		if stateMachineData then
-			print("Top Level Keys:", table.concat(table.keys(stateMachineData), ", "))
-			if stateMachineData.Graph then print("Graph Keys:", table.concat(table.keys(stateMachineData.Graph), ", ")) end
-			if stateMachineData.Definition then print("Definition Keys:", table.concat(table.keys(stateMachineData.Definition), ", ")) end
-		end
-
 		local rawState = stateMachineData.State
 		local initialState = stateMachineData.InitialState 
 			or stateMachineData.initial 
 			or (stateMachineData.Graph and stateMachineData.Graph.InitialState)
 			or (stateMachineData.Definition and stateMachineData.Definition.InitialState)
-		
-		print("Resolved InitialState:", initialState)
-		print("------------------------")
 
 		local validStates = stateMachineData.ValidStates or (stateMachineData.Graph and stateMachineData.Graph.ValidStates) or {}
 
@@ -638,7 +654,7 @@ function VisualizePage.Create(ServiceManager: any, ops: Ops)
 				
 				btn.MouseButton1Click:Connect(function()
 					this.Constants.SelectedID = item.Id
-					BuildGraphData(this, item.Id)
+					buildGraphData(this, item.Id)
 					this:UpdateFunction()
 					
 					-- Hook state updates
@@ -662,7 +678,13 @@ function VisualizePage.Create(ServiceManager: any, ops: Ops)
 	end
 	
 	-- -- Input Handling -- --
-	local function HookInput(this: Page)
+	--[[
+		@description Sets up pan (right/middle mouse drag), zoom (scroll wheel),
+		reset (R key), and node dragging input handlers on the graph container.
+		@param this Page -- The page instance.
+		@return ()
+	]]
+	local function hookInput(this: Page)
 		local container = this.Container
 		
 		-- Pan / Zoom
@@ -718,7 +740,7 @@ function VisualizePage.Create(ServiceManager: any, ops: Ops)
 	end
 
 	-- -- Initialization -- --
-	HookInput(page)
+	hookInput(page)
 	
 	page.SimConnection = RunService.RenderStepped:Connect(function(dt)
 		if ServiceManager.ActivePage ~= "Visualize" then return end

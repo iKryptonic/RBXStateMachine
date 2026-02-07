@@ -16,6 +16,11 @@ local BottomBarEntity = {
 	}
 }
 
+--[[
+	@description Extracts the bottom bar container and ServiceManager reference from creation params.
+	@param params any -- Entity creation parameters containing Context table.
+	@return table -- The resolved context with BottomBarContainer and ServiceManager.
+]]
 function BottomBarEntity:GetContext(params: any)
 	return {
 		BottomBarContainer = params.Context and params.Context.BottomBarContainer,
@@ -23,6 +28,9 @@ function BottomBarEntity:GetContext(params: any)
 	}
 end
 
+--[[
+	@description Initializes bottom bar state counters and caches label GUI references.
+]]
 function BottomBarEntity:Initialize()
 	self.ServerTick = 0
 	self.ServerTime = os.date("%I:%M:%S %p")
@@ -44,6 +52,10 @@ function BottomBarEntity:Initialize()
 	self:Log({ Level = "INFO", Message = "BottomBarEntity initialized" })
 end
 
+--[[
+	@description Refreshes all bottom bar label text with current state values
+	(tick, time, task count, running count, user name).
+]]
 function BottomBarEntity:UpdateLabels()
 	if self.ServerTickLabel then
 		self.ServerTickLabel.Text = string.format(
@@ -87,6 +99,10 @@ function BottomBarEntity:UpdateLabels()
 	end
 end
 
+--[[
+	@description Applies schema-defined state changes and refreshes labels if any value changed.
+	@param changes { [string]: any } -- Key-value pairs of changed fields.
+]]
 function BottomBarEntity:ApplyChanges(changes: { [string]: any })
 	local needsUpdate = false
 	

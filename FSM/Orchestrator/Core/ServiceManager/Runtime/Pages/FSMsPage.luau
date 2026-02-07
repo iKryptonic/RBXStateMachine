@@ -1,7 +1,15 @@
 --!strict
-
--- Runtime/Pages/FSMsPage.luau
--- Extracted FSMs page controller.
+--[[
+	@Name FSMsPage
+	@Author iKrypto
+	@Description FSMs page controller. Displays active, failed, and archived
+	state machines in categorized sections with toolbar (search, show-ended,
+	clear-ended), pagination, metadata panel, and action buttons
+	(Cancel, Retry, Clear).
+	
+	@deprecated This legacy controller is retained for regression testing only.
+	Use the new FSM/Entity pattern: FSM/FSMsPageFSM.luau + Entity/FSMsPageEntity.luau
+]]
 
 export type Deps = {
 	EnsureToolbar: (Instance) -> Instance,
@@ -25,6 +33,13 @@ type Constants = {
 
 local FSMsPage = {}
 
+--[[
+	@description Factory that creates the FSMs page with Active/Failed/Archived
+	sections, paginated list, search, and metadata drill-down.
+	@param ServiceManager any -- The root ServiceManager instance.
+	@param deps Deps -- Injected dependencies.
+	@return any -- A page table.
+]]
 function FSMsPage.Create(ServiceManager: any, deps: Deps)
 	local page: any = {
 		Container = ServiceManager.GUI.BodyContainer:WaitForChild("FSMsView"):WaitForChild("Container"),
@@ -107,6 +122,14 @@ function FSMsPage.Create(ServiceManager: any, deps: Deps)
 		end
 
 		-- Ensure Sections Exist
+		--[[
+			@description Creates a labeled section frame with a scrollable list.
+			@param name string -- Section frame name.
+			@param titleText string -- Section heading text.
+			@param color Color3 -- Heading text color.
+			@param parent Instance -- Parent container.
+			@return Instance -- The created section Frame.
+		]]
 		local function createSection(name: string, titleText: string, color: Color3, parent: Instance)
 			local section = deps.Create("Frame", {
 				Name = name,
@@ -167,6 +190,10 @@ function FSMsPage.Create(ServiceManager: any, deps: Deps)
 		-- --------------------------------------------------------------------------------
 		-- HELPERS
 		-- --------------------------------------------------------------------------------
+		--[[
+			@description Clears the StateMachineMetadata panel and destroys the ActionsPanel.
+			@return ()
+		]]
 		local function clearMetadataPanel()
 			ServiceManager:ClearConnections(this.DynamicConnections)
 			this.DynamicConnections = {}
@@ -177,11 +204,19 @@ function FSMsPage.Create(ServiceManager: any, deps: Deps)
 				end
 			end
 			if (this.Container :: any):FindFirstChild("ActionsPanel") then
-				local actionsPanel = (this.Container :: any).ActionsPanel;
-				actionsPanel:Destroy();
+				local actionsPanel = (this.Container :: any).ActionsPanel
+				actionsPanel:Destroy()
 			end
 		end
 
+		--[[
+			@description Creates an action button in the ActionsPanel for the FSM metadata view.
+			@param name string -- Button label (CANCEL, RETRY, CLEAR).
+			@param color Color3 -- Button background color.
+			@param order number -- LayoutOrder.
+			@param callback () -> () -- Click callback.
+			@return ()
+		]]
 		local function createActionButton(name: string, color: Color3, order: number, callback: () -> ())
 			local panel = (this.Container :: any):FindFirstChild("ActionsPanel")
 			if not panel then
@@ -215,6 +250,13 @@ function FSMsPage.Create(ServiceManager: any, deps: Deps)
 			table.insert(this.Connections, connection)
 		end
 
+		--[[
+			@description Attaches click handler to a FSM card for selection.
+			Guards against double-hooking with an IsHooked marker.
+			@param card any -- The card Instance.
+			@param stateMachineId string -- The FSM identifier.
+			@return ()
+		]]
 		local function hookStateMachineCard(card: any, stateMachineId: string)
 			if card:FindFirstChild("IsHooked") then return end
 			local hookMarker = Instance.new("BoolValue")
@@ -229,6 +271,11 @@ function FSMsPage.Create(ServiceManager: any, deps: Deps)
 			table.insert(this.Connections, conn)
 		end
 
+		--[[
+			@description Rebuilds the FSM list across Active/Failed/Archived sections
+			with search filtering and pagination.
+			@return ()
+		]]
 		local function updateStateMachineList()
 			local fsmService = ServiceManager.Services.FSM
 			if not fsmService then return end
@@ -345,6 +392,11 @@ function FSMsPage.Create(ServiceManager: any, deps: Deps)
 			end
 		end
 
+		--[[
+			@description Populates the metadata panel for the selected FSM and creates
+			action buttons (CANCEL/RETRY/CLEAR) based on its state.
+			@return ()
+		]]
 		local function updateSelectedStateMachineMetadata()
 			local fsmService = ServiceManager.Services.FSM
 			if not constants.SelectedStateMachine or not fsmService then return end
@@ -363,6 +415,12 @@ function FSMsPage.Create(ServiceManager: any, deps: Deps)
 			end
 
 			local container = (this.Container :: any).StateMachineMetadata
+			--[[
+				@description Adds or updates a key-value field in the metadata panel.
+				@param key string -- The field name.
+				@param value any -- The field value.
+				@return ()
+			]]
 			local function addProp(key: string, value: any)
 				local dataObject = container:FindFirstChild(key) or deps.TaskDataReference:Clone()
 				dataObject.Name = key
@@ -425,5 +483,3 @@ function FSMsPage.Create(ServiceManager: any, deps: Deps)
 
 	return page
 end
-
-return FSMsPage

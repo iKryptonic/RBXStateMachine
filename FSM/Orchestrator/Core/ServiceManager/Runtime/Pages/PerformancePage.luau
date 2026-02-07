@@ -1,7 +1,15 @@
 --!strict
-
--- Runtime/Pages/PerformancePage.luau
--- Extracted Performance page controller.
+--[[
+	@Name PerformancePage
+	@Author iKrypto
+	@Description Performance page controller. Displays global frame-time stats,
+	a real-time graph (standard bars or heatmap), per-task list with sort/filter/
+	search/pagination, and task-specific average/max/delayed metrics with bar
+	indicators.
+	
+	@deprecated This legacy controller is retained for regression testing only.
+	Use the new FSM/Entity pattern: FSM/PerformancePageFSM.luau + Entity/PerformancePageEntity.luau
+]]
 
 export type Deps = {
 	EnsureToolbar: (Instance) -> Instance,
@@ -27,6 +35,13 @@ type Constants = {
 
 local PerformancePage = {}
 
+--[[
+	@description Factory that creates the Performance page with frame-time graph,
+	global stats, per-task list, and task detail panel.
+	@param ServiceManager any -- The root ServiceManager instance.
+	@param deps Deps -- Injected dependencies.
+	@return any -- A page table.
+]]
 function PerformancePage.Create(ServiceManager: any, deps: Deps)
 	local page: any = {
 		Container = ServiceManager.GUI.BodyContainer:WaitForChild("PerformanceView"):WaitForChild("Container"),
@@ -65,7 +80,13 @@ function PerformancePage.Create(ServiceManager: any, deps: Deps)
 				this.UpdateFunction(this)
 			end)
 
-			local function CreateFilter(Name: string, Color: Color3)
+			--[[
+				@description Creates a named filter toggle button (Active/Inactive) on the toolbar.
+				@param Name string -- Filter category label.
+				@param Color Color3 -- Button accent color.
+				@return ()
+			]]
+			local function createFilter(Name: string, Color: Color3)
 				local Btn = deps.CreateButton(Toolbar, Name, Color, nil, 60)
 				local btnAny = Btn :: any
 				btnAny.BackgroundTransparency = constants.Filters[Name] and 0 or 0.7
@@ -78,8 +99,8 @@ function PerformancePage.Create(ServiceManager: any, deps: Deps)
 				table.insert(this.StableConnections, conn)
 				table.insert(this.Connections, conn)
 			end
-			CreateFilter("Active", deps.COLORS.Success)
-			CreateFilter("Inactive", deps.COLORS.Error)
+			createFilter("Active", deps.COLORS.Success)
+			createFilter("Inactive", deps.COLORS.Error)
 
 			local SortBtn = deps.CreateButton(Toolbar, "SORT: NAME", deps.COLORS.DarkBG, nil, 80)
 			local sortBtnAny = SortBtn :: any
@@ -110,7 +131,14 @@ function PerformancePage.Create(ServiceManager: any, deps: Deps)
 			local labelsContainer = (GlobalStats :: any).StatsLabels
 			local graphContainer = (GlobalStats :: any).GraphContainer
 
-			local function SetLabel(labelName: string, labelText: string, labelColor: Color3?)
+			--[[
+				@description Creates or updates a named stat label in the GlobalStats panel.
+				@param labelName string -- Unique label identifier.
+				@param labelText string -- Rich-text content.
+				@param labelColor Color3? -- Optional override text color.
+				@return ()
+			]]
+			local function setLabel(labelName: string, labelText: string, labelColor: Color3?)
 				local label = labelsContainer:FindFirstChild(labelName) or Instance.new("TextLabel", labelsContainer)
 				label.Name = labelName
 				label.Size = UDim2.new(1, 0, 0, 20)
@@ -127,10 +155,10 @@ function PerformancePage.Create(ServiceManager: any, deps: Deps)
 			local BudgetMs = (frameStats :: any).Budget * 1000
 			local UsagePercent = (BudgetMs > 0) and (FrameTimeMs / BudgetMs * 100) or 0
 
-			SetLabel("Rate", string.format("TASKS/FRAME: <font color='#A0FFA0'><b>%d</b></font>", (frameStats :: any).TaskCount))
-			SetLabel("Time", string.format("FRAME TIME:  <font color='#%s'><b>%.2fms</b></font>", FrameTimeMs > BudgetMs and "FF7878" or "00C8FF", FrameTimeMs))
-			SetLabel("Budget", string.format("BUDGET:      <font color='#CCCCCC'>%.2fms</font>", BudgetMs))
-			SetLabel("Usage", string.format("USAGE:       <font color='#%s'><b>%.1f%%</b></font>", UsagePercent > 100 and "FF7878" or (UsagePercent > 80 and "FFDC8C" or "A0FFA0"), UsagePercent))
+			setLabel("Rate", string.format("TASKS/FRAME: <font color='#A0FFA0'><b>%d</b></font>", (frameStats :: any).TaskCount))
+			setLabel("Time", string.format("FRAME TIME:  <font color='#%s'><b>%.2fms</b></font>", FrameTimeMs > BudgetMs and "FF7878" or "00C8FF", FrameTimeMs))
+			setLabel("Budget", string.format("BUDGET:      <font color='#CCCCCC'>%.2fms</font>", BudgetMs))
+			setLabel("Usage", string.format("USAGE:       <font color='#%s'><b>%.1f%%</b></font>", UsagePercent > 100 and "FF7878" or (UsagePercent > 80 and "FFDC8C" or "A0FFA0"), UsagePercent))
 
 			if not (GlobalStats :: any):FindFirstChild("PauseBtn") then
 				local PauseBtn = Instance.new("TextButton", GlobalStats)
@@ -299,8 +327,8 @@ function PerformancePage.Create(ServiceManager: any, deps: Deps)
 							local maxX = math.max(0, graphContainer.AbsoluteSize.X - (Tooltip :: any).AbsoluteSize.X)
 							local maxY = math.max(0, graphContainer.AbsoluteSize.Y - (Tooltip :: any).AbsoluteSize.Y)
 							local posX = math.clamp(relX + 10, 0, maxX)
-							local posY = math.clamp(10, 0, maxY);
-							(Tooltip :: any).Position = UDim2.new(0, posX, 0, posY);
+							local posY = math.clamp(10, 0, maxY)
+							;(Tooltip :: any).Position = UDim2.new(0, posX, 0, posY)
 						end
 					end
 				end))
@@ -312,37 +340,52 @@ function PerformancePage.Create(ServiceManager: any, deps: Deps)
 
 		local Controls = deps.EnsurePagination(View, this.Constants, function() this.UpdateFunction(this) end)
 
-		local function ClearTaskMetadataPanel()
+		--[[
+			@description Destroys all Frame/TextLabel children from the TaskMetadata panel.
+			@return ()
+		]]
+		local function clearTaskMetadataPanel()
 			for _, TaskData in next, (this.Container :: any).TaskMetadata:GetChildren() do
 				if TaskData:IsA("Frame") or TaskData:IsA("TextLabel") then TaskData:Destroy() end
 			end
 		end
 
-		local function HookTaskCard(TaskCard: Instance, TaskName: string)
+		--[[
+			@description Attaches click handler to a performance task card for selection.
+			@param TaskCard Instance -- The card Instance.
+			@param TaskName string -- The task name key.
+			@return ()
+		]]
+		local function hookTaskCard(TaskCard: Instance, TaskName: string)
 			if (TaskCard :: any):FindFirstChild("IsHooked") then return end
 			local HookMarker = Instance.new("BoolValue", TaskCard)
 			HookMarker.Name = "IsHooked"
 			local Connection = (TaskCard :: any).MouseButton1Click:Connect(function()
 				constants.SelectedTask = nil
-				ClearTaskMetadataPanel()
+				clearTaskMetadataPanel()
 				constants.SelectedTask = TaskName
 				this.UpdateFunction(this)
 			end)
 			table.insert(this.Connections, Connection)
 		end
 
-		local function UpdateTaskList()
+		--[[
+			@description Rebuilds the performance task list: merges Stats and active Tasks,
+			applies search/filter/sort/pagination, creates or updates task cards.
+			@return ()
+		]]
+		local function updateTaskList()
 			local scheduler = ServiceManager.Services.Scheduler
 			if not scheduler then return end
 			local Stats = (scheduler :: any).PerformanceManager and (scheduler :: any).PerformanceManager.Stats or {}
 			local ActiveTasks = (scheduler :: any).Tasks or {}
 
 			local function CreateTaskCard(TaskName: string)
-				local TaskCard = deps.TaskCardReference:Clone();
-				(TaskCard :: any):FindFirstChildWhichIsA("TextLabel").Text = TaskName;
-				(TaskCard :: any).Name = TaskName;
-				(TaskCard :: any).Parent = (this.Container :: any).TaskList;
-				(TaskCard :: any).Visible = true;
+				local TaskCard = deps.TaskCardReference:Clone()
+				;(TaskCard :: any):FindFirstChildWhichIsA("TextLabel").Text = TaskName
+				;(TaskCard :: any).Name = TaskName
+				;(TaskCard :: any).Parent = (this.Container :: any).TaskList
+				;(TaskCard :: any).Visible = true
 
 				local StatusDot = Instance.new("Frame", TaskCard)
 				StatusDot.Name = "StatusDot"
@@ -413,11 +456,16 @@ function PerformancePage.Create(ServiceManager: any, deps: Deps)
 					((card :: any).StatusDot :: any).BackgroundColor3 = IsActive and deps.COLORS.Success or deps.COLORS.Error
 				end
 
-				HookTaskCard(card, TaskName)
+				hookTaskCard(card, TaskName)
 			end
 		end
 
-		local function UpdateSelectedTaskMetadata()
+		--[[
+			@description Populates the TaskMetadata panel with Average, Max, and Delayed
+			metrics for the selected task, including proportional bar indicators.
+			@return ()
+		]]
+		local function updateSelectedTaskMetadata()
 			local scheduler = ServiceManager.Services.Scheduler
 			if not constants.SelectedTask or not scheduler then return end
 			local Selected = constants.SelectedTask
@@ -434,7 +482,12 @@ function PerformancePage.Create(ServiceManager: any, deps: Deps)
 			if GlobalMaxAvg == 0 then GlobalMaxAvg = 1 end
 			if GlobalMaxMax == 0 then GlobalMaxMax = 1 end
 
-			local function FormatTime(t)
+			--[[
+				@description Formats a time value (seconds) into human-readable ns/ms/s.
+				@param t number -- Time in seconds.
+				@return string
+			]]
+			local function formatTime(t)
 				return t < 0.001 and (math.floor(t * 1e6) .. "ns") or t < 1 and (math.floor(t * 1e3) .. "ms") or (math.floor(t) .. "s")
 			end
 			local DataKeys = {"Average", "Max", "Delayed"}
@@ -449,35 +502,35 @@ function PerformancePage.Create(ServiceManager: any, deps: Deps)
 				local metric = Data[keyName]
 				local DataObject = Container:FindFirstChild(keyName) or deps.TaskDataReference:Clone()
 				DataObject.Name = keyName
-				DataObject.Parent = Container;
-				(DataObject :: any).Visible = true;
-				(DataObject :: any).LayoutOrder = i
+				DataObject.Parent = Container
+				;(DataObject :: any).Visible = true
+				;(DataObject :: any).LayoutOrder = i
 
 				if (DataObject :: any):FindFirstChild("Title") then
 					((DataObject :: any).Title :: any).Text = string.upper(keyName)
 				end
 				if (DataObject :: any):FindFirstChild("Value") then
 					local val = metric.Val
-					local text = metric.Format and FormatTime(val) or tostring(val);
-					((DataObject :: any).Value :: any).Text = string.format("<b>%s</b>", text);
+					local text = metric.Format and formatTime(val) or tostring(val)
+					;((DataObject :: any).Value :: any).Text = string.format("<b>%s</b>", text)
 
 					if metric.Max > 0 then
 						local Bar = (DataObject :: any):FindFirstChild("Bar")
 						if not Bar then
 							Bar = Instance.new("Frame", DataObject)
 							Bar.Name = "Bar"
-							(Bar :: any).LayoutOrder = 3;
-							(Bar :: any).Size = UDim2.new(1, 0, 0, 4);
-							(Bar :: any).BackgroundColor3 = Color3.fromRGB(60, 60, 60);
+							;(Bar :: any).LayoutOrder = 3
+							;(Bar :: any).Size = UDim2.new(1, 0, 0, 4)
+							;(Bar :: any).BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 							Instance.new("UICorner", Bar).CornerRadius = UDim.new(1, 0)
 							local Fill = Instance.new("Frame", Bar)
 							Fill.Name = "Fill"
 							Fill.BackgroundColor3 = deps.COLORS.Accent
 							Instance.new("UICorner", Fill).CornerRadius = UDim.new(1, 0)
 						end
-						local pct = math.clamp(val / metric.Max, 0, 1);
-						((Bar :: any).Fill :: any).Size = UDim2.new(pct, 0, 1, 0);
-						((Bar :: any).Fill :: any).BackgroundColor3 = pct > 0.8 and deps.COLORS.Error or (pct > 0.5 and deps.COLORS.Warning or deps.COLORS.Accent);
+						local pct = math.clamp(val / metric.Max, 0, 1)
+						;((Bar :: any).Fill :: any).Size = UDim2.new(pct, 0, 1, 0)
+						;((Bar :: any).Fill :: any).BackgroundColor3 = pct > 0.8 and deps.COLORS.Error or (pct > 0.5 and deps.COLORS.Warning or deps.COLORS.Accent)
 					end
 				end
 			end
@@ -487,8 +540,8 @@ function PerformancePage.Create(ServiceManager: any, deps: Deps)
 			end
 		end
 
-		UpdateTaskList()
-		UpdateSelectedTaskMetadata()
+		updateTaskList()
+		updateSelectedTaskMetadata()
 	end
 
 	return page

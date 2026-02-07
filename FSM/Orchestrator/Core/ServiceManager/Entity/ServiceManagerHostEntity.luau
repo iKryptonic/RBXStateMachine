@@ -18,6 +18,11 @@ local ServiceManagerHostEntity = {
 	}
 }
 
+--[[
+	@description Extracts the Orchestrator reference from creation params.
+	@param params any -- Entity creation parameters containing Context table.
+	@return table -- The resolved context with Orchestrator.
+]]
 function ServiceManagerHostEntity:GetContext(params: any)
 	return {
 		Orchestrator = params.Context and params.Context.Orchestrator
@@ -28,11 +33,19 @@ function ServiceManagerHostEntity:ApplyChanges(changes: { [string]: any })
 	-- Visual updates if any (e.g. overhead UI on a physical part? likely none for this system entity)
 end
 
+--[[
+	@description Cleanup callback for unregistering resources when the entity is destroyed.
+]]
 function ServiceManagerHostEntity:OnCleanup()
     -- Cleanup callbacks if necessary (NetworkManager usually handles replacements, but good practice to allow unregistering)
 end
 
 
+--[[
+	@description Registers all server-side remote callbacks (GetSyncData, UpdateSettings,
+	FSM, ConsoleCommand, Scheduler). Each callback is wrapped in SafeCall for
+	error resilience.
+]]
 function ServiceManagerHostEntity:RegisterServerCallbacks()
     local Orchestrator = self.Orchestrator 
     if not Orchestrator then 
@@ -98,7 +111,7 @@ function ServiceManagerHostEntity:RegisterServerCallbacks()
                         IsValid = props.IsValid,
                         OwnerId = props.OwnerId,
                         Data = props.Data
-                    };
+                    }
                 end
             end
 
@@ -136,7 +149,7 @@ function ServiceManagerHostEntity:RegisterServerCallbacks()
                 if out == "" then out = "No active stateMachines." end
                 return out
             elseif cmd == "clearlogs" then 
-                 Logger.History = {}; 
+                 Logger.History = {} 
                  return "Logs cleared."
             end
             
@@ -204,6 +217,9 @@ function ServiceManagerHostEntity:RegisterServerCallbacks()
     end
 end
 
+--[[
+	@description Initializes the entity, registers server callbacks, and starts heartbeat uptime tracking.
+]]
 function ServiceManagerHostEntity:Initialize()
     self.Status = "Initializing"
     

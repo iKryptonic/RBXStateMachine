@@ -1,10 +1,21 @@
 --!strict
-
--- Runtime/Network.luau
--- Network state helpers (circuit breaker + disconnected status)
+--[[
+	@Name Network
+	@Author iKrypto
+	@Description Network state helpers providing circuit breaker logic and
+	disconnection tracking for the ServiceManager polling loop.
+]]
 
 local Network = {}
 
+--[[
+	@description Sets the network disconnected state and updates the sidebar UI.
+	Clears ping when entering disconnected state.
+	@param this any -- ServiceManager instance.
+	@param isDisconnected boolean -- Whether the connection is lost.
+	@param reason string? -- Optional human-readable error reason.
+	@return ()
+]]
 function Network.SetDisconnected(this: any, isDisconnected: boolean, reason: string?)
 	this.Network.IsDisconnected = isDisconnected
 	this.Network.LastError = reason
@@ -14,6 +25,13 @@ function Network.SetDisconnected(this: any, isDisconnected: boolean, reason: str
 	this:UpdateSideBar()
 end
 
+--[[
+	@description Records a network failure, increments the failure counter, and
+	opens the circuit breaker (5s cooldown) after 3 consecutive failures.
+	@param this any -- ServiceManager instance.
+	@param err string? -- Optional error message.
+	@return ()
+]]
 function Network.RecordFailure(this: any, err: string?)
 	this.Network.Failures += 1
 	this.Network.LastError = err
@@ -26,6 +44,12 @@ function Network.RecordFailure(this: any, err: string?)
 	end
 end
 
+--[[
+	@description Records a successful network call, resets failure counter,
+	and closes the circuit breaker if it was open.
+	@param this any -- ServiceManager instance.
+	@return ()
+]]
 function Network.RecordSuccess(this: any)
 	this.Network.Failures = 0
 	this.Network.CircuitOpenUntil = 0

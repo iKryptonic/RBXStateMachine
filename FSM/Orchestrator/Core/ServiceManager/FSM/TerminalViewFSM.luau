@@ -15,6 +15,10 @@ local TerminalViewFSM = {
 	}
 }
 
+--[[
+	@description Registers the Closed and Open states, toggled by the IsTogglePressed
+	context flag. Each state calls SetVisible to show/hide the terminal panel.
+]]
 function TerminalViewFSM:RegisterStates()
 	-- Shared Transitions
 	local function OpenTransition(fsm)

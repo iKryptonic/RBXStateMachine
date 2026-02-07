@@ -121,6 +121,16 @@ function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {
 	end
 
 	self.IsActive = false
+<<<<<<< HEAD
+	self.initialState = params.InitialState or (validStatesList and validStatesList[1]) or nil
+
+	if self.initialState and next(self.validStates) and not self.validStates[self.initialState] then
+		self.Logger:Log({
+			Level = "WARN",
+			Message = string.format("InitialState '%s' is not in ValidStates.", self.initialState)
+		})
+		self.initialState = nil
+=======
 	self.InitialState = params.InitialState or (validStatesList and validStatesList[1]) or nil
 
 	if self.InitialState and next(self.validStates) and not self.validStates[self.InitialState] then
@@ -129,6 +139,7 @@ function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {
 			Message = string.format("InitialState '%s' is not in ValidStates.", self.InitialState)
 		})
 		self.InitialState = nil
+>>>>>>> master
 	end
 
 	self._completed = (Signal and Signal.new()) or error("BaseStateMachine: Signal not initialized. Did you call BaseStateMachine.Initialize(Util)?")

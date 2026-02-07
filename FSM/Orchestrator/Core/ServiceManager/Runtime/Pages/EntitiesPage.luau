@@ -1,7 +1,14 @@
 --!strict
-
--- Runtime/Pages/EntitiesPage.luau
--- Extracted Entities page controller.
+--[[
+	@Name EntitiesPage
+	@Author iKrypto
+	@Description Entities page controller. Displays active and archived entities
+	with toolbar (search, show-ended, clear-ended), pagination, entity metadata
+	panel, and action buttons.
+	
+	@deprecated This legacy controller is retained for regression testing only.
+	Use the new FSM/Entity pattern: FSM/EntitiesPageFSM.luau + Entity/EntitiesPageEntity.luau
+]]
 
 export type Deps = {
 	EnsureToolbar: (Instance) -> Instance,
@@ -25,6 +32,13 @@ type Constants = {
 
 local EntitiesPage = {}
 
+--[[
+	@description Factory that creates the Entities page with Active/Archived
+	sections, paginated list, search, and metadata drill-down.
+	@param ServiceManager any -- The root ServiceManager instance.
+	@param deps Deps -- Injected dependencies.
+	@return any -- A page table.
+]]
 function EntitiesPage.Create(ServiceManager: any, deps: Deps)
 	local page: any = {
 		Container = ServiceManager.GUI.BodyContainer:WaitForChild("EntitiesView"):WaitForChild("Container"),
@@ -112,6 +126,14 @@ function EntitiesPage.Create(ServiceManager: any, deps: Deps)
 		end
 
 		-- Ensure Sections Exist
+		--[[
+			@description Creates a labeled section frame with a scrollable list.
+			@param name string -- Section frame name.
+			@param titleText string -- Section heading text.
+			@param color Color3 -- Heading text color.
+			@param parent Instance -- Parent container.
+			@return Instance -- The created section Frame.
+		]]
 		local function createSection(name: string, titleText: string, color: Color3, parent: Instance)
 			local section = deps.Create("Frame", {
 				Name = name,
@@ -165,6 +187,10 @@ function EntitiesPage.Create(ServiceManager: any, deps: Deps)
 		-- --------------------------------------------------------------------------------
 		-- HELPERS
 		-- --------------------------------------------------------------------------------
+		--[[
+			@description Clears the EntityMetadata panel and destroys the ActionsPanel.
+			@return ()
+		]]
 		local function clearMetadataPanel()
 			ServiceManager:ClearConnections(this.DynamicConnections)
 			this.DynamicConnections = {}
@@ -175,11 +201,19 @@ function EntitiesPage.Create(ServiceManager: any, deps: Deps)
 				end
 			end
 			if (this.Container :: any):FindFirstChild("ActionsPanel") then
-				local actionsPanel = (this.Container :: any).ActionsPanel;
-				actionsPanel:Destroy();
+				local actionsPanel = (this.Container :: any).ActionsPanel
+				actionsPanel:Destroy()
 			end
 		end
 
+		--[[
+			@description Creates an action button in the ActionsPanel for entity metadata.
+			@param name string -- Button label.
+			@param color Color3 -- Button background color.
+			@param order number -- LayoutOrder.
+			@param callback () -> () -- Click callback.
+			@return ()
+		]]
 		local function createActionButton(name: string, color: Color3, order: number, callback: () -> ())
 			local panel = (this.Container :: any):FindFirstChild("ActionsPanel")
 			if not panel then
@@ -213,6 +247,13 @@ function EntitiesPage.Create(ServiceManager: any, deps: Deps)
 			table.insert(this.Connections, connection)
 		end
 
+		--[[
+			@description Attaches click handler to an entity card for selection.
+			Guards against double-hooking with an IsHooked marker.
+			@param card any -- The card Instance.
+			@param entityId string -- The entity identifier.
+			@return ()
+		]]
 		local function hookEntityCard(card: any, entityId: string)
 			if card:FindFirstChild("IsHooked") then return end
 			local hookMarker = Instance.new("BoolValue")
@@ -227,6 +268,11 @@ function EntitiesPage.Create(ServiceManager: any, deps: Deps)
 			table.insert(this.Connections, conn)
 		end
 
+		--[[
+			@description Rebuilds the entity list across Active/Archived sections
+			with search filtering and pagination.
+			@return ()
+		]]
 		local function updateEntityList()
 			local fsmService = ServiceManager.Services.FSM
 			if not fsmService then return end
@@ -334,6 +380,11 @@ function EntitiesPage.Create(ServiceManager: any, deps: Deps)
 			end
 		end
 
+		--[[
+			@description Populates the metadata panel for the selected entity and
+			creates a CLEAR action button if archived.
+			@return ()
+		]]
 		local function updateSelectedEntityMetadata()
 			local fsmService = ServiceManager.Services.FSM
 			if not constants.SelectedEntity or not fsmService then return end
@@ -365,6 +416,12 @@ function EntitiesPage.Create(ServiceManager: any, deps: Deps)
 			end
 
 			local container = (this.Container :: any).EntityMetadata
+			--[[
+				@description Adds or updates a key-value field in the entity metadata panel.
+				@param key string -- The field name.
+				@param value any -- The field value.
+				@return ()
+			]]
 			local function addProp(key: string, value: any)
 				local dataObject = container:FindFirstChild(key) or deps.TaskDataReference:Clone()
 				dataObject.Name = key

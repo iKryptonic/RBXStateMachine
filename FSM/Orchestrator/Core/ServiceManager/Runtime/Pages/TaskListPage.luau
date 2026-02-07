@@ -1,12 +1,20 @@
 --!strict
-
--- Runtime/Pages/TaskListPage.luau
--- Extracted TaskList page controller.
+--[[
+	@Name TaskListPage
+	@Author iKrypto
+	@Description TaskList page controller. Displays active and archived tasks in
+	two sections with a toolbar (search, sort, archive toggle), clickable task
+	cards, a metadata detail panel, and action buttons (Execute, Reset, Kill, Clear).
+	
+	@deprecated This legacy controller is retained for regression testing only.
+	Use the new FSM/Entity pattern: FSM/TaskListPageFSM.luau + Entity/TaskListPageEntity.luau
+]]
 
 export type Deps = {
 	EnsureToolbar: (Instance) -> Instance,
 	CreateSearchBox: (Instance, string?, (string) -> ()) -> Instance,
 	CreateButton: (Instance, string, Color3, (() -> ())?, number?) -> Instance,
+	Create: (string, { [string]: any }) -> Instance,
 	COLORS: { [string]: Color3 },
 	TaskCardReference: Instance,
 	TaskDataReference: Instance,
@@ -21,6 +29,13 @@ type Constants = {
 
 local TaskListPage = {}
 
+--[[
+	@description Factory that creates the TaskList page with active/archived
+	sections, toolbar controls, task cards, and a metadata panel.
+	@param ServiceManager any -- The root ServiceManager instance.
+	@param deps Deps -- Injected dependencies (toolbar, search, button, create, colors, templates).
+	@return any -- A page table with Container, Tab, Constants, Connections, UpdateFunction.
+]]
 function TaskListPage.Create(ServiceManager: any, deps: Deps)
 	local page: any = {
 		Container = ServiceManager.GUI.BodyContainer:WaitForChild("TaskListView"):WaitForChild("Container"),
@@ -98,6 +113,14 @@ function TaskListPage.Create(ServiceManager: any, deps: Deps)
 		end
 
 		-- Ensure Sections Exist
+		--[[
+			@description Creates a titled section frame (Active/Archived) with a scrollable list.
+			@param name string -- Section frame name.
+			@param titleText string -- Section heading text.
+			@param color Color3 -- Heading text color.
+			@param parent Instance -- Parent container.
+			@return Instance -- The created section Frame.
+		]]
 		local function createSection(name: string, titleText: string, color: Color3, parent: Instance)
 			local section = deps.Create("Frame", {
 				Name = name,
@@ -145,6 +168,11 @@ function TaskListPage.Create(ServiceManager: any, deps: Deps)
 		-- --------------------------------------------------------------------------------
 		-- HELPERS (Scoped to UpdateFunction)
 		-- --------------------------------------------------------------------------------
+		--[[
+			@description Clears the TaskMetadata panel, destroys action buttons, and
+			disconnects dynamic connections.
+			@return ()
+		]]
 		local function clearTaskMetadataPanel()
 			ServiceManager:ClearConnections(this.DynamicConnections)
 			this.DynamicConnections = {}
@@ -160,6 +188,14 @@ function TaskListPage.Create(ServiceManager: any, deps: Deps)
 			end
 		end
 		
+		--[[
+			@description Creates or appends an action button to the ActionsPanel.
+			@param name string -- Button label (EXECUTE, RESET, KILL, CLEAR).
+			@param color Color3 -- Button background color.
+			@param order number -- LayoutOrder for horizontal positioning.
+			@param callback () -> () -- Click callback.
+			@return ()
+		]]
 		local function createActionButton(name: string, color: Color3, order: number, callback: () -> ())
 			local panel = (this.Container :: any):FindFirstChild("ActionsPanel")
 			if not panel then
@@ -193,6 +229,11 @@ function TaskListPage.Create(ServiceManager: any, deps: Deps)
 			table.insert(this.Connections, connection)
 		end
 
+		--[[
+			@description Populates the TaskMetadata panel with key-value fields for
+			the selected task and creates appropriate action buttons.
+			@return ()
+		]]
 		local function updateSelectedTaskMetadata()
 			local scheduler = ServiceManager.Services.Scheduler
 			if not constants.SelectedTask or not scheduler then return end
@@ -216,7 +257,7 @@ function TaskListPage.Create(ServiceManager: any, deps: Deps)
 				if typeof(value) == "function" then continue end
 				local dataObject = container:FindFirstChild(key) or deps.TaskDataReference:Clone()
 				dataObject.Name = key
-				dataObject.Parent = container;
+				dataObject.Parent = container
 				local dataObjectAny = dataObject :: any
 				dataObjectAny.Visible = true
 				if dataObjectAny:FindFirstChild("Title") then
@@ -275,6 +316,13 @@ function TaskListPage.Create(ServiceManager: any, deps: Deps)
 			end
 		end
 
+		--[[
+			@description Attaches click and per-card button handlers to a task card.
+			Guards against double-hooking with an IsHooked marker.
+			@param taskCard any -- The card Instance.
+			@param taskName string -- The task name key.
+			@return ()
+		]]
 		local function hookTaskCard(taskCard: any, taskName: string)
 			-- Hook card selection
 			if not taskCard:FindFirstChild("IsHooked") then
@@ -341,6 +389,7 @@ function TaskListPage.Create(ServiceManager: any, deps: Deps)
 			end
 		end
 
+		--[[\n\t\t\t@description Rebuilds the active and archived task card lists, applying\n\t\t\tsearch, sort, and filter criteria.\n\t\t\t@return ()\n\t\t]]
 		local function updateTaskList()
 			local scheduler = ServiceManager.Services.Scheduler
 			if not scheduler then return end

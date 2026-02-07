@@ -1,7 +1,8 @@
 --!strict
 -- @Name SettingsPageEntity
--- @Author iKrypto (AI Assistant)
--- @Description Settings Page entity managing setting values and pending changes.
+-- @Author iKrypto
+-- @Description Settings Page entity managing configuration state.
+-- Migrated from legacy SettingsPage.luau controller pattern.
 
 local BasePageEntity = require(script.Parent.BasePageEntity)
 
@@ -9,58 +10,71 @@ local SettingsPageEntity = BasePageEntity.Extend({
 	Name = "SettingsPageEntity",
 	Schema = {
 		-- Data State
-		InitializedSettings = { Type = "boolean", Persist = false },
-		PendingChanges = { Type = "table", Persist = false }, -- { [settingName]: newValue }
+		Initialized = { Type = "boolean", Persist = false },
 	}
 })
 
+--[[
+	@description Extracts context from initialization parameters.
+	@param params { Context: { ... } }
+	@return { [string]: any }
+]]
 function SettingsPageEntity:GetContext(params: any)
 	local baseContext = BasePageEntity.GetContext(self, params)
-	baseContext.SettingFields = {} -- Cache setting input elements
+	
+	-- Add settings-specific cached GUI elements
+	baseContext.SettingsList = nil
+	
 	return baseContext
 end
 
+--[[
+	@description Initializes settings entity state.
+	@return ()
+]]
 function SettingsPageEntity:Initialize()
 	if BasePageEntity.Initialize then
 		BasePageEntity.Initialize(self)
 	end
 	
-	self.InitializedSettings = false
-	self.PendingChanges = {}
+	-- Initialize data state
+	self.Initialized = false
+	
+	-- Initialize GUI references
+	self.SettingsList = nil
 	
 	self:Log({ Level = "INFO", Message = "SettingsPageEntity initialized" })
 end
 
+--[[
+	@description Applies entity state changes to GUI.
+	@param changes { [string]: any }
+	@return ()
+]]
 function SettingsPageEntity:ApplyChanges(changes: { [string]: any })
 	BasePageEntity.ApplyChanges(self, changes)
 	
-	if changes.PendingChanges ~= nil then
-		self:Log({ Level = "DEBUG", Message = string.format("Settings pending changes: %d", 
-			(function()
-				local count = 0
-				for _ in pairs(self.PendingChanges) do count += 1 end
-				return count
-			end)()
-		)})
+	if changes.Initialized ~= nil then
+		self:Log({ Level = "DEBUG", Message = string.format("Settings initialized: %s", tostring(self.Initialized)) })
 	end
 end
 
-function SettingsPageEntity:SetPendingChange(settingName: string, value: any)
-	local newPending = table.clone(self.PendingChanges)
-	newPending[settingName] = value
-	self.PendingChanges = newPending
+--[[
+	@description Marks the page as initialized.
+	@return ()
+]]
+function SettingsPageEntity:MarkInitialized()
+	self.Initialized = true
 end
 
-function SettingsPageEntity:ClearPendingChanges()
-	self.PendingChanges = {}
-end
-
-function SettingsPageEntity:HasPendingChanges(): boolean
-	return next(self.PendingChanges) ~= nil
-end
-
+--[[
+	@description Cleanup handler.
+	@return ()
+]]
 function SettingsPageEntity:Cleanup()
-	self.SettingFields = {}
+	self.SettingsList = nil
+	self.Initialized = false
+	
 	BasePageEntity.Cleanup(self)
 	self:Log({ Level = "INFO", Message = "SettingsPageEntity cleanup complete" })
 end

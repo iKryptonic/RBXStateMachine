@@ -17,6 +17,11 @@ local WindowEntity = {
 	}
 }
 
+--[[
+	@description Extracts the main frame and ServiceManager reference from creation params.
+	@param params any -- Entity creation parameters containing Context table.
+	@return table -- The resolved context with MainFrame and ServiceManager.
+]]
 function WindowEntity:GetContext(params: any)
 	return {
 		MainFrame = params.Context and params.Context.MainFrame,
@@ -24,6 +29,9 @@ function WindowEntity:GetContext(params: any)
 	}
 end
 
+--[[
+	@description Initializes window state (hidden, not minimized) and caches position/size from the MainFrame.
+]]
 function WindowEntity:Initialize()
 	self.IsVisible = false
 	self.IsMinimized = false
@@ -36,6 +44,9 @@ function WindowEntity:Initialize()
 	self:Log({ Level = "INFO", Message = "WindowEntity initialized" })
 end
 
+--[[
+	@description Makes the window visible with a slide-in tween animation.
+]]
 function WindowEntity:Show()
 	if not self.MainFrame then 
 		self:Log({ Level = "WARN", Message = "WindowEntity: MainFrame not available" })
@@ -52,6 +63,9 @@ function WindowEntity:Show()
 	tween:Play()
 end
 
+--[[
+	@description Hides the window with a slide-out tween, then sets Visible to false.
+]]
 function WindowEntity:Hide()
 	if not self.MainFrame then return end
 	
@@ -68,6 +82,9 @@ function WindowEntity:Hide()
 	tween:Play()
 end
 
+--[[
+	@description Tweens the window to a minimized bar size.
+]]
 function WindowEntity:Minimize()
 	if not self.MainFrame then return end
 	
@@ -80,6 +97,9 @@ function WindowEntity:Minimize()
 	tween:Play()
 end
 
+--[[
+	@description Restores the window from minimized state to its full stored size.
+]]
 function WindowEntity:Restore()
 	if not self.MainFrame then return end
 	
@@ -91,6 +111,10 @@ function WindowEntity:Restore()
 	tween:Play()
 end
 
+--[[
+	@description Routes visibility and minimization changes to Show/Hide/Minimize/Restore handlers.
+	@param changes { [string]: any } -- Key-value pairs of changed fields.
+]]
 function WindowEntity:ApplyChanges(changes: { [string]: any })
 	-- Handle IsVisible changes
 	if changes.IsVisible ~= nil then

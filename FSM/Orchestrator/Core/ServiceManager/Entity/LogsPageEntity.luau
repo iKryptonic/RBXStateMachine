@@ -1,7 +1,8 @@
 --!strict
 -- @Name LogsPageEntity
--- @Author iKrypto (AI Assistant)
+-- @Author iKrypto
 -- @Description Logs Page entity with filter state and log buffer management.
+-- Migrated from legacy LogsPage.luau controller pattern.
 
 local BasePageEntity = require(script.Parent.BasePageEntity)
 
@@ -41,15 +42,26 @@ function LogsPageEntity:Initialize()
 		BasePageEntity.Initialize(self)
 	end
 	
-	-- Initialize data state
+	-- Initialize data state with both named and numeric keys for compatibility
 	self.Filters = {
+		-- Named keys (new pattern)
 		DEBUG = false,
 		INFO = true,
 		WARN = true,
-		ERROR = true
+		ERROR = true,
+		-- Numeric keys (legacy compatibility: 1=INFO, 2=WARN, 3=ERROR)
+		[1] = true,
+		[2] = true,
+		[3] = true,
 	}
 	self.LastBufferHash = ""
 	self.Search = ""
+	
+	-- Initialize GUI references
+	self.FilterButtons = {}
+	self.ClearButton = nil
+	self.Viewport = nil
+	self.Content = nil
 	
 	self:Log({ Level = "INFO", Message = "LogsPageEntity initialized" })
 end
@@ -75,18 +87,32 @@ function LogsPageEntity:ApplyChanges(changes: { [string]: any })
 	
 	-- Handle search or filter changes (trigger re-render)
 	if changes.Search ~= nil or changes.Filters ~= nil then
+		self.LastBufferHash = "" -- Force re-render
 		self:Log({ Level = "DEBUG", Message = "Logs filters or search changed, re-render needed" })
 	end
 end
 
 --[[
-	@description Toggles a log level filter.
-	@param level string -- "DEBUG", "INFO", "WARN", "ERROR"
+	@description Toggles a log level filter (supports both named and numeric keys).
+	@param level string | number -- "DEBUG", "INFO", "WARN", "ERROR" or 1, 2, 3
 	@return ()
 ]]
-function LogsPageEntity:ToggleFilter(level: string)
+function LogsPageEntity:ToggleFilter(level: string | number)
 	if self.Filters[level] ~= nil then
 		self.Filters[level] = not self.Filters[level]
+		
+		-- Sync named/numeric keys if applicable
+		if type(level) == "string" then
+			local numericMap = { INFO = 1, WARN = 2, ERROR = 3 }
+			if numericMap[level] then
+				self.Filters[numericMap[level]] = self.Filters[level]
+			end
+		elseif type(level) == "number" then
+			local nameMap = { [1] = "INFO", [2] = "WARN", [3] = "ERROR" }
+			if nameMap[level] then
+				self.Filters[nameMap[level]] = self.Filters[level]
+			end
+		end
 	end
 end
 
@@ -100,21 +126,34 @@ function LogsPageEntity:SetAllFilters(enabled: boolean)
 		DEBUG = enabled,
 		INFO = enabled,
 		WARN = enabled,
-		ERROR = enabled
+		ERROR = enabled,
+		[1] = enabled,
+		[2] = enabled,
+		[3] = enabled,
 	}
 end
 
 --[[
 	@description Checks if a log entry matches current filters.
-	@param logEntry { Level: string }
+	@param logEntry { Level: string?, Type: number? }
 	@return boolean
 ]]
 function LogsPageEntity:MatchesFilters(logEntry: any): boolean
-	if not logEntry or not logEntry.Level then
+	if not logEntry then
 		return false
 	end
 	
-	return self.Filters[logEntry.Level] == true
+	-- Check by named Level
+	if logEntry.Level and self.Filters[logEntry.Level] ~= nil then
+		return self.Filters[logEntry.Level] == true
+	end
+	
+	-- Check by numeric Type
+	if logEntry.Type and self.Filters[logEntry.Type] ~= nil then
+		return self.Filters[logEntry.Type] == true
+	end
+	
+	return true -- Default to visible
 end
 
 --[[

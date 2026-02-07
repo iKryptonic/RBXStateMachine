@@ -174,7 +174,20 @@ function BaseEntity.new(params: { Name: string, Instance: Instance, OwnerId: str
 
 	proxy.Instance = params.Instance
 	proxy._privateProperties = privateProperties
+<<<<<<< HEAD
+	proxy._logger = Logger.new
+	{ 
+		Name = params.Name or "BaseEntity" 
+	}
+=======
 	proxy._logger = privateProperties._logger
+
+	-- @description Returns the raw data of the entity. Allows for quick lookups without using __index.
+	-- @return { [string]: any } - The raw data of the entity.
+	proxy.GetRawData = function()
+		return privateProperties.Data
+	end
+>>>>>>> master
 
 	-- @description Returns the raw data of the entity. Allows for quick lookups without using __index.
 	-- @return { [string]: any } - The raw data of the entity.
@@ -402,7 +415,7 @@ end
 	@description Performs cleanup tasks before destruction.
 	@return ()
 ]]
-function BaseEntity:OnCleanup()
+function BaseEntity:Cleanup()
 	-- Override in subclasses if needed
 	self:Log
 	{ 
@@ -485,7 +498,7 @@ function BaseEntity:Destroy()
 	end
 	privateProperties._cleanupTasks = {}
 
-	self:OnCleanup() -- Call subclass cleanup
+	self:Cleanup() -- Call subclass cleanup
 	privateProperties._entityDestroyedEvent:Fire()
 	privateProperties.IsValid = false
 	if privateProperties.InstanceDestroyedConn then privateProperties.InstanceDestroyedConn:Disconnect() end

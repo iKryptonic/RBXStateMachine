@@ -1,8 +1,20 @@
+--[[
+	@Name ActorWorker
+	@Author iKrypto
+	@Description Worker script running inside an Actor. Receives jobs via
+	"RunJob" message, executes them in a parallel (desynchronized) context,
+	then sends results back via "JobResult". Only pure-compute functions
+	should be registered here — no Instance creation or Roblox API calls.
+]]
 local actor = script:GetActor()
 
 local Jobs = {}
 
--- Register jobs here (pure compute only)
+--[[
+	@description Sorts a cloned list of tables by a specified key.
+	@param input { list: { { [string]: any } }, key: string, descending: boolean } -- Sort parameters.
+	@return { { [string]: any } } -- The sorted list.
+]]
 Jobs.SortByKey = function(input)
     -- input = { list = {...}, key = "time", descending = true }
     local list = table.clone(input.list)
@@ -19,6 +31,11 @@ Jobs.SortByKey = function(input)
     return list
 end
 
+--[[
+	@description Aggregates a list of numeric samples into count + average.
+	@param input { samples: { number } } -- The samples to aggregate.
+	@return { count: number, avg: number } -- Aggregated result.
+]]
 Jobs.AggregatePerf = function(input)
     -- input = { samples = {...} }
     local sum = 0
@@ -33,9 +50,11 @@ Jobs.AggregatePerf = function(input)
     }
 end
 
+-- Listens for "RunJob" messages from the pool, executes the named job
+-- in a desynchronized (parallel) context, then replies with "JobResult".
 actor:BindToMessage("RunJob", function(jobId: number, jobName: string, jobInput: any)
-    -- Enter parallel
-    task.desynchronize()
+	-- Enter parallel
+	task.desynchronize()
 
     local ok, out = pcall(function()
         local fn = Jobs[jobName]
