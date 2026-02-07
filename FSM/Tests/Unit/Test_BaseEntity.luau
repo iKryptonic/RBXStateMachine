@@ -11,7 +11,7 @@ local Test_BaseEntity = {}
 local function createTestEntity(name: string, instance: Instance)
 	local TestEntity = BaseEntity.Extend({ Name = name, Schema = {} })
 	function TestEntity:GetContext() return {} end
-	function TestEntity:Cleanup() end
+	function TestEntity:OnCleanup() end
 	return TestEntity.new({ Name = name, Instance = instance })
 end
 
@@ -170,7 +170,7 @@ function Test_BaseEntity.Run()
 		local SubEntity = BaseEntity.Extend({ Name = "SubEntity", Schema = { Prop = { Type = "string" } } })
 		
 		function SubEntity:GetContext() return {} end
-		function SubEntity:Cleanup() end
+		function SubEntity:OnCleanup() end
 		function SubEntity:ApplyChanges(changes)
 			if changes.Prop then
 				self.Instance.Name = changes.Prop
@@ -293,7 +293,7 @@ function Test_BaseEntity.Run()
 	tester:RunTest("Subclass GetContext (no error)", function(t)
 		local Sub = BaseEntity.Extend({ Name = "NoGetContext", Schema = {} })
 		function Sub:GetContext() return {} end
-		function Sub:Cleanup() end
+		function Sub:OnCleanup() end
 		function Sub:ApplyChanges(_) end
 		local ok = pcall(function()
 			local e = Sub.new({ Name = "NoCtx", Instance = Instance.new("Part") })

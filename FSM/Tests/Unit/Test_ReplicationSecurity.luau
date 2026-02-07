@@ -40,7 +40,7 @@ function Test_ReplicationSecurity.Run()
 		local DummyEntity = BaseEntity.Extend({ Name = "SnapshotEntity", Schema = { Value = { Type = "number", Replicate = true } } })
 		function DummyEntity:ApplyChanges(_) end
 		function DummyEntity:GetContext() return {} end
-		function DummyEntity:Cleanup() end
+		function DummyEntity:OnCleanup() end
 
 		local part = Instance.new("Part")
 		part.Parent = workspace

@@ -402,7 +402,7 @@ end
 	@description Performs cleanup tasks before destruction.
 	@return ()
 ]]
-function BaseEntity:Cleanup()
+function BaseEntity:OnCleanup()
 	-- Override in subclasses if needed
 	self:Log
 	{ 
@@ -485,7 +485,7 @@ function BaseEntity:Destroy()
 	end
 	privateProperties._cleanupTasks = {}
 
-	self:Cleanup() -- Call subclass cleanup
+	self:OnCleanup() -- Call subclass cleanup
 	privateProperties._entityDestroyedEvent:Fire()
 	privateProperties.IsValid = false
 	if privateProperties.InstanceDestroyedConn then privateProperties.InstanceDestroyedConn:Disconnect() end

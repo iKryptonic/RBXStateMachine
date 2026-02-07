@@ -55,7 +55,7 @@ function Test_OrchestratorDiscovery.Run()
 		if orchestratorClone and orchestratorClone.Parent then
 			orchestratorClone:Destroy()
 		end
-		if install.Cleanup then install.Cleanup() end
+		if install.Cleanup then install.OnCleanup() end
 
 		shared.FSM = oldShared.FSM
 		shared.Entity = oldShared.Entity

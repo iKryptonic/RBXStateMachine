@@ -26,7 +26,7 @@ function Test_Orchestrator.Run()
 	local DummyEntity = BaseEntity.Extend({ Name = "DummyEntity", Schema = { Val = { Type = "number" } } })
 	function DummyEntity:ApplyChanges(changes) end
 	function DummyEntity:GetContext() return {} end
-	function DummyEntity:Cleanup() end
+	function DummyEntity:OnCleanup() end
 	
 	local DummyFSM = BaseStateMachine.Extend({ className = "DummyFSM", validStates = {"Idle"} })
 	function DummyFSM:RegisterStates()
