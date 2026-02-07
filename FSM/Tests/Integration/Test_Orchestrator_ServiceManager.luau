@@ -1,7 +1,7 @@
 --!nocheck
 -- @Name Test_Orchestrator_ServiceManager
 -- @Author iKrypto
--- @Description Coverage/integration tests for Orchestrator ServiceManagerRemote OnServerInvoke branches and persistence hooks.
+-- @Description Coverage/integration tests for Orchestrator OrchestratorFunction OnServerInvoke branches and persistence hooks.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local RunService = game:GetService("RunService")
@@ -35,11 +35,11 @@ function Test_Orchestrator_ServiceManager.Run()
 	-- because OnServerInvoke is write-only. These tests would need to run on clients.
 	-- Skipping OnServerInvoke callback tests and testing only persistence hooks.
 
-	tester:RunTest("ServiceManagerRemote OnServerInvoke branches", function(t)
+	tester:RunTest("OrchestratorFunction OnServerInvoke branches", function(t)
 		-- Verify remote exists
 		Orchestrator.StartServiceManagerAPI()
-		local remote = ReplicatedStorage:FindFirstChild(Settings.StaticStrings.ServiceManagerRemoteName)
-		t:Assert(remote ~= nil and remote:IsA("RemoteFunction"), "ServiceManagerRemote should exist")
+		local remote = ReplicatedStorage:FindFirstChild(Settings.StaticStrings.Instance.OrchestratorFunctionName)
+		t:Assert(remote ~= nil and remote:IsA("RemoteFunction"), "OrchestratorFunction remote should exist")
 	end)
 
 	tester:RunTest("Persistence hooks call Load/Save", function(t)
