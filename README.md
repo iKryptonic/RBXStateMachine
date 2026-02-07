@@ -29,9 +29,10 @@ This framework enforces a clean separation of concerns through four core compone
 
 *   **/FSM**: The core engine. Contains the implementation of the 4 Pillars and auxiliary systems.
     *   *See [FSM/README.md](FSM/README.md) for deep technical implementation details.*
-*   **/wiki**: Comprehensive guides, tutorials, and API references.
-    *   *See the [Wiki Home](wiki/Home.md) for the full documentation suite.*
-*   **/tests**: A robust suite of Spec-style unit and integration tests.
+*   **/FSM/Tests**: A robust suite of Spec-style unit and integration tests.
+*   **/example**: Working examples demonstrating Entity, StateMachine, and Orchestrator usage.
+*   **/RBXStateMachine.wiki**: Comprehensive guides, tutorials, and API references.
+    *   *See the [Wiki Home](RBXStateMachine.wiki/Home.md) for the full documentation suite.*
 
 ---
 
@@ -54,4 +55,4 @@ This framework enforces a clean separation of concerns through four core compone
 
 ## 📖 Learn More
 
-For full documentation, tutorials, and advanced patterns, visit the **[Project Wiki](wiki/Home.md)**.
+For full documentation, tutorials, and advanced patterns, visit the **[Project Wiki](RBXStateMachine.wiki/Home.md)**.
