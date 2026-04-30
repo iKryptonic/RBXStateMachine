@@ -228,9 +228,12 @@ function BaseEntity.Extend(extensionParams: { Name: string, Schema: { [string]: 
 		if params and (params :: any).InitialData and type((params :: any).InitialData) == "table" then
 			local pp = subclassEntity._privateProperties
 			for k, v in pairs((params :: any).InitialData) do
-				if pp.Schema[k] then
+				if k ~= "_v" and pp.Schema[k] then
 					pp.Data[k] = v
 				end
+			end
+			if (params :: any).InitialData._v and type((params :: any).InitialData._v) == "number" then
+				pp.Version = (params :: any).InitialData._v
 			end
 		end
 
@@ -393,9 +396,14 @@ function BaseEntity:UpdateEntity(lockingCallerId: string?)
 
 	privateProperties._stateUpdatedEvent:Fire(changes)
 
+	-- Strip _v before passing to ApplyChanges so subclasses iterating
+	-- `changes` don't see _v as a property to render.
+	local visualChanges = table.clone(changes)
+	visualChanges._v = nil
+
 	-- Apply Changes (Visual/Instance updates)
 	local success, err = xpcall(function()
-		self:ApplyChanges(changes)
+		self:ApplyChanges(visualChanges)
 	end, function(e) return debug.traceback(tostring(e)) end)
 	if not success then
 		self:Log({ Level = "ERROR", Message = string.format("ApplyChanges failed: %s", tostring(err)) })
@@ -499,22 +507,28 @@ function BaseEntity:Destroy()
 	local privateProperties = self._privateProperties
 	if not privateProperties.IsValid then return end
 
-	privateProperties.IsValid = false
-
-	for _, task in ipairs(privateProperties._cleanupTasks) do
-		if typeof(task) == "Instance" then task:Destroy()
-		elseif typeof(task) == "RBXScriptConnection" then task:Disconnect()
-		elseif type(task) == "function" then task()
-		elseif type(task) == "table" and task.Destroy then task:Destroy()
+	for _, cleanupTask in ipairs(privateProperties._cleanupTasks) do
+		local ok, err = pcall(function()
+			if typeof(cleanupTask) == "Instance" then cleanupTask:Destroy()
+			elseif typeof(cleanupTask) == "RBXScriptConnection" then cleanupTask:Disconnect()
+			elseif type(cleanupTask) == "function" then cleanupTask()
+			elseif type(cleanupTask) == "table" and cleanupTask.Destroy then cleanupTask:Destroy()
+			end
+		end)
+		if not ok then
+			privateProperties._logger:Log({ Level = "ERROR", Message = "Cleanup task failed: " .. tostring(err) })
 		end
 	end
 	privateProperties._cleanupTasks = {}
 
 	self:OnCleanup() -- Call subclass cleanup
 	privateProperties._entityDestroyedEvent:Fire()
+	privateProperties.IsValid = false
 	if privateProperties.InstanceDestroyedConn then privateProperties.InstanceDestroyedConn:Disconnect() end
-	if privateProperties._entityDestroyedEvent then privateProperties._entityDestroyedEvent:Destroy() end
-	if privateProperties._stateUpdatedEvent then privateProperties._stateUpdatedEvent:Destroy() end
+	task.defer(function()
+		if privateProperties._entityDestroyedEvent then privateProperties._entityDestroyedEvent:Destroy() end
+		if privateProperties._stateUpdatedEvent then privateProperties._stateUpdatedEvent:Destroy() end
+	end)
 end
 
 return BaseEntity

@@ -281,7 +281,7 @@ function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Con
 	assert(Initialized, "Factory not initialized")
 	local EntityClass = ResolveClass("Entity", params.EntityClass)
 	local entityId = params.EntityId or HttpService:GenerateGUID(false)
-	local entityContext = params.Context or {}
+	local entityContext = if params.Context then table.clone(params.Context) else {}
 	entityContext.EntityId = entityId
 
 	if not EntityClass then
@@ -323,6 +323,7 @@ function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Con
 			for k, v in pairs(params.Context) do pooled._privateProperties.Context[k] = v end
 		end
 		pooled._privateProperties.Context.EntityId = entityId
+		pooled._privateProperties.Persistent = params.Persistent
 		-- Restore replicated state if provided
 		if params.InitialData then
 			for k, v in pairs(params.InitialData) do
@@ -335,11 +336,18 @@ function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Con
 		Factory.Registry.RegisterEntity(entityId, pooled)
 
 		if RunService:IsServer() and Utility.NetworkManager then
+			local sanitizedInitial = {}
+			local schema = pooled.GetValidProperties and pooled:GetValidProperties() or {}
+			for k, v in pairs(pooled._privateProperties.Data) do
+				local def = schema[k]
+				if def and def.Replicate then sanitizedInitial[k] = v end
+			end
+			sanitizedInitial._v = pooled._privateProperties.Version
 			pcall(Utility.NetworkManager.BroadcastEntityCommand, entityId, "OnEntityCreated", {
 				EntityId = entityId,
 				EntityClassName = entityClassName,
 				Instance = pooled.Instance,
-				InitialData = {}
+				InitialData = sanitizedInitial
 			})
 		end
 		return pooled
@@ -371,6 +379,7 @@ function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Con
 
 	-- Registered
 	Factory.Registry.RegisterEntity(entityId, newEntity)
+	newEntity._privateProperties.Persistent = params.Persistent
 
 	-- Persistence
 	if RunService:IsServer() and params.Persistent and Factory.PersistenceManager then
@@ -379,6 +388,7 @@ function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Con
 	end
 
 	-- Wire up StateUpdated for Replication
+	local stateConn
 	if RunService:IsServer() then
 		local ReplicationState = {
 			Pending = {} :: { [string]: any },
@@ -386,7 +396,7 @@ function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Con
 			LastSent = nil,
 		}
 
-		newEntity.StateUpdated:Connect(function(changes)
+		stateConn = newEntity.StateUpdated:Connect(function(changes)
 			if not changes then return end;
 			if not newEntity._privateProperties.IsValid then return end
 			local schema = newEntity:GetValidProperties()
@@ -418,8 +428,9 @@ function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Con
 			-- Send Immediate Updates
 			if next(processNow) then
 				if Utility.NetworkManager then
+					local liveId = (newEntity._privateProperties and newEntity._privateProperties.Context and newEntity._privateProperties.Context.EntityId) or entityId
 					processNow._v = newEntity.Version
-					pcall(Utility.NetworkManager.BroadcastEntityUpdate, entityId, processNow)
+					pcall(Utility.NetworkManager.BroadcastEntityUpdate, liveId, processNow)
 				end
 			end
 
@@ -447,8 +458,9 @@ function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Con
 						end
 						
 						if next(packet) and Utility.NetworkManager then
+							local liveId = (newEntity._privateProperties and newEntity._privateProperties.Context and newEntity._privateProperties.Context.EntityId) or entityId
 							packet._v = newEntity.Version
-							pcall(Utility.NetworkManager.BroadcastEntityUpdate, entityId, packet)
+							pcall(Utility.NetworkManager.BroadcastEntityUpdate, liveId, packet)
 						end
 						
 						task.wait(1/60) 
@@ -457,9 +469,13 @@ function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Con
 				end)
 			end
 
-			-- Auto-save
-			if params.Persistent and Factory.PersistenceManager and changes.SaveState then
-				pcall(Factory.PersistenceManager.SaveState, newEntity)
+			-- Auto-save: persistent entities save on every replicated change.
+			if newEntity._privateProperties and newEntity._privateProperties.Persistent and Factory.PersistenceManager and next(changes) then
+				task.defer(function()
+					if newEntity._privateProperties and newEntity._privateProperties.IsValid then
+						pcall(Factory.PersistenceManager.SaveState, newEntity)
+					end
+				end)
 			end
 		end)
 
@@ -484,15 +500,19 @@ function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Con
 	end
 
 	newEntity.Destroyed:Connect(function()
+		if stateConn then stateConn:Disconnect() end
+		local liveId = (newEntity._privateProperties
+			and newEntity._privateProperties.Context
+			and newEntity._privateProperties.Context.EntityId) or entityId
 		if RunService:IsServer() and Utility.NetworkManager then
 			-- Final Save
 			if params.Persistent and Factory.PersistenceManager then
 				pcall(Factory.PersistenceManager.SaveState, newEntity)
 			end
-			pcall(Utility.NetworkManager.BroadcastEntityCommand, entityId, "OnEntityDestroyed")
-			pcall(Utility.NetworkManager.UnregisterEntityCommands, entityId)
+			pcall(Utility.NetworkManager.BroadcastEntityCommand, liveId, "OnEntityDestroyed")
+			pcall(Utility.NetworkManager.UnregisterEntityCommands, liveId)
 		end
-		Factory.Registry.UnregisterEntity(entityId)
+		Factory.Registry.UnregisterEntity(liveId)
 	end)
 
 	Logger:Log({ Level = "DEBUG", Message = "Created Entity " .. entityId })
@@ -508,7 +528,7 @@ function Factory.CreateStateMachine(params: { StateMachineClass: any, StateMachi
 	assert(Initialized, "Factory not initialized")
 	local StateMachineClass = ResolveClass("StateMachine", params.StateMachineClass)
 	local smId = params.StateMachineId or HttpService:GenerateGUID(false)
-	local smContext = params.Context or {}
+	local smContext = if params.Context then table.clone(params.Context) else {}
 	smContext.StateMachineId = smId
 
 	if not StateMachineClass then
@@ -556,7 +576,7 @@ function Factory.CreateStateMachine(params: { StateMachineClass: any, StateMachi
 
 	-- Replicate state changes if Server
 	if RunService:IsServer() and Utility.Settings.ServiceManager.Enabled then
-		newSM.StateChanged:Connect(function(newState, oldState)
+		connections[#connections + 1] = newSM.StateChanged:Connect(function(newState, oldState)
 			if not Utility.NetworkManager then return end
 			Utility.NetworkManager.BroadcastEntityCommand("SyncClient", smId, "ApplyStateMachineStateChanged", newState)
 		end)

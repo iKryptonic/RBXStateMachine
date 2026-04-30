@@ -98,10 +98,15 @@ end
 	@param className string
 	@param entity any
 ]]
+local MAX_POOL_SIZE = 64
+
 function Registry.PoolEntity(className: string, entity: any)
 	ValidateRequest()
 	if not Registry.EntityPools[className] then
 		Registry.EntityPools[className] = {}
+	end
+	if #Registry.EntityPools[className] >= MAX_POOL_SIZE then
+		return
 	end
 	table.insert(Registry.EntityPools[className], entity)
 	Registry.Logger:Log({ Level = "DEBUG", Message = "Entity pooled: " .. className })
