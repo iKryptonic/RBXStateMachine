@@ -84,11 +84,14 @@ do
 			History = table.create(100),
 			_historyIndex = 1,
 			_heaps = {},
-			_running = {},
+			_connections = {}, -- RunService connections (separate from _running)
+			_running = {}, -- Currently executing tasks
 			_taskCount = 0, -- O(1) tracking
+			TaskStats = {},
+			LastFrameStats = { FrameTime = 0, TaskCount = 0, Budget = 0 },
 			Settings = settings or {
 				FrameBudget = 0.005,
-				PriorityWeight = 0.001, -- How much 1 priority point "shifts" time
+				PriorityWeight = 0.001,
 			},
 			Logger = nil,
 		}, Scheduler)
@@ -113,14 +116,15 @@ do
         t.CreationTime = os_clock()
 
         if self.Tasks[t.Name] then
-            -- If overwriting, we should ideally release the old one, 
-            -- but since it's in the Heap, lazy removal handles it.
+            -- Overwriting an existing task — don't double-count
             self.Tasks[t.Name] = nil 
+            self._taskCount -= 1
         end
 
         self.Tasks[t.Name] = t
         if not self._heaps[t.Event] then self._heaps[t.Event] = {} end
         self:_heapPush(self._heaps[t.Event], t)
+        self._taskCount += 1
         
         return t
     end
@@ -133,8 +137,13 @@ do
 		self.Tasks = {}
 		self._heaps = {}
 		self.History = {}
+		self._taskCount = 0
 		self.LastFrameStats = { FrameTime = 0, TaskCount = 0, Budget = 0 }
-		table.clear(self.TaskStats)
+		if self.TaskStats then
+			table.clear(self.TaskStats)
+		else
+			self.TaskStats = {}
+		end
 	end
 
 	--[[
@@ -167,10 +176,14 @@ do
 		if self.Tasks[name] then
 			self:AddToHistory(self.Tasks[name], "Cancelled", 0, "")
 			self.Tasks[name] = nil
-			self.Logger:Log({
-				Level = "INFO",
-				Message = string.format("Descheduled: %s", name),
-			})
+			self._taskCount -= 1
+			local logger = self.Logger or Scheduler.Logger
+			if logger then
+				logger:Log({
+					Level = "INFO",
+					Message = string.format("Descheduled: %s", name),
+				})
+			end
 		end
 	end
 
@@ -206,10 +219,13 @@ do
 			task = taskOrName
 		end
 		if not task then return end
-		self.Logger:Log({
-			Level = "INFO",
-			Message = string.format("Manually Executed: %s", task.Name),
-		})
+		local logger = self.Logger or Scheduler.Logger
+		if logger then
+			logger:Log({
+				Level = "INFO",
+				Message = string.format("Manually Executed: %s", task.Name),
+			})
+		end
 		self:_internalExecute(task)
 	end
 
@@ -265,10 +281,13 @@ do
 				task.RunCount = 0
 				task.TotalRunTime = 0
 				task.MaxRunTime = 0
-				self.Logger:Log({
-					Level = "INFO",
-					Message = string.format("Reset: %s", name),
-				})
+				local logger = self.Logger or Scheduler.Logger
+				if logger then
+					logger:Log({
+						Level = "INFO",
+						Message = string.format("Reset: %s", name),
+					})
+				end
 			end
 		end
 	end
@@ -287,37 +306,30 @@ do
 		@return ()
 	]]
 	function Scheduler:_internalExecute(t)
-		local thread
-		if #freeThreads > 0 then
-			thread = table_remove(freeThreads)
-		else
-			thread = coroutine.create(yielder)
-			coroutine.resume(thread) -- Start the yielder
-		end
+		local schedulerRef = self
 
-		-- We wrap the logic in a non-allocating wrapper
-		task_spawn(thread, function()
+		task_spawn(function()
 			local start = os_clock()
-			self._running[t.Name] = t
+			schedulerRef._running[t.Name] = t
 			
 			local s, e = xpcall(t.Action, ERROR_HANDLER)
 			
 			local dur = os_clock() - start
-			self._running[t.Name] = nil
+			schedulerRef._running[t.Name] = nil
 
-			if self.Tasks[t.Name] == t then
+			if schedulerRef.Tasks[t.Name] == t then
 				t.RunCount += 1
 				t.TotalRunTime += dur
 				if dur > t.MaxRunTime then t.MaxRunTime = dur end
 				
 				if not t.IsRecurringTask then
-					self:AddToHistory(t, s and "Completed" or "Failed", dur, not s and tostring(e) or nil)
-					self.Tasks[t.Name] = nil
-					self._taskCount -= 1
+					schedulerRef:AddToHistory(t, s and "Completed" or "Failed", dur, not s and tostring(e) or nil)
+					schedulerRef.Tasks[t.Name] = nil
+					schedulerRef._taskCount -= 1
 					TaskPool.Release(t)
 				end
 			end
-		end, thread)
+		end)
 	end
 
 	--[[
@@ -328,10 +340,13 @@ do
     -- Only shrink if the pool is significantly large
 		if TaskPool._count > 100 then
 			TaskPool.Shrink(20)
-			self.Logger:Log({
-				Level = "DEBUG",
-				Message = "TaskPool pruned to 20 objects."
-			})
+			local logger = self.Logger or Scheduler.Logger
+			if logger then
+				logger:Log({
+					Level = "DEBUG",
+					Message = "TaskPool pruned to 20 objects."
+				})
+			end
 		end
 	end
 
@@ -359,7 +374,9 @@ do
 			-- Lazy Removal check
 			if self.Tasks[t.Name] ~= t then
 				self:_heapPop(heap)
-				TaskPool.Release(t)
+				if not self._running[t.Name] then
+					TaskPool.Release(t)
+				end
 				continue
 			end
 			
@@ -398,6 +415,14 @@ do
 				break
 			end
 		end
+
+		-- 3. Update LastFrameStats
+		local frameTime = os_clock() - startTime
+		self.LastFrameStats = {
+			FrameTime = frameTime,
+			TaskCount = count,
+			Budget = budget
+		}
 	end
 
 	--[[
@@ -449,7 +474,7 @@ do
 	end
 
 	function Scheduler:Start()
-		if self._running.Heartbeat then return end
+		if self._connections.Heartbeat then return end
 
 		local ValidStates = 
 		{
@@ -465,21 +490,44 @@ do
 		}
 
 		for _, state in ipairs(ValidStates) do
-			self._running[state] = RunService[state]:Connect(function(dt)
+			self._connections[state] = RunService[state]:Connect(function(dt)
 				self:Step(state)
 			end)
 		end
 		if RunService:IsClient() then
 			for _, state in ipairs(ClientStates) do
-				self._running[state] = RunService[state]:Connect(function(dt)
+				self._connections[state] = RunService[state]:Connect(function(dt)
 					self:Step(state)
 				end)
 			end
 		end
-		self.Logger:Log({
-			Level = "INFO",
-			Message = "Scheduler started."
-		})
+		local logger = self.Logger or Scheduler.Logger
+		if logger then
+			logger:Log({
+				Level = "INFO",
+				Message = "Scheduler started."
+			})
+		end
+	end
+
+	--[[
+		@description Stops the scheduler and disconnects all RunService connections.
+		@return ()
+	]]
+	function Scheduler:Stop()
+		for name, connection in pairs(self._connections) do
+			if typeof(connection) == "RBXScriptConnection" then
+				connection:Disconnect()
+			end
+		end
+		self._connections = {}
+		local logger = self.Logger or Scheduler.Logger
+		if logger then
+			logger:Log({
+				Level = "INFO",
+				Message = "Scheduler stopped."
+			})
+		end
 	end
 end
 return Scheduler

@@ -153,7 +153,9 @@ function Orchestrator.PoolEntity(entityId: string)
 	local className = entity.Name
 	entity._privateProperties.IsValid = false
 	Core.Factory.Registry.UnregisterEntity(entityId)
-	pcall(Core.NetworkManager.BroadcastEntityCommand, entityId, "OnEntityPooled")
+	if RunService:IsServer() then
+		pcall(Core.NetworkManager.BroadcastEntityCommand, entityId, "OnEntityPooled")
+	end
 	Core.Factory.Registry.PoolEntity(className, entity)
 	return true
 end
@@ -380,8 +382,17 @@ local function SyncEntitiesFromServer()
 									local newVersion = changes._v
 									if newVersion and newVersion > (entity._privateProperties.Version or 0) then
 										entity._privateProperties.Version = newVersion
+										local schema = entity._privateProperties.Schema or {}
 										for k, v in pairs(changes) do
-											if k ~= "_v" then entity._privateProperties.Data[k] = v end
+											if k == "_v" then continue end
+											local def = schema[k]
+											if not def then continue end
+											if v ~= nil and def.Type and def.Type ~= "any" and typeof(v) ~= def.Type then
+												if not (typeof(v) == "Instance" and v:IsA(def.Type)) then
+													continue
+												end
+											end
+											entity._privateProperties.Data[k] = v
 										end
 										local visualChanges = table.clone(changes)
 										visualChanges._v = nil
@@ -541,8 +552,17 @@ function Initialize()
 										local newVersion = changes._v
 										if newVersion and newVersion > (liveEnt._privateProperties.Version or 0) then
 											liveEnt._privateProperties.Version = newVersion
+											local schema = liveEnt._privateProperties.Schema or {}
 											for k, v in pairs(changes) do
-												if k ~= "_v" then liveEnt._privateProperties.Data[k] = v end
+												if k == "_v" then continue end
+												local def = schema[k]
+												if not def then continue end
+												if v ~= nil and def.Type and def.Type ~= "any" and typeof(v) ~= def.Type then
+													if not (typeof(v) == "Instance" and v:IsA(def.Type)) then
+														continue
+													end
+												end
+												liveEnt._privateProperties.Data[k] = v
 											end
 											local visualChanges = table.clone(changes)
 											visualChanges._v = nil

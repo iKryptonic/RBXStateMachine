@@ -631,7 +631,8 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 
 	-- Execute OnLeave for the previous state. Wrapped in xpcall so a throwing
 	-- OnLeave does not leave the FSM half-transitioned.
-	if typeof(self.CurrentState) == "table" and self.CurrentState.OnLeave then
+	-- Skip OnLeave on self-transitions to avoid tearing down the current state.
+	if oldStateName ~= name and typeof(self.CurrentState) == "table" and self.CurrentState.OnLeave then
 		local ok, leaveErr = xpcall(function()
 			self.CurrentState:OnLeave(self)
 		end, function(e) return debug.traceback(tostring(e)) end)
@@ -658,6 +659,12 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 		self._legacyCleanup[oldStateName] = nil
 	end
 
+	-- If OnLeave caused the FSM to deactivate (e.g. via Cancel/Fail), abort.
+	if not self.IsActive then
+		self._inTransition = false
+		return
+	end
+
 	-- Update Transition Count
 	if name == oldStateName then
 		self.TransitionCount += 1
@@ -680,65 +687,77 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 	self.CurrentState = newState
 
 	if newState then
-		if typeof(newState) == "table" then
-			-- It's a state object; defer OnEnter so the reentrance guard is not
-			-- held across a potentially-yielding callback.
-			if type(newState.OnEnter) == "function" then
-				local capturedState = newState
+		if isTerminalState(self, name) then
+			-- Run OnEnter synchronously for terminal states since auto-finish runs immediately after
+			if typeof(newState) == "function" then
+				local ok, cleanupFunction = xpcall(newState, function(e) return debug.traceback(tostring(e)) end, self, table.unpack(args))
+				if not ok then
+					self.Logger:Log({Level="ERROR", Message="Terminal function state error: "..tostring(cleanupFunction), OperationId = self.Id})
+				elseif type(cleanupFunction) == "function" then
+					self._legacyCleanup[name] = cleanupFunction
+				end
+			elseif typeof(newState) == "table" and type(newState.OnEnter) == "function" then
+				local ok, err = xpcall(newState.OnEnter, function(e) return debug.traceback(tostring(e)) end, newState, self, table.unpack(args))
+				if not ok then self.Logger:Log({Level="ERROR", Message="Terminal OnEnter error: "..tostring(err), OperationId = self.Id}) end
+			end
+		else
+			-- Non-terminal: defer as before
+			if typeof(newState) == "table" then
+				if type(newState.OnEnter) == "function" then
+					local capturedState = newState
+					task.defer(function()
+						if not self.IsActive then return end
+						local success, err = xpcall(function()
+							capturedState:OnEnter(self, table.unpack(args))
+						end, function(e) return debug.traceback(tostring(e)) end)
+						if not success then
+							self.Logger:Log
+							{ 
+								Level = "ERROR", 
+								Message = string.format("OnEnter error in state '%s': %s", name, tostring(err)), 
+								OperationId = self.Id 
+							}
+						else
+							self.Logger:Log
+							{ 
+								Level = "DEBUG", 
+								Message = string.format("Entered state object '%s'.", name), 
+								OperationId = self.Id 
+							}
+						end
+					end)
+				end
+			elseif typeof(newState) == "function" then
+				local capturedFn = newState
 				task.defer(function()
 					if not self.IsActive then return end
-					local success, err = xpcall(function()
-						capturedState:OnEnter(self, table.unpack(args))
+					local success, cleanupFunction = xpcall(function()
+						return capturedFn(self, table.unpack(args))
 					end, function(e) return debug.traceback(tostring(e)) end)
 					if not success then
 						self.Logger:Log
 						{ 
 							Level = "ERROR", 
-							Message = string.format("OnEnter error in state '%s': %s", name, tostring(err)), 
+							Message = string.format("Error executing state function '%s': %s", name, tostring(cleanupFunction)), 
 							OperationId = self.Id 
 						}
-					else
-						self.Logger:Log
-						{ 
-							Level = "DEBUG", 
-							Message = string.format("Entered state object '%s'.", name), 
-							OperationId = self.Id 
-						}
+					elseif type(cleanupFunction) == "function" then
+						if name == self.State then
+							self._legacyCleanup[name] = cleanupFunction
+						else
+							local cleanupSuccess, cleanupResult = pcall(cleanupFunction)
+							if not cleanupSuccess then
+								self.Logger:Log
+								{ 
+									Level = "ERROR", 
+									Message = string.format("Error in cleanup function for state '%s': %s", name, tostring(cleanupResult)), 
+									OperationId = self.Id 
+								}
+							end
+						end
 					end
 				end)
 			end
-		elseif typeof(newState) == "function" then
-			-- It's a legacy state function; defer dispatch similarly.
-			local capturedFn = newState
-			task.defer(function()
-				if not self.IsActive then return end
-				local success, cleanupFunction = xpcall(function()
-					return capturedFn(self, table.unpack(args))
-				end, function(e) return debug.traceback(tostring(e)) end)
-				if not success then
-					self.Logger:Log
-					{ 
-						Level = "ERROR", 
-						Message = string.format("Error executing state function '%s': %s", name, tostring(cleanupFunction)), 
-						OperationId = self.Id 
-					}
-				elseif type(cleanupFunction) == "function" then
-					if name == self.State then -- State didn't change during execution, store cleanup for OnLeave
-						self._legacyCleanup[name] = cleanupFunction
-					else
-						-- State changed during execution — run cleanup immediately since we're already leaving
-						local cleanupSuccess, cleanupResult = pcall(cleanupFunction)
-						if not cleanupSuccess then
-							self.Logger:Log
-							{ 
-								Level = "ERROR", 
-								Message = string.format("Error in cleanup function for state '%s': %s", name, tostring(cleanupResult)), 
-								OperationId = self.Id 
-							}
-						end
-					end
-				end
-			end)
 		end
 	end
 
@@ -817,9 +836,13 @@ function BaseStateMachine:_Teardown()
 	local wasActive = self.IsActive
 	self.IsActive = false
 
-	-- Execute OnLeave for the current state before tearing down
-	if wasActive and typeof(self.CurrentState) == "table" and self.CurrentState.OnLeave then
-		self.CurrentState:OnLeave(self)
+	-- Nil CurrentState BEFORE calling OnLeave to prevent double-call
+	-- (ChangeState's OnLeave + _Teardown's OnLeave on the same state).
+	local leavingState = self.CurrentState
+	self.CurrentState = nil
+	if wasActive and typeof(leavingState) == "table" and leavingState.OnLeave then
+		local ok, err = xpcall(function() leavingState:OnLeave(self) end, function(e) return debug.traceback(tostring(e)) end)
+		if not ok then self.Logger:Log({ Level = "ERROR", Message = "OnLeave during teardown threw: " .. tostring(err) }) end
 	end
 
 	-- Execute any pending legacy cleanup for the current state
