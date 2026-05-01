@@ -106,17 +106,17 @@ local function buildIntentPayload(kind: string, rawIntent: { [string]: any }): {
 	return nil
 end
 
-local function appendIntent(characterEntity: any, kind: string, payload: { [string]: any }, sourceCharId: string, targetCharId: string?)
+local function appendIntent(characterEntity: any, kind: string, payload: { [string]: any }, sourceCharId: string, targetCharId: string?, lockId: string?)
 	local IntentSchema = getSharedModule("IntentSchema")
 	IntentSchema.AppendIntent(characterEntity, {
 		Kind = kind,
 		Payload = payload,
 		SourceCharId = sourceCharId,
 		TargetCharId = targetCharId or sourceCharId,
-	})
+	}, lockId)
 end
 
-local function appendOptionalIntent(characterEntity: any, intentDef: any, sourceCharId: string)
+local function appendOptionalIntent(characterEntity: any, intentDef: any, sourceCharId: string, lockId: string?)
 	if typeof(intentDef) ~= "table" then
 		return
 	end
@@ -128,7 +128,7 @@ local function appendOptionalIntent(characterEntity: any, intentDef: any, source
 
 	local payload = buildIntentPayload(kind, intentDef)
 	if payload then
-		appendIntent(characterEntity, kind, payload, sourceCharId, sourceCharId)
+		appendIntent(characterEntity, kind, payload, sourceCharId, sourceCharId, lockId)
 	end
 end
 
@@ -306,7 +306,7 @@ local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: numb
 			SoundId = tostring(hitSoundId),
 			Volume = tonumber(chooseValue(entry[4], 0.5)) or 0.5,
 			Pitch = tonumber(chooseValue(entry[5], 1)) or 1,
-		}, fsm.CharacterEntityId, fsm.CharacterEntityId)
+		}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 	end
 end
 
@@ -330,21 +330,21 @@ local function processTimelineEntry(fsm: any, entry: { any })
 				SoundId = tostring(soundId),
 				Volume = tonumber(chooseValue(entry[4], 0.5)) or 0.5,
 				Pitch = tonumber(chooseValue(entry[5], 1)) or 1,
-			}, fsm.CharacterEntityId, fsm.CharacterEntityId)
+			}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 		end
 	elseif tag == "Effect" then
 		local effectName = chooseValue(entry[3], nil)
 		if typeof(effectName) == "string" and effectName ~= "" then
 			appendIntent(characterEntity, "Effect", {
 				Name = effectName,
-			}, fsm.CharacterEntityId, fsm.CharacterEntityId)
+			}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 		end
 	else
 		appendIntent(characterEntity, "Animation", {
 			Name = tag,
 			Speed = tonumber(chooseValue(entry[3], 1)) or 1,
 			FadeTime = 0.1,
-		}, fsm.CharacterEntityId, fsm.CharacterEntityId)
+		}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 	end
 end
 
@@ -533,7 +533,7 @@ function AttackJob:RegisterStates()
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity then
 				local attackDef = fsm.Context._selectedCombo
-				appendOptionalIntent(characterEntity, if typeof(attackDef) == "table" then attackDef.WindupIntent else nil, fsm.CharacterEntityId)
+				appendOptionalIntent(characterEntity, if typeof(attackDef) == "table" then attackDef.WindupIntent else nil, fsm.CharacterEntityId, fsm.Id)
 			end
 			fsm.State = "PlayTimeline"
 		end,
@@ -596,7 +596,7 @@ function AttackJob:RegisterStates()
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity then
 				local attackDef = fsm.Context._selectedCombo
-				appendOptionalIntent(characterEntity, if typeof(attackDef) == "table" then attackDef.RecoveryIntent else nil, fsm.CharacterEntityId)
+				appendOptionalIntent(characterEntity, if typeof(attackDef) == "table" then attackDef.RecoveryIntent else nil, fsm.CharacterEntityId, fsm.Id)
 			end
 			fsm.State = "RollbackConstraints"
 		end,
