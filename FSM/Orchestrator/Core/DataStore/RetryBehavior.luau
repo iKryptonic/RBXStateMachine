@@ -35,9 +35,10 @@ function RetryBehavior.Create(Orchestrator)
 	local function ScheduleRetry(context)
 		if context.FSM then
 			context.RetryCount = (context.RetryCount or 0) + 1
-			-- Calculate Backoff
-			local base = 2
-			local delay = math.pow(base, context.RetryCount)
+			-- Calculate Backoff with cap and jitter
+			local MAX_DELAY = 30
+			local jitter = math.random() * 0.5 + 0.75  -- 0.75x to 1.25x
+			local delay = math.min(math.pow(2, context.RetryCount) * jitter, MAX_DELAY)
 			
 			context.FSM.WaitSpan = delay -- Use FSM's built-in delay capability
 			context.FSM:ChangeState({ Name = "Retrying" })
@@ -49,7 +50,7 @@ function RetryBehavior.Create(Orchestrator)
 	-- Action: Fail Permanently
 	local function FailRequest(context)
 		if context.FSM then
-			context.FSM:Fail(tostring(context.LastError))
+			context.FSM:ChangeState({ Name = "Failed" })
 		end
 		return BT.BehaviorTreeStatus.Success
 	end
@@ -57,7 +58,7 @@ function RetryBehavior.Create(Orchestrator)
 	-- Action: Succeed
 	local function CompleteRequest(context)
 		if context.FSM then
-			context.FSM:Finish()
+			context.FSM:ChangeState({ Name = "Success" })
 		end
 		return BT.BehaviorTreeStatus.Success
 	end

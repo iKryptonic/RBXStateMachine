@@ -23,13 +23,27 @@ function PerformanceManager:GetTaskAverage(name: string): number
     return task.TotalRunTime / task.RunCount
 end
 
+function PerformanceManager:GetTaskMaximum(name: string): number
+    local task = self._s.Tasks[name]
+    if not task then return 0 end
+    return task.MaxRunTime
+end
+
+function PerformanceManager:GetTaskCount(name: string): number
+    local task = self._s.Tasks[name]
+    if not task then return 0 end
+    return task.RunCount
+end
+
 function PerformanceManager:GetStatsSnapshot()
     local stats = {}
     for name, task in pairs(self._s.Tasks) do
         stats[name] = {
-            Runs = task.RunCount,
-            Avg = task.RunCount > 0 and (task.TotalRunTime / task.RunCount) or 0,
-            Max = task.MaxRunTime
+            RunCount = task.RunCount,
+            RunTimeAverage = task.RunCount > 0 and (task.TotalRunTime / task.RunCount) or 0,
+            RunTimeMax = task.MaxRunTime,
+            MemoryAverage = task.RunCount > 0 and (task.TotalMemory / task.RunCount) or 0,
+            MemoryMax = task.MaxMemory or 0
         }
     end
     return stats

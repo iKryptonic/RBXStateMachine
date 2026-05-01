@@ -8,17 +8,12 @@ local RunService = game:GetService("RunService")
 local Orchestrator = require(game:FindFirstChild("Orchestrator", true) :: any)
 local BaseEntity = require(game:FindFirstChild("BaseEntity", true) :: any)
 local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
+local TestUtils = require(script.Parent.Parent:FindFirstChild("TestUtils") :: any)
 local Mocker = require(script.Parent.Parent:FindFirstChild("Mocker", true) :: any)
 
 local Test_Replication = {}
 
-local function waitFor(predicate: () -> boolean, timeout: number): boolean
-	local start = os.clock()
-	while not predicate() and (os.clock() - start) < timeout do
-		task.wait()
-	end
-	return predicate()
-end
+local waitFor = TestUtils.WaitFor
 
 function Test_Replication.Run()
 	local tester = TestBase.new("Replication")
@@ -27,8 +22,8 @@ function Test_Replication.Run()
 	local ReplicatedEntity = BaseEntity.Extend({
 		Name = "ReplicatedEntity",
 		Schema = {
-			Health = { Type = "number", Replicate = true },
-			Score = { Type = "number", Replicate = true },
+			Health = { Type = "number", Replicate = true, Persist = true },
+			Score = { Type = "number", Replicate = true, Persist = true },
 			InternalFlag = { Type = "boolean", Replicate = false },
 			PrivateData = { Type = "string" }, -- No Replicate key at all
 		},

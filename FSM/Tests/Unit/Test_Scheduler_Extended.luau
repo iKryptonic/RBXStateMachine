@@ -6,6 +6,7 @@
 local RunService = game:GetService("RunService")
 local SchedulerModule = require(game:FindFirstChild("Scheduler", true) :: any)
 local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
+local TestUtils = require(script.Parent.Parent:FindFirstChild("TestUtils") :: any)
 
 local Test_Scheduler_Extended = {}
 
@@ -14,13 +15,7 @@ local DefaultSettings = {
 	PriorityWeight = 0.001,
 }
 
-local function waitFor(predicate: () -> boolean, timeout: number): boolean
-	local start = os.clock()
-	while not predicate() and (os.clock() - start) < timeout do
-		task.wait()
-	end
-	return predicate()
-end
+local waitFor = TestUtils.WaitFor
 
 function Test_Scheduler_Extended.Run()
 	local tester = TestBase.new("Scheduler_Extended")

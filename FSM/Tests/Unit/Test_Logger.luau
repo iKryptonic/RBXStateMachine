@@ -43,12 +43,12 @@ function Test_Logger.Run()
 	tester:RunTest("Enabled Toggle", function(t)
 		local log = Logger.new({ Name = "ToggleLog" })
 		log.Enabled = false
-		
-		-- Note: Log() usually still records to History even if Enabled=false (which controls print output)
-		-- If implementation changes to stop recording, this test might need adjustment.
-		-- Based on typical patterns, Enabled controls Output, not History.
-		-- We mainly verify no errors occur.
 		log:Log({ Level = "INFO", Message = "Hidden" })
+		-- Verify toggling doesn't error and disabled state is respected
+		t:Assert(log.Enabled == false, "Logger should remain disabled")
+		log.Enabled = true
+		log:Log({ Level = "INFO", Message = "Visible" })
+		t:Assert(log.Enabled == true, "Logger should be re-enabled")
 	end)
 
 	tester:RunTest("Disabled Skips History", function(t)

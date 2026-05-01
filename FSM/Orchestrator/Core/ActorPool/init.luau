@@ -62,6 +62,7 @@ end
 	@return Actor -- The chosen worker.
 ]]
 function ActorPool:_pickWorker(): Actor
+    assert(#self._workers > 0, "ActorPool has no workers")
     self._rr = (self._rr % #self._workers) + 1
     return self._workers[self._rr]
 end
@@ -92,8 +93,14 @@ function ActorPool:Submit(job: Job): Result
 
     worker:SendMessage("RunJob", jobId, job.name, job.input)
 
-    -- Simple blocking wait; if your Scheduler is async, switch to a Promise pattern instead.
+    -- Simple blocking wait with timeout
+    local TIMEOUT = 30
+    local startTime = os.clock()
     while not done do
+        if os.clock() - startTime > TIMEOUT then
+            self._pending[jobId] = nil
+            return { ok = false, error = "Job timed out after " .. TIMEOUT .. "s" }
+        end
         task.wait()
     end
 

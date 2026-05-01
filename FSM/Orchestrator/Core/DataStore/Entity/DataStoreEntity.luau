@@ -69,31 +69,42 @@ function DataStoreEntity:_ExecuteRequest(requestFn, maxRetries)
 	local resultData, resultErr
 	local success = false
 	
-	-- Spawn FSM
-	Orchestrator.CreateStateMachine({
-		StateMachineClass = "RequestFSM",
-		StateMachineId = "DS_" .. Orchestrator.Scheduler:GenerateKey(),
-		Context = {
-			Orchestrator = Orchestrator,
-			RequestFunction = requestFn,
-			MaxRetries = maxRetries or 3,
-			RetryCount = 0,
-			FSM = nil, -- Injected by factory or we set it? Factory injects 'self' into context? No, BaseStateMachine.new sets self.Context to the table.
-			
-			OnSuccess = function(res)
-				success = true
-				resultData = res
-				self.ActiveRequests = self.ActiveRequests - 1
-				bindable:Fire()
-			end,
-			OnFailure = function(err)
-				success = false
-				resultErr = err
-				self.ActiveRequests = self.ActiveRequests - 1
-				bindable:Fire()
-			end
-		}
-	})
+	-- Spawn FSM (pcall-wrapped to prevent counter + Instance leak)
+	local ok, createErr = pcall(function()
+		local fsm = Orchestrator.CreateStateMachine({
+			StateMachineClass = "RequestFSM",
+			StateMachineId = "DS_" .. Orchestrator.Scheduler:GenerateKey(),
+			Context = {
+				Orchestrator = Orchestrator,
+				RequestFunction = requestFn,
+				MaxRetries = maxRetries or 3,
+				RetryCount = 0,
+				FSM = nil,
+				
+				OnSuccess = function(res)
+					success = true
+					resultData = res
+					self.ActiveRequests = self.ActiveRequests - 1
+					bindable:Fire()
+				end,
+				OnFailure = function(err)
+					success = false
+					resultErr = err
+					self.ActiveRequests = self.ActiveRequests - 1
+					bindable:Fire()
+				end
+			}
+		})
+		if not fsm then
+			error("Failed to create RequestFSM for DataStore operation")
+		end
+	end)
+
+	if not ok then
+		self.ActiveRequests = self.ActiveRequests - 1
+		bindable:Destroy()
+		error(createErr)
+	end
 	
 	-- Wait for FSM to complete (yields)
 	bindable.Event:Wait()

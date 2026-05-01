@@ -702,4 +702,4 @@ export type EntityPersistence = {
 	Update: (self: EntityPersistence, key: string, mutateFn: (data: { [string]: any }) -> { [string]: any }) -> (boolean, string?),
 }
 
-return {}
+return Types
