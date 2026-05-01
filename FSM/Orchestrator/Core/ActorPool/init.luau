@@ -32,11 +32,13 @@ type Pending = {
 	@return ActorPool -- The pool instance.
 ]]
 function ActorPool.new(workers: { Actor })
+    assert(workers and #workers > 0, "ActorPool requires at least one worker Actor")
     local self = setmetatable({}, ActorPool)
     self._workers = workers
     self._rr = 0
     self._nextId = 0
     self._pending = {} :: { [number]: Pending }
+    self._submitTimeout = 30 -- seconds
 
     for _, actor in ipairs(workers) do
         actor:BindToMessage("JobResult", function(jobId: number, ok: boolean, payload: any)
@@ -92,8 +94,14 @@ function ActorPool:Submit(job: Job): Result
 
     worker:SendMessage("RunJob", jobId, job.name, job.input)
 
-    -- Simple blocking wait; if your Scheduler is async, switch to a Promise pattern instead.
+    -- Blocking wait with timeout to prevent permanent thread leak
+    local startTime = os.clock()
+    local timeout = self._submitTimeout or 30
     while not done do
+        if os.clock() - startTime > timeout then
+            self._pending[jobId] = nil
+            return { ok = false, error = string.format("Job '%s' timed out after %ds", job.name, timeout) }
+        end
         task.wait()
     end
 

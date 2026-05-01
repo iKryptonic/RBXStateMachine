@@ -8,16 +8,11 @@ local Orchestrator = require(game:FindFirstChild("Orchestrator", true) :: any)
 local BaseEntity = require(game:FindFirstChild("BaseEntity", true) :: any)
 local BaseStateMachine = require(game:FindFirstChild("BaseStateMachine", true) :: any)
 local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
+local TestUtils = require(script.Parent.Parent:FindFirstChild("TestUtils") :: any)
 
 local Test_Orchestrator = {}
 
-local function waitFor(predicate: () -> boolean, timeout: number): boolean
-	local start = os.clock()
-	while not predicate() and (os.clock() - start) < timeout do
-		task.wait()
-	end
-	return predicate()
-end
+local waitFor = TestUtils.WaitFor
 
 function Test_Orchestrator.Run()
 	local tester = TestBase.new("Orchestrator")
@@ -128,16 +123,18 @@ function Test_Orchestrator.Run()
 	end)
 	
 	tester:RunTest("ServiceManager API", function(t)
-		-- Ensure API is started
-		Orchestrator.StartServiceManagerAPI()
-		
-		local remote = ReplicatedStorage:FindFirstChild("OrchestratorFunction")
-		if not remote or not remote:IsA("RemoteFunction") then
-			-- Skip if not running in a server context where remotes are created
-			return
-		end
+		-- ServiceManager starts automatically during init when Settings.ServiceManager.Enabled is true.
+		t:Assert(Orchestrator.Settings ~= nil, "Orchestrator.Settings should be reachable")
+		t:Assert(Orchestrator.Settings.ServiceManager ~= nil, "ServiceManager settings should be reachable")
 
-		t:Assert(remote ~= nil, "OrchestratorFunction remote should exist")
+		-- If we're on the server and ServiceManager is enabled, the remote should already exist.
+		if Orchestrator.Settings.ServiceManager.Enabled then
+			local remoteName = Orchestrator.Settings.StaticStrings.Instance.OrchestratorFunctionName
+			local remote = ReplicatedStorage:FindFirstChild(remoteName)
+			if remote then
+				t:Assert(remote:IsA("RemoteFunction"), "OrchestratorFunction remote should be a RemoteFunction")
+			end
+		end
 	end)
 
 	tester:RunTest("Pooling & Reuse", function(t)
@@ -154,14 +151,17 @@ function Test_Orchestrator.Run()
 		Orchestrator.PoolEntity("Pool_01")
 		t:Assert(Orchestrator.GetEntity("Pool_01") == nil, "Pooled entity should be removed from active registry")
 
-		local reused = Orchestrator.GetPooledEntity({
+		-- Reuse: just call CreateEntity with same EntityClass under a new ID;
+		-- Factory will return the pooled instance automatically.
+		local reused = Orchestrator.CreateEntity({
 			EntityClass = DummyEntity,
 			EntityId = "Pool_02",
 			Context = { Instance = part }
 		})
 		t:Assert(reused ~= nil, "Should reuse pooled entity")
-		t:AssertEquals(Orchestrator.GetEntity("Pool_02"), reused, "Reused entity should be active")
-		t:Assert(reused.Val == nil, "Pooled entity data should be cleared")
+		t:AssertEquals(reused, entity, "Reused entity should be the same proxy reference as the pooled one")
+		t:AssertEquals(Orchestrator.GetEntity("Pool_02"), reused, "Reused entity should be active under new ID")
+		t:Assert(reused.Val == nil, "Pooled entity data should be cleared on reuse")
 
 		Orchestrator.DeleteEntity("Pool_02")
 		part:Destroy()

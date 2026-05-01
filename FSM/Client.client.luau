@@ -1,6 +1,11 @@
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local OrchestratorModule = ReplicatedStorage:WaitForChild("Orchestrator")
+local OrchestratorModule = ReplicatedStorage:WaitForChild("Orchestrator", 30)
+
+if not OrchestratorModule then
+	warn("[FSM Client] Orchestrator module not found in ReplicatedStorage after 30s timeout.")
+	return
+end
 
 local Orchestrator = require(OrchestratorModule)
 Orchestrator:RegisterComponents()

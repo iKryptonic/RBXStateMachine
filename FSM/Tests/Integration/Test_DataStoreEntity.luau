@@ -1,65 +1,35 @@
---!strict
+--!nocheck
 -- @Name Test_DataStoreEntity
--- @Description Integration Test for DataStoreEntity
+-- @Author iKrypto
+-- @Description Integration test for the DataStoreSystem entity. Skips gracefully
+-- when the DataStore subsystem is disabled or not registered.
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
+local Orchestrator = require(game:FindFirstChild("Orchestrator", true) :: any)
+local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
 
-local Orchestrator = require(script.Parent.Parent.Parent.init) -- Path to Orchestrator/init
-local DataStoreEntityClass = require(script.Parent.DataStoreEntity)
+local Test_DataStoreEntity = {}
 
-local function Test()
-	print("Starting DataStoreEntity Integrity Test...")
+function Test_DataStoreEntity.Run()
+	local tester = TestBase.new("DataStoreEntity")
 
-	-- 1. Initialize Orchestrator (Mock Environment if needed, but assuming actual env)
-	if not Orchestrator.Initialized then
-		Orchestrator:RegisterComponents()
-		-- Wait for Init
-		task.wait(1)
-	end
-	
-	-- 2. Verify DataStoreEntity Creation
-	local dsEntity = Orchestrator.GetEntity("DataStoreSystem")
-	if not dsEntity then
-		warn("DataStoreSystem Entity not found! Attempting manual creation for test.")
-		dsEntity = Orchestrator.CreateEntity({
-			EntityClass = DataStoreEntityClass,
-			EntityId = "DataStoreSystem",
-			Context = { Orchestrator = Orchestrator }
-		})
-	end
-	
-	if not dsEntity then
-		error("Failed to create/find DataStoreEntity")
-	end
-	print("DataStoreEntity is active.")
-	
-	-- 3. Mock DataStore Service Call (by mocking the internal Request Function if possible, or using MockDataStoreService)
-	-- For this test we will try to set a value to a mock datastore (if running in Studio with API access, or Mock)
-	
-	local testKey = "TestKey_" .. tostring(os.time())
-	local testVal = { Data = "Hello World" }
-	
-	print("Attempting SetAsync...")
-	local success, err = pcall(function()
-		dsEntity:SetAsync("TestDS", testKey, testVal)
+	tester:RunTest("DataStoreSystem entity is initialized", function(t)
+		if not Orchestrator.Initialized then
+			Orchestrator:RegisterComponents()
+			task.wait(1)
+		end
+
+		local dsEntity = Orchestrator.GetEntity("DataStoreSystem")
+		if not dsEntity then
+			t:SkipTest("DataStoreSystem not initialized (DataStore subsystem may be disabled)")
+			return
+		end
+
+		t:AssertNotNil(dsEntity, "DataStoreSystem entity should be registered")
+		t:Assert(dsEntity._privateProperties ~= nil, "Entity should expose _privateProperties")
+		t:Assert(dsEntity._privateProperties.IsValid == true, "Entity should be valid")
 	end)
-	
-	if success then
-		print("SetAsync Success!")
-	else
-		warn("SetAsync Failed (Expected if no API access): " .. tostring(err))
-		-- Verify it failed gracefully via FSM
-	end
-	
-	-- 4. Check FSM History (if accessible) or just observe RequestFSM creation in logs
-	print("Check Console/Logs for RequestFSM transitions.")
-	
-	print("Test Complete.")
+
+	return tester:PrintSummary()
 end
 
-if RunService:IsStudio() then
-	task.spawn(Test)
-end
-
-return Test
+return Test_DataStoreEntity

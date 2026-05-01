@@ -6,7 +6,8 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local BaseEntity = require(game:FindFirstChild("BaseEntity", true) :: any)
 local Orchestrator = require(game:FindFirstChild("Orchestrator", true) :: any)
-local Settings = require(ReplicatedStorage:FindFirstChild("Settings", true) :: any)
+local SettingsModule = game:FindFirstChild("Settings", true)
+local Settings = if SettingsModule then require(SettingsModule :: any) else Orchestrator.Settings
 local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
 
 local Test_ReplicationSecurity = {}
@@ -27,9 +28,9 @@ function Test_ReplicationSecurity.Run()
 	end)
 
 	tester:RunTest("Scheduler security gate", function(t)
-		-- NOTE: OnServerInvoke tests cannot run on server (write-only property)
-		-- This test would need to run on clients via InvokeServer
-		Orchestrator.StartServiceManagerAPI()
+		-- NOTE: OnServerInvoke tests cannot run on server (write-only property).
+		-- ServiceManager starts automatically during Orchestrator init when enabled,
+		-- so just verify the remote presence directly.
 		local svcRemote = ReplicatedStorage:FindFirstChild(Settings.StaticStrings.Instance.OrchestratorFunctionName)
 		t:Assert(svcRemote ~= nil, "OrchestratorFunction remote should exist")
 	end)
@@ -53,7 +54,6 @@ function Test_ReplicationSecurity.Run()
 		entity.Value = 7
 		entity:UpdateEntity()
 
-		Orchestrator.StartServiceManagerAPI()
 		local svcRemote = ReplicatedStorage:FindFirstChild(Settings.StaticStrings.Instance.OrchestratorFunctionName)
 		t:Assert(svcRemote ~= nil and svcRemote:IsA("RemoteFunction"), "OrchestratorFunction remote should exist")
 
