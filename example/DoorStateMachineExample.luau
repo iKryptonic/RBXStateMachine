@@ -62,6 +62,7 @@ function DoorStateMachine:RegisterStates()
 				Message = "Camera not found, using Hint instead." 
 			}
 			fsm.State = "Failed"
+			return
 		end
 
 		messageGui.Parent = workspace.CurrentCamera
@@ -89,6 +90,7 @@ function DoorStateMachine:RegisterStates()
 
 			if not OpenDoorResult then
 				fsm.State = "Failed"
+				return
 			end
 		end
 
@@ -137,8 +139,12 @@ end
 ]]
 function DoorStateMachine:OnCleanup()
 	-- reset the status light to neutral.
-	if self.DoorEntity and self.DoorEntity.Instance then
-		self.DoorEntity:Reset()
+	local doorEntity: any = self.DoorEntity
+	if doorEntity and doorEntity.Instance then
+		local reset = doorEntity.Reset
+		if type(reset) == "function" then
+			reset(doorEntity)
+		end
 	end
 end
 

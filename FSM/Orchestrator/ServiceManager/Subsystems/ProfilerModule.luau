@@ -1,0 +1,749 @@
+--!strict
+-- @Name ServiceManager/Subsystems/ProfilerModule.luau
+-- @Author iKrypto
+-- @Description Aggregated profiler subsystem for the ServiceManager dashboard.
+-- Provides a single "PROFILER" tab that surfaces hot-path timing data from the
+-- Scheduler, FSM heartbeat, and network call tracking — answering the question
+-- "what's eating my frame budget?" without requiring the user to dig through
+-- individual TASKS/FSM/NETWORK tabs.
+--
+-- Layout:
+--   ┌────────────────────────────────────────────────────┐
+--   │ FRAME BUDGET BAR  [━━━━━━━░░░░░░░]  1.2ms / 16.6ms │
+--   ├────────────────────────────────────────────────────┤
+--   │ ▸ HOT TASKS (top N by avg time)                    │
+--   │   Name | AvgMs | MaxMs | ×Runs | MemKB | Status   │
+--   ├────────────────────────────────────────────────────┤
+--   │ ▸ HOT FSMs (top N by avg update time)              │
+--   │   Id | State | AvgMs | MaxMs | ×Updates | MemΔ    │
+--   ├────────────────────────────────────────────────────┤
+--   │ ▸ DIAGNOSTICS (collapsed by default)               │
+--   │   Thread pool | Network traffic | GC stats          │
+--   └────────────────────────────────────────────────────┘
+
+local Theme = require(script.Parent.Parent.Theme)
+
+local ProfilerModule = {}
+ProfilerModule.__index = ProfilerModule
+
+local MAX_HOT_ITEMS = 10
+
+--[[
+	Create the PROFILER subsystem controller.
+	Owns the aggregated task/FSM/network snapshots and frame-budget state that
+	feed the cross-cutting performance dashboard.
+]]
+function ProfilerModule.new(): any
+	local self = setmetatable({}, ProfilerModule)
+	self._taskPerf = {} :: { [string]: any }
+	self._fsmPerf = {} :: { [string]: any }
+	self._frameBudget = { UsedMs = 0, BudgetMs = 16.6, FPS = 60 }
+	self._threadPool = { Total = 0, Free = 0, Active = 0, Peak = 0 }
+	self._networkTraffic = {} :: { { Name: string, Count: number, LastFired: number } }
+	self._gcStats = { MemoryMB = 0 }
+	self._sortMode = "AvgTime"
+	self._fsmSortMode = "AvgTime"
+	self._showDiagnostics = false
+	return self
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- DATA FETCH
+-- ══════════════════════════════════════════════════════════════
+
+--[[
+	Refresh the profiler snapshot for the active context.
+	Merges scheduler, FSM, GC, thread-pool, and network telemetry into a single
+	view so the PROFILER tab can rank the hottest work at a glance.
+]]
+function ProfilerModule:FetchData(nexus: any)
+	local orchestrator = nexus._orchestrator
+	if not orchestrator then return end
+
+	if nexus._contextMode == "client" then
+		self:_FetchClient(orchestrator, nexus)
+	else
+		-- In server mode, read from the server snapshot. But also read
+		-- the LOCAL orchestrator for any data that's only available locally
+		-- (FPS, thread pool stats, client-side scheduler tasks).
+		self:_FetchServer(nexus._serverData)
+		-- FPS comes from the client's render loop, not the server.
+		self._frameBudget.FPS = nexus._lastFPS or self._frameBudget.FPS
+	end
+
+	nexus.Store:BatchUpdate(function()
+		nexus.Store:Set("profiler.frameBudget", self._frameBudget)
+		nexus.Store:Set("profiler.taskCount", self:_CountTable(self._taskPerf))
+		nexus.Store:Set("profiler.fsmCount", self:_CountTable(self._fsmPerf))
+	end)
+end
+
+function ProfilerModule:_CountTable(t: { [any]: any }): number
+	local n = 0
+	for _ in pairs(t) do n += 1 end
+	return n
+end
+
+function ProfilerModule:_FetchClient(orchestrator: any, nexus: any?)
+	-- Tasks
+	self._taskPerf = {}
+	local scheduler = orchestrator.Scheduler
+	if scheduler and scheduler.Tasks then
+		for name, taskDef in pairs(scheduler.Tasks) do
+			local runCount = taskDef.RunCount or 0
+			local totalRunTime = taskDef.TotalRunTime or 0
+			local avgMs = if runCount > 0 then (totalRunTime / runCount) * 1000 else 0
+			local maxMs = (taskDef.MaxRunTime or 0) * 1000
+			local totalMem = taskDef.TotalMemory or 0
+			local maxMem = taskDef.MaxMemory or 0
+			local avgMem = if runCount > 0 then totalMem / runCount else 0
+
+			self._taskPerf[name] = {
+				Name = name,
+				AvgMs = avgMs,
+				MaxMs = maxMs,
+				RunCount = runCount,
+				MemoryAvgKB = avgMem,
+				MemoryMaxKB = maxMem,
+				Priority = taskDef.Priority or 5,
+				IsRecurring = taskDef.IsRecurringTask or false,
+				Event = taskDef.Event or "Heartbeat",
+			}
+		end
+
+		-- Frame budget from LastFrameStats
+		if scheduler.LastFrameStats then
+			local lfs = scheduler.LastFrameStats
+			self._frameBudget.UsedMs = (lfs.FrameTime or 0) * 1000
+			self._frameBudget.BudgetMs = (lfs.Budget or 0.005) * 1000
+		end
+
+		-- Thread pool
+		if type(scheduler.GetThreadPoolStats) == "function" then
+			local ok, stats = pcall(scheduler.GetThreadPoolStats)
+			if ok and stats then
+				self._threadPool = {
+					Total = stats.TotalThreads or 0,
+					Free = stats.FreeThreads or 0,
+					Active = stats.ActiveThreads or 0,
+					Peak = stats.PeakThreads or 0,
+				}
+			end
+		end
+	end
+
+	-- FPS comes from the Nexus render loop, not the Orchestrator table.
+	self._frameBudget.FPS = (if nexus then nexus._lastFPS else nil)
+		or ((orchestrator :: any).Scheduler and (orchestrator :: any).Scheduler.PerformanceManager and (orchestrator :: any).Scheduler.PerformanceManager.FPS)
+		or 60
+
+	-- FSMs
+	self._fsmPerf = {}
+	local factory = orchestrator.Factory
+	if factory and factory.Registry then
+		local fsms = {}
+		if type(factory.Registry.GetAllStateMachines) == "function" then
+			local ok, result = pcall(factory.Registry.GetAllStateMachines)
+			if ok and type(result) == "table" then fsms = result end
+		end
+		for id, fsm in pairs(fsms) do
+			local perf = (fsm :: any).Perf
+			if perf then
+				self._fsmPerf[id] = {
+					Id = id,
+					State = rawget(fsm, "_activeStateName") or rawget(fsm, "State") or "?",
+					AvgMs = (perf.AvgUpdateTime or 0) * 1000,
+					MaxMs = (perf.MaxUpdateTime or 0) * 1000,
+					UpdateCount = perf.UpdateCount or 0,
+					MemDeltaKB = perf.MaxMemKBDelta or 0,
+					IsActive = rawget(fsm, "IsActive") or false,
+				}
+			end
+		end
+	end
+
+	-- Network traffic
+	self:_FetchNetworkClient(orchestrator.NetworkManager)
+
+	-- GC
+	self._gcStats.MemoryMB = collectgarbage("count") / 1024
+end
+
+function ProfilerModule:_FetchServer(serverData: any?)
+	self._taskPerf = {}
+	self._fsmPerf = {}
+	self._networkTraffic = {}
+	if not serverData then
+		self._frameBudget.UsedMs = 0
+		self._frameBudget.BudgetMs = 16.6
+		self._gcStats.MemoryMB = 0
+		return
+	end
+
+	-- Tasks from snapshot
+	if serverData.Tasks and serverData.Tasks.List then
+		for name, td in pairs(serverData.Tasks.List) do
+			local runCount = td.RunCount or td.ExecutionCount or 0
+			local avgMs = td.AvgTimeMs or 0
+			local maxMs = td.MaxTimeMs or 0
+			self._taskPerf[name] = {
+				Name = name,
+				AvgMs = avgMs,
+				MaxMs = maxMs,
+				RunCount = runCount,
+				MemoryAvgKB = 0,
+				MemoryMaxKB = 0,
+				Priority = td.Priority or 5,
+				IsRecurring = td.IsRecurringTask or false,
+				Event = td.Event or "Heartbeat",
+			}
+		end
+	end
+
+	-- Frame budget from server performance
+	if serverData.Tasks and serverData.Tasks.Performance then
+		local perf = serverData.Tasks.Performance
+		-- Server has no render loop so FPS is only advisory here; FetchData will
+		-- overwrite it with the client's live FPS after this snapshot is read.
+		self._frameBudget.FPS = perf.FPS or 0
+		local rawUsed = perf.UsedMs or perf.FrameTimeMs or perf.FrameTime or 0
+		self._frameBudget.UsedMs = if rawUsed > 0 and rawUsed < 1 then rawUsed * 1000 else rawUsed
+		-- FrameBudget may be in seconds (e.g., 0.005) — convert to ms.
+		local rawBudget = perf.FrameBudget or perf.FrameBudgetMs or 0
+		self._frameBudget.BudgetMs = if rawBudget > 0 and rawBudget < 1 then rawBudget * 1000 else rawBudget
+		if self._frameBudget.BudgetMs < 0.1 then self._frameBudget.BudgetMs = 16.6 end
+		self._gcStats.MemoryMB = perf.MemoryMB or 0
+	end
+
+	-- FSMs from snapshot
+	self._fsmPerf = {}
+	if serverData.FSM then
+		local fsmList = serverData.FSM.StateMachines or serverData.FSM.List or {}
+		for id, fsmInfo in pairs(fsmList) do
+			if type(fsmInfo) ~= "table" then continue end
+			local perf = fsmInfo.Perf or {}
+			self._fsmPerf[id] = {
+				Id = id,
+				State = fsmInfo.CurrentState or fsmInfo.State or "?",
+				AvgMs = (perf.AvgUpdateTime or 0) * 1000,
+				MaxMs = (perf.MaxUpdateTime or 0) * 1000,
+				UpdateCount = perf.UpdateCount or 0,
+				MemDeltaKB = perf.MaxMemKBDelta or 0,
+				IsActive = fsmInfo.IsActive ~= false,
+			}
+		end
+	end
+
+	-- Network from snapshot
+	self._networkTraffic = {}
+	if serverData.Network then
+		for _, category in ipairs({ serverData.Network.Commands, serverData.Network.EventBuses, serverData.Network.Remotes }) do
+			if category then
+				for name, info in pairs(category) do
+					if type(info) == "table" and (info.MessageCount or info.Count or 0) > 0 then
+						table.insert(self._networkTraffic, {
+							Name = info.Name or name,
+							Count = info.MessageCount or info.Count or 0,
+							LastFired = info.LastFired or info.LastInvoked or 0,
+						})
+					end
+				end
+			end
+		end
+		table.sort(self._networkTraffic, function(a, b) return a.Count > b.Count end)
+	end
+end
+
+function ProfilerModule:_FetchNetworkClient(nm: any?)
+	self._networkTraffic = {}
+	if not nm then return end
+
+	local function addStats(statsTable: { [string]: any }?)
+		if not statsTable then return end
+		for name, stats in pairs(statsTable) do
+			if type(stats) == "table" and (stats.Count or 0) > 0 then
+				table.insert(self._networkTraffic, {
+					Name = name,
+					Count = stats.Count or 0,
+					LastFired = stats.LastFired or stats.LastInvoked or 0,
+				})
+			end
+		end
+	end
+	addStats(nm._remoteStats)
+	addStats(nm._busStats)
+	addStats(nm._invokeStats)
+	table.sort(self._networkTraffic, function(a, b) return a.Count > b.Count end)
+end
+
+--[[
+	Legacy subsystem hook retained for interface parity.
+	PROFILER rendering is produced by BuildRootLayer and its section builders.
+]]
+function ProfilerModule:Render(_nexus: any) end
+
+-- ══════════════════════════════════════════════════════════════
+-- SORTING
+-- ══════════════════════════════════════════════════════════════
+
+function ProfilerModule:_GetSortedTasks(): { any }
+	local result = {}
+	for _, data in pairs(self._taskPerf) do
+		table.insert(result, data)
+	end
+	local mode = self._sortMode
+	table.sort(result, function(a, b)
+		if mode == "AvgTime" then return (a.AvgMs or 0) > (b.AvgMs or 0)
+		elseif mode == "MaxTime" then return (a.MaxMs or 0) > (b.MaxMs or 0)
+		elseif mode == "Runs" then return (a.RunCount or 0) > (b.RunCount or 0)
+		elseif mode == "Memory" then return (a.MemoryAvgKB or 0) > (b.MemoryAvgKB or 0)
+		elseif mode == "Name" then return (a.Name or "") < (b.Name or "")
+		end
+		return (a.AvgMs or 0) > (b.AvgMs or 0)
+	end)
+	return result
+end
+
+function ProfilerModule:_GetSortedFSMs(): { any }
+	local result = {}
+	for _, data in pairs(self._fsmPerf) do
+		table.insert(result, data)
+	end
+	local mode = self._fsmSortMode
+	table.sort(result, function(a, b)
+		if mode == "AvgTime" then return (a.AvgMs or 0) > (b.AvgMs or 0)
+		elseif mode == "MaxTime" then return (a.MaxMs or 0) > (b.MaxMs or 0)
+		elseif mode == "Updates" then return (a.UpdateCount or 0) > (b.UpdateCount or 0)
+		elseif mode == "Memory" then return (a.MemDeltaKB or 0) > (b.MemDeltaKB or 0)
+		elseif mode == "Name" then return (a.Id or "") < (b.Id or "")
+		end
+		return (a.AvgMs or 0) > (b.AvgMs or 0)
+	end)
+	return result
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- ROOT LAYER
+-- ══════════════════════════════════════════════════════════════
+
+--[[
+	Build or rebuild the PROFILER root layer inside the supplied navigator frame.
+	Lays out the frame-budget bar, hot-task table, hot-FSM table, and optional
+	diagnostics section from the current aggregated snapshot.
+]]
+function ProfilerModule:BuildRootLayer(frame: Frame, context: any)
+	local nexus = context.Nexus
+	local contentFrame = frame:FindFirstChild("Content") :: Frame
+	if not contentFrame then return end
+
+	Theme.ClearExcept(contentFrame, {})
+
+	if not contentFrame:FindFirstChildOfClass("UIListLayout") then
+		local layout = Instance.new("UIListLayout")
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0, 6)
+		layout.Parent = contentFrame
+		local pad = Instance.new("UIPadding")
+		pad.PaddingLeft = UDim.new(0, 10)
+		pad.PaddingRight = UDim.new(0, 10)
+		pad.PaddingTop = UDim.new(0, 8)
+		pad.PaddingBottom = UDim.new(0, 8)
+		pad.Parent = contentFrame
+	end
+
+	local order = 0
+	local function nextOrder(): number
+		order += 1
+		return order
+	end
+
+	-- ── FRAME BUDGET BAR ──────────────────────────────────────
+	self:_BuildBudgetBar(contentFrame, nextOrder())
+
+	-- ── HOT TASKS ─────────────────────────────────────────────
+	self:_BuildHotTasksSection(contentFrame, nexus, nextOrder())
+
+	-- ── HOT FSMs ──────────────────────────────────────────────
+	self:_BuildHotFSMsSection(contentFrame, nexus, nextOrder())
+
+	-- ── DIAGNOSTICS (collapsed) ───────────────────────────────
+	self:_BuildDiagnosticsSection(contentFrame, nexus, nextOrder())
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- FRAME BUDGET BAR
+-- ══════════════════════════════════════════════════════════════
+
+function ProfilerModule:_BuildBudgetBar(parent: Frame, layoutOrder: number)
+	local fb = self._frameBudget
+	local usedMs = fb.UsedMs or 0
+	local budgetMs = math.max(fb.BudgetMs or 16.6, 0.1)
+	local fps = fb.FPS or 0
+	local pct = math.clamp(usedMs / budgetMs, 0, 1)
+	local barColor = if pct > 0.9 then Theme.Colors.Danger
+		elseif pct > 0.6 then Theme.Colors.Warning
+		else Theme.Colors.Success
+
+	local container = Instance.new("Frame")
+	container.Name = "BudgetBar"
+	container.Size = UDim2.new(1, 0, 0, 40)
+	container.BackgroundColor3 = Theme.Colors.GlassTertiary
+	container.BackgroundTransparency = 0.7
+	container.BorderSizePixel = 0
+	container.LayoutOrder = layoutOrder
+	container.Parent = parent
+	Instance.new("UICorner", container).CornerRadius = UDim.new(0, Theme.Radius.Sm)
+
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0, 10)
+	pad.PaddingRight = UDim.new(0, 10)
+	pad.PaddingTop = UDim.new(0, 6)
+	pad.PaddingBottom = UDim.new(0, 6)
+	pad.Parent = container
+
+	-- Label
+	Theme.CreateLabel({
+		Text = string.format(
+			'<font color="#888">FRAME BUDGET</font>  <font color="#FFF">%.2fms</font> / <font color="#888">%.1fms</font>  <font color="#666">(%d FPS)</font>',
+			usedMs, budgetMs, fps),
+		Size = UDim2.new(1, 0, 0, 14),
+		Color = Theme.Colors.TextPrimary,
+		FontSize = Theme.TextSize.Caption,
+		FontFace = Theme.Font.Bold,
+		Alignment = Enum.TextXAlignment.Left,
+		Parent = container,
+	})
+
+	-- Bar track
+	local track = Instance.new("Frame")
+	track.Size = UDim2.new(1, 0, 0, 8)
+	track.Position = UDim2.new(0, 0, 1, -8)
+	track.BackgroundColor3 = Color3.fromRGB(30, 30, 40)
+	track.BackgroundTransparency = 0.3
+	track.BorderSizePixel = 0
+	track.Parent = container
+	Instance.new("UICorner", track).CornerRadius = UDim.new(0, 4)
+
+	-- Fill
+	local fill = Instance.new("Frame")
+	fill.Size = UDim2.new(pct, 0, 1, 0)
+	fill.BackgroundColor3 = barColor
+	fill.BackgroundTransparency = 0.2
+	fill.BorderSizePixel = 0
+	fill.Parent = track
+	Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 4)
+
+	-- Memory badge
+	Theme.CreateLabel({
+		Text = string.format('<font color="#666">MEM</font> %.1fMB', self._gcStats.MemoryMB),
+		Size = UDim2.new(0, 100, 0, 14),
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 0),
+		Color = Theme.Colors.TextMuted,
+		FontSize = Theme.TextSize.Tiny,
+		FontFace = Theme.Font.Mono,
+		Alignment = Enum.TextXAlignment.Right,
+		Parent = container,
+	})
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- HOT TASKS TABLE
+-- ══════════════════════════════════════════════════════════════
+
+function ProfilerModule:_BuildHotTasksSection(parent: Frame, nexus: any, layoutOrder: number)
+	local sorted = self:_GetSortedTasks()
+
+	Theme.CreateLabel({
+		Text = string.format('<font color="#3898FF">▸</font> HOT TASKS <font color="#666">(%d total, top %d)</font>',
+			#sorted, math.min(#sorted, MAX_HOT_ITEMS)),
+		Size = UDim2.new(1, 0, 0, 16),
+		Color = Theme.Colors.TextPrimary,
+		FontSize = Theme.TextSize.Caption,
+		FontFace = Theme.Font.Bold,
+		Alignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	}).LayoutOrder = layoutOrder * 100
+
+	-- Header row
+	local headerOrder = layoutOrder * 100 + 1
+	self:_BuildTableHeader(parent, headerOrder,
+		{ "Name", "AvgMs", "MaxMs", "×Runs", "MemKB", "Pri" },
+		{ 0.35, 0.13, 0.13, 0.13, 0.13, 0.08 })
+
+	for i, task in ipairs(sorted) do
+		if i > MAX_HOT_ITEMS then break end
+		local rowOrder = layoutOrder * 100 + 1 + i
+
+		local avgColor = if task.AvgMs > 1 then Theme.Colors.Danger
+			elseif task.AvgMs > 0.1 then Theme.Colors.Warning
+			else Theme.Colors.Success
+
+		self:_BuildTableRow(parent, rowOrder, {
+			{ Text = task.Name or "?", Width = 0.35, Color = Theme.Colors.TextPrimary },
+			{ Text = string.format("%.3f", task.AvgMs), Width = 0.13, Color = avgColor },
+			{ Text = string.format("%.2f", task.MaxMs), Width = 0.13, Color = Theme.Colors.TextSecondary },
+			{ Text = string.format("×%d", task.RunCount), Width = 0.13, Color = Theme.Colors.Cyan },
+			{ Text = string.format("%.1f", task.MemoryAvgKB), Width = 0.13, Color = Theme.Colors.TextMuted },
+			{ Text = string.format("P%d", task.Priority), Width = 0.08, Color = Theme.Colors.TextMuted },
+		})
+	end
+
+	if #sorted == 0 then
+		Theme.CreateLabel({
+			Text = "(no tasks)",
+			Size = UDim2.new(1, 0, 0, 14),
+			Color = Theme.Colors.TextMuted,
+			FontSize = Theme.TextSize.Tiny,
+			FontFace = Theme.Font.Mono,
+			Alignment = Enum.TextXAlignment.Center,
+			Parent = parent,
+		}).LayoutOrder = layoutOrder * 100 + 2
+	end
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- HOT FSMs TABLE
+-- ══════════════════════════════════════════════════════════════
+
+function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOrder: number)
+	local sorted = self:_GetSortedFSMs()
+
+	Theme.CreateLabel({
+		Text = string.format('<font color="#3CD278">▸</font> HOT FSMs <font color="#666">(%d total, top %d)</font>',
+			#sorted, math.min(#sorted, MAX_HOT_ITEMS)),
+		Size = UDim2.new(1, 0, 0, 16),
+		Color = Theme.Colors.TextPrimary,
+		FontSize = Theme.TextSize.Caption,
+		FontFace = Theme.Font.Bold,
+		Alignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	}).LayoutOrder = layoutOrder * 100
+
+	-- Header
+	local headerOrder = layoutOrder * 100 + 1
+	self:_BuildTableHeader(parent, headerOrder,
+		{ "FSM Id", "State", "AvgMs", "MaxMs", "×Updates", "MemΔ" },
+		{ 0.30, 0.15, 0.13, 0.13, 0.13, 0.11 })
+
+	for i, fsm in ipairs(sorted) do
+		if i > MAX_HOT_ITEMS then break end
+		local rowOrder = layoutOrder * 100 + 1 + i
+
+		local avgColor = if fsm.AvgMs > 1 then Theme.Colors.Danger
+			elseif fsm.AvgMs > 0.1 then Theme.Colors.Warning
+			else Theme.Colors.Success
+
+		-- Truncate FSM id for display
+		local displayId = fsm.Id or "?"
+		if #displayId > 30 then displayId = displayId:sub(1, 28) .. ".." end
+
+		self:_BuildTableRow(parent, rowOrder, {
+			{ Text = displayId, Width = 0.30, Color = if fsm.IsActive then Theme.Colors.TextPrimary else Theme.Colors.TextMuted },
+			{ Text = fsm.State or "?", Width = 0.15, Color = Theme.Colors.Accent },
+			{ Text = string.format("%.3f", fsm.AvgMs), Width = 0.13, Color = avgColor },
+			{ Text = string.format("%.2f", fsm.MaxMs), Width = 0.13, Color = Theme.Colors.TextSecondary },
+			{ Text = string.format("×%d", fsm.UpdateCount), Width = 0.13, Color = Theme.Colors.Cyan },
+			{ Text = string.format("%.1f", fsm.MemDeltaKB), Width = 0.11, Color = Theme.Colors.TextMuted },
+		})
+	end
+
+	if #sorted == 0 then
+		Theme.CreateLabel({
+			Text = "(no FSMs with perf data)",
+			Size = UDim2.new(1, 0, 0, 14),
+			Color = Theme.Colors.TextMuted,
+			FontSize = Theme.TextSize.Tiny,
+			FontFace = Theme.Font.Mono,
+			Alignment = Enum.TextXAlignment.Center,
+			Parent = parent,
+		}).LayoutOrder = layoutOrder * 100 + 2
+	end
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- DIAGNOSTICS (collapsed by default)
+-- ══════════════════════════════════════════════════════════════
+
+function ProfilerModule:_BuildDiagnosticsSection(parent: Frame, _nexus: any, layoutOrder: number)
+	local btn = Instance.new("TextButton")
+	btn.Name = "DiagnosticsToggle"
+	btn.Size = UDim2.new(1, 0, 0, 22)
+	btn.BackgroundColor3 = Theme.Colors.GlassTertiary
+	btn.BackgroundTransparency = 0.8
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = false
+	btn.LayoutOrder = layoutOrder * 100
+	btn.Text = ""
+	btn.Parent = parent
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, Theme.Radius.Xs)
+
+	local chevron = if self._showDiagnostics then "▾" else "▸"
+	Theme.CreateLabel({
+		Text = string.format('<font color="#666">%s</font> DIAGNOSTICS', chevron),
+		Size = UDim2.new(1, -8, 1, 0),
+		Position = UDim2.new(0, 8, 0, 0),
+		Color = Theme.Colors.TextMuted,
+		FontSize = Theme.TextSize.Caption,
+		FontFace = Theme.Font.Bold,
+		Alignment = Enum.TextXAlignment.Left,
+		Parent = btn,
+	})
+
+	if not self._showDiagnostics then
+		btn.MouseButton1Click:Connect(function()
+			self._showDiagnostics = true
+			-- Rebuild via navigator
+			local nav = _nexus and _nexus._navigator
+			if nav then nav:RebuildCurrentLayer() end
+		end)
+		return
+	end
+
+	btn.MouseButton1Click:Connect(function()
+		self._showDiagnostics = false
+		local nav = _nexus and _nexus._navigator
+		if nav then nav:RebuildCurrentLayer() end
+	end)
+
+	-- Thread pool
+	local tp = self._threadPool
+	local threadText = string.format(
+		'<font color="#888">THREAD POOL</font>  Total: %d  Free: %d  Active: %d  Peak: %d',
+		tp.Total, tp.Free, tp.Active, tp.Peak)
+	Theme.CreateLabel({
+		Text = threadText,
+		Size = UDim2.new(1, 0, 0, 14),
+		Color = Theme.Colors.TextSecondary,
+		FontSize = Theme.TextSize.Tiny,
+		FontFace = Theme.Font.Mono,
+		Alignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	}).LayoutOrder = layoutOrder * 100 + 1
+
+	-- GC
+	Theme.CreateLabel({
+		Text = string.format('<font color="#888">GC</font>  Heap: %.1f MB', self._gcStats.MemoryMB),
+		Size = UDim2.new(1, 0, 0, 14),
+		Color = Theme.Colors.TextSecondary,
+		FontSize = Theme.TextSize.Tiny,
+		FontFace = Theme.Font.Mono,
+		Alignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	}).LayoutOrder = layoutOrder * 100 + 2
+
+	-- Network traffic top 5
+	Theme.CreateLabel({
+		Text = string.format('<font color="#888">NETWORK TRAFFIC</font>  <font color="#666">(top 5 by volume)</font>'),
+		Size = UDim2.new(1, 0, 0, 14),
+		Color = Theme.Colors.TextSecondary,
+		FontSize = Theme.TextSize.Tiny,
+		FontFace = Theme.Font.Bold,
+		Alignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	}).LayoutOrder = layoutOrder * 100 + 3
+
+	for i, item in ipairs(self._networkTraffic) do
+		if i > 5 then break end
+		local ago = "—"
+		if item.LastFired and item.LastFired > 0 then
+			local a = os.clock() - item.LastFired
+			if a < 1 then ago = string.format("%.0fms ago", a * 1000)
+			elseif a < 60 then ago = string.format("%.1fs ago", a)
+			else ago = string.format("%.0fm ago", a / 60) end
+		end
+		Theme.CreateLabel({
+			Text = string.format('  <font color="#9DC9FF">%s</font>  ×%d  <font color="#666">%s</font>',
+				item.Name, item.Count, ago),
+			Size = UDim2.new(1, 0, 0, 14),
+			Color = Theme.Colors.TextSecondary,
+			FontSize = Theme.TextSize.Tiny,
+			FontFace = Theme.Font.Mono,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = parent,
+		}).LayoutOrder = layoutOrder * 100 + 3 + i
+	end
+
+	if #self._networkTraffic == 0 then
+		Theme.CreateLabel({
+			Text = "  (no network traffic)",
+			Size = UDim2.new(1, 0, 0, 14),
+			Color = Theme.Colors.TextMuted,
+			FontSize = Theme.TextSize.Tiny,
+			FontFace = Theme.Font.Mono,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = parent,
+		}).LayoutOrder = layoutOrder * 100 + 4
+	end
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- SHARED TABLE RENDERING
+-- ══════════════════════════════════════════════════════════════
+
+function ProfilerModule:_BuildTableHeader(parent: Frame, layoutOrder: number, columns: { string }, widths: { number })
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 16)
+	row.BackgroundTransparency = 1
+	row.BorderSizePixel = 0
+	row.LayoutOrder = layoutOrder
+	row.Parent = parent
+
+	local xOff = 0
+	for i, col in ipairs(columns) do
+		local w = widths[i] or 0.1
+		Theme.CreateLabel({
+			Text = col,
+			Size = UDim2.new(w, -4, 1, 0),
+			Position = UDim2.new(xOff, 2, 0, 0),
+			Color = Theme.Colors.TextMuted,
+			FontSize = Theme.TextSize.Tiny,
+			FontFace = Theme.Font.Bold,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = row,
+		})
+		xOff += w
+	end
+end
+
+function ProfilerModule:_BuildTableRow(parent: Frame, layoutOrder: number, cells: { { Text: string, Width: number, Color: Color3 } })
+	local row = Instance.new("Frame")
+	row.Size = UDim2.new(1, 0, 0, 18)
+	row.BackgroundColor3 = Theme.Colors.GlassTertiary
+	row.BackgroundTransparency = 0.88
+	row.BorderSizePixel = 0
+	row.LayoutOrder = layoutOrder
+	row.Parent = parent
+	Instance.new("UICorner", row).CornerRadius = UDim.new(0, Theme.Radius.Xs)
+
+	local xOff = 0
+	for _, cell in ipairs(cells) do
+		local w = cell.Width or 0.1
+		Theme.CreateLabel({
+			Text = cell.Text,
+			Size = UDim2.new(w, -4, 1, 0),
+			Position = UDim2.new(xOff, 4, 0, 0),
+			Color = cell.Color or Theme.Colors.TextSecondary,
+			FontSize = Theme.TextSize.Tiny,
+			FontFace = Theme.Font.Mono,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = row,
+		})
+		xOff += w
+	end
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- DESTROY
+-- ══════════════════════════════════════════════════════════════
+
+--[[
+	Clear all cached profiler aggregates.
+]]
+function ProfilerModule:Destroy()
+	table.clear(self._taskPerf)
+	table.clear(self._fsmPerf)
+	table.clear(self._networkTraffic)
+end
+
+return ProfilerModule

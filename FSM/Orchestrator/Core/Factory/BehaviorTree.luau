@@ -31,7 +31,8 @@ local Logger, Initialized;
 
 	@param Util table -- Orchestrator utility table containing Logger, Signal, and Settings
 	@return ()
-	@writes Module-level Logger, Signal, Settings upvalues
+	@reads Initialized
+	@writes Module-level Logger upvalues, Initialized
 ]=]
 function BehaviorTree.Initialize(Util)
 	if Initialized then return end
@@ -44,6 +45,16 @@ end
 local function ValidateRequest()
 	assert(Initialized, "BehaviorTree not initialized")
 	assert(type(Logger) == "table", "Logger not initialized")
+end
+
+local function normalizeStatus(status: any): string
+	if status == BehaviorTree.BehaviorTreeStatus.Success
+		or status == BehaviorTree.BehaviorTreeStatus.Failure
+		or status == BehaviorTree.BehaviorTreeStatus.Running
+	then
+		return status
+	end
+	return BehaviorTree.BehaviorTreeStatus.Failure
 end
 
 --[=[
@@ -60,7 +71,7 @@ function BehaviorTree.Selector(children: { (context: any) -> string }): (context
 	ValidateRequest()
 	return function(context)
 		for _, child in ipairs(children) do
-			local status = child(context)
+			local status = normalizeStatus(child(context))
 			if status ~= BehaviorTree.BehaviorTreeStatus.Failure then
 				return status
 			end
@@ -83,7 +94,7 @@ function BehaviorTree.Sequence(children: { (context: any) -> string }): (context
 	ValidateRequest()
 	return function(context)
 		for _, child in ipairs(children) do
-			local status = child(context)
+			local status = normalizeStatus(child(context))
 			if status ~= BehaviorTree.BehaviorTreeStatus.Success then
 				return status
 			end
@@ -104,7 +115,7 @@ end
 function BehaviorTree.Inverter(child: (context: any) -> string): (context: any) -> string
 	ValidateRequest()
 	return function(context)
-		local status = child(context)
+		local status = normalizeStatus(child(context))
 		if status == BehaviorTree.BehaviorTreeStatus.Success then
 			return BehaviorTree.BehaviorTreeStatus.Failure
 		elseif status == BehaviorTree.BehaviorTreeStatus.Failure then
@@ -126,7 +137,7 @@ end
 function BehaviorTree.Succeeder(child: (context: any) -> string): (context: any) -> string
 	ValidateRequest()
 	return function(context)
-		local status = child(context)
+		local status = normalizeStatus(child(context))
 		if status == BehaviorTree.BehaviorTreeStatus.Running then
 			return BehaviorTree.BehaviorTreeStatus.Running
 		end
