@@ -1,0 +1,16 @@
+{
+  "name": "RBXStateMachine",
+  "tree": {
+    "$className": "DataModel",
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "$ignoreUnknownInstances": true,
+      "Orchestrator": {
+        "$path": "FSM/Orchestrator"
+      },
+      "Examples": {
+        "$path": "example"
+      }
+    }
+  }
+}
