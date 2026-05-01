@@ -1,0 +1,48 @@
+--!strict
+-- @Name PlayerEntity
+-- @Author iKrypto
+-- @Description Entity implementation for player-level persistent data
+
+local PlayerEntity = {
+	Name = "PlayerEntity",
+	Mutable = true,
+	Replication = { Enabled = true, RateLimit = 30 },
+	Schema = {
+		UserId       = { Type = "number",  Replicate = true,  Persist = true  },
+		Class        = { Type = "string",  Replicate = true,  Persist = true  },
+		Inventory    = { Type = "any",     Replicate = true,  Persist = true  },
+		Equipped     = { Type = "any",     Replicate = true,  Persist = true  },
+		WeaponEqp    = { Type = "string",  Replicate = true,  Persist = true  },
+		ActionBar    = { Type = "any",     Replicate = true,  Persist = true  },
+		Settings     = { Type = "any",     Replicate = true,  Persist = true  },
+		Cooldowns    = { Type = "any",     Replicate = true,  Persist = false },
+		Revision     = { Type = "number",  Replicate = true,  Persist = false },
+		DataVersion  = { Type = "number",  Replicate = false, Persist = true  },
+	},
+}
+
+function PlayerEntity:GetContext(params: { [any]: any })
+	local context = params.Context or params
+	local userId = context.UserId
+		or (context.Instance and context.Instance:IsA("Player") and context.Instance.UserId)
+		or 0
+
+	return {
+		UserId = userId,
+		Class = context.Class or "Beginner",
+		Inventory = context.Inventory or { "1", "2", "3", "4", "5", "6", "7" },
+		Equipped = context.Equipped or {},
+		WeaponEqp = context.WeaponEqp or "1",
+		ActionBar = context.ActionBar or {},
+		Settings = context.Settings or {},
+		Cooldowns = context.Cooldowns or {},
+		Revision = 0,
+		DataVersion = context.DataVersion or 1,
+	}
+end
+
+function PlayerEntity:ApplyChanges(_changes: { [string]: any })
+	-- PlayerEntity is pure data — no visual rendering
+end
+
+return PlayerEntity
