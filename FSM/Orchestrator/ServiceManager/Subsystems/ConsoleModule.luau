@@ -75,7 +75,7 @@ function ConsoleModule:FetchData(nexus: any)
 	-- Console doesn't poll data; it's event-driven.
 	-- Push a welcome message on first load if buffer is empty.
 	if #self._outputBuffer == 0 then
-		self:_PushLine("SYSTEM", "Nexus Orchestrator Console v1.0", Theme.Colors.Accent)
+		self:_PushLine("SYSTEM", "ServiceManager Console v1.0", Theme.Colors.Accent)
 		self:_PushLine("SYSTEM", 'Type "help" for available commands.', Theme.Colors.TextMuted)
 		self:_PushLine("SYSTEM", "", Theme.Colors.TextMuted)
 	end

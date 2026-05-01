@@ -336,7 +336,7 @@ function ServiceManager.Initialize(Orchestrator: any)
 end
 
 --[[
-	Show the Nexus Orchestrator GUI window.
+	Show the ServiceManager GUI window.
 ]]
 function ServiceManager.Show()
 	if _gui then
@@ -349,7 +349,7 @@ function ServiceManager.Show()
 end
 
 --[[
-	Hide the Nexus Orchestrator GUI window.
+	Hide the ServiceManager GUI window.
 ]]
 function ServiceManager.Hide()
 	if _gui then _gui:Hide() end
@@ -490,7 +490,7 @@ function ServiceManager.GetStore(): any
 end
 
 --[[
-	Destroy the entire Nexus Orchestrator, cleaning up all resources.
+	Destroy the entire ServiceManager, cleaning up all resources.
 ]]
 function ServiceManager.Destroy()
 	if _serverPollConnection then
