@@ -116,8 +116,6 @@ local function GetClassName(class: any): string
 end
 
 -- Configuration Map
-local TYPES = {
-};
 local CompiledClasses = {
 	StateMachines = {},
 	Entities = {}
@@ -368,253 +366,265 @@ end
 	@writes Factory.Registry (registers entity)
 ]=]
 function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Context: {any}?, Persistent: boolean?, PersistenceKey: string?, InitialData: { [string]: any }? })
-	assert(Initialized, "Factory not initialized")
-	local EntityClass = ResolveClass("Entity", params.EntityClass)
-	local entityId = params.EntityId or HttpService:GenerateGUID(false)
-	local entityContext = if params.Context then table.clone(params.Context) else {}
-	entityContext.EntityId = entityId
+assert(Initialized, "Factory not initialized")
+local EntityClass = ResolveClass("Entity", params.EntityClass)
+local entityId = params.EntityId or HttpService:GenerateGUID(false)
+local entityContext = if params.Context then table.clone(params.Context) else {}
+entityContext.EntityId = entityId
 
-	if not EntityClass then
-		Logger:Log({ Level = "ERROR", Message = "Failed to resolve EntityClass for " .. tostring(entityId) })
-		return nil
-	end
-
-	-- Check Registry
-	local existing = Factory.Registry.GetEntity(entityId)
-	if existing then return existing end
-
-	local entityClassName = GetClassName(EntityClass)
-
-	-- Check Pool
-	local pooled = Factory.Registry.GetPooledEntity(entityClassName)
-	if pooled then
-		local entityId = params.EntityId or game:GetService("HttpService"):GenerateGUID(false)
-		pooled._privateProperties.IsValid = true
-		table.clear(pooled._privateProperties.Data)
-		table.clear(pooled._privateProperties.Pending)
-		table.clear(pooled._privateProperties._pendingKeys or {})
-		table.clear(pooled._privateProperties._cache or {})
-		table.clear(pooled._privateProperties.Context)
-		pooled._privateProperties.Version = 0
-		pooled._privateProperties.EntityLocked = nil
-
-		-- Reset signals to prevent old listeners from firing
-		if pooled._privateProperties._stateUpdatedEvent then
-			pooled._privateProperties._stateUpdatedEvent:Destroy()
-		end
-		if pooled._privateProperties._entityDestroyedEvent then
-			pooled._privateProperties._entityDestroyedEvent:Destroy()
-		end
-		local Signal = Utility.Signal
-		pooled._privateProperties._stateUpdatedEvent = Signal.new()
-		pooled._privateProperties._entityDestroyedEvent = Signal.new()
-		pooled.StateUpdated = pooled._privateProperties._stateUpdatedEvent
-		pooled.Destroyed = pooled._privateProperties._entityDestroyedEvent
-
-		if params.Context then
-			for k, v in pairs(params.Context) do pooled._privateProperties.Context[k] = v end
-		end
-		pooled._privateProperties.Context.EntityId = entityId
-		pooled._privateProperties.Persistent = params.Persistent
-		-- Restore replicated state if provided
-		if params.InitialData then
-			for k, v in pairs(params.InitialData) do
-				if k ~= "_v" then pooled._privateProperties.Data[k] = v end
-			end
-			if type(params.InitialData._v) == "number" then
-				pooled._privateProperties.Version = params.InitialData._v
-			end
-		end
-		Factory.Registry.RegisterEntity(entityId, pooled)
-
-		if RunService:IsServer() and Utility.NetworkManager then
-			local sanitizedInitial = {}
-			local schema = (pooled.GetValidProperties and pooled:GetValidProperties()) or {}
-			for k, v in pairs(pooled._privateProperties.Data) do
-				local def = schema[k]
-				if def and def.Replicate then sanitizedInitial[k] = v end
-			end
-			sanitizedInitial._v = pooled._privateProperties.Version
-			Utility.NetworkManager.BroadcastEntityCommand(entityId, "OnEntityCreated", {
-				EntityId = entityId,
-				EntityClassName = entityClassName,
-				InitialData = sanitizedInitial
-			})
-		end
-		return pooled
-	end
-
-	local success, newEntity = xpcall(function()
-		return EntityClass.new({
-			Name = entityClassName,
-			OwnerId = entityContext.OwnerId,
-			Context = entityContext,
-			-- Pass through so BaseEntity Subclass.new can pre-populate Data BEFORE GetContext
-			InitialData = params.InitialData,
-		})
-	end, function(err) return debug.traceback(tostring(err)) end)
-
-	if not success then
-		Logger:Log({ Level = "ERROR", Message = "Failed to instantiate Entity " .. entityId .. ": " .. tostring(newEntity) })
-		return nil
-	end
-
-	-- Inject Context
-	if type((newEntity :: any).SetContext) == "function" then
-		for k, v in pairs(entityContext) do
-			if k ~= "OwnerId" and k ~= "Name" then
-				pcall(function() (newEntity :: any):SetContext(k, v) end)
-			end
-		end
-	end
-
-	-- Registered
-	Factory.Registry.RegisterEntity(entityId, newEntity)
-	newEntity._privateProperties.Persistent = params.Persistent
-
-	-- Persistence
-	if RunService:IsServer() and params.Persistent and Factory.PersistenceManager then
-		Factory.PersistenceManager.LoadState(newEntity, params.PersistenceKey or entityId)
-		Logger:Log({ Level = "INFO", Message = "Loaded state for Entity " .. entityId })
-	end
-
-	-- Wire up StateUpdated for Replication
-	local stateConn
-	if RunService:IsServer() then
-		local ReplicationState = {
-			Pending = {} :: { [string]: any },
-			Processing = false,
-			LastSent = nil,
-		}
-
-		stateConn = newEntity.StateUpdated:Connect(function(changes)
-			if not changes then return end;
-			if not newEntity._privateProperties or not newEntity._privateProperties.IsValid then return end
-			local schema = newEntity:GetValidProperties()
-			
-			local entityReplication = newEntity.Definition and newEntity.Definition.Replication
-			-- BUG FIX: `entityReplication.Enabled == (false or nil)` evaluates
-			-- to `entityReplication.Enabled == nil`, which is the OPPOSITE of
-			-- the intent. Use a direct boolean check.
-			if entityReplication and entityReplication.Enabled == false then return end
-
-			local entityRateLimit = (entityReplication and entityReplication.RateLimit) or 0
-			
-			local processNow = {}
-			local processLater = {}
-
-			for key, value in pairs(changes) do
-				if key == "_v" then continue end 
-				local def = schema[key]
-				
-				if not def or not def.Replicate then
-					continue
-				end
-
-				if entityRateLimit > 0 then
-					-- Check if we are ready to send NOW? 
-					-- Actually, if it's rate limited, we always defer to the loop to ensure spacing, 
-					-- unless we haven't sent in a long time.
-					-- For simplicity, push to Pending and let the loop handle flushing.
-					ReplicationState.Pending[key] = value
-					processLater[key] = true
-				else
-					processNow[key] = value
-				end
-			end
-
-			-- Send Immediate Updates
-			if next(processNow) then
-				if Utility.NetworkManager then
-					-- Use the entity's CURRENT id rather than the captured one,
-					-- so pool-reused entities replicate under the right id.
-					local liveId = (newEntity._privateProperties and newEntity._privateProperties.Context and newEntity._privateProperties.Context.EntityId) or entityId
-					processNow._v = newEntity.Version
-					Utility.NetworkManager.BroadcastEntityUpdate(liveId, processNow)
-				end
-			end
-
-			-- Start Processing Loop if needed
-			if next(processLater) and not ReplicationState.Processing then
-				ReplicationState.Processing = true
-				task.spawn(function()
-					while next(ReplicationState.Pending) do
-						local now = os.clock()
-						local packet = {}
-						local lastSent = ReplicationState.LastSent or 0
-						local interval = 1 / entityRateLimit
-						
-						if (now - lastSent) >= interval then
-							for key, data in pairs(ReplicationState.Pending) do
-								packet[key] = data
-								ReplicationState.Pending[key] = nil -- Clear from pending
-							end
-							ReplicationState.LastSent = now
-						end
-						
-						if next(packet) and Utility.NetworkManager then
-							local liveId = (newEntity._privateProperties and newEntity._privateProperties.Context and newEntity._privateProperties.Context.EntityId) or entityId
-							packet._v = newEntity.Version
-							Utility.NetworkManager.BroadcastEntityUpdate(liveId, packet)
-						end
-						
-						task.wait(1/60) 
-					end
-					ReplicationState.Processing = false
-				end)
-			end
-
-			-- Auto-save: persistent entities save on every replicated change.
-			-- (The previous gate `changes.SaveState` was unreachable because
-			--  __newindex rejects writes to non-schema keys.)
-			if newEntity._privateProperties and newEntity._privateProperties.Persistent and Factory.PersistenceManager and next(changes) then
-				task.defer(function()
-					if newEntity._privateProperties and newEntity._privateProperties.IsValid then
-						pcall(Factory.PersistenceManager.SaveState, newEntity)
-					end
-				end)
-			end
-		end)
-
-		-- Broadcast Creation — sanitize Data to only include Replicate=true fields
-		if Utility.NetworkManager then
-			local sanitizedInitial = {} :: { [string]: any }
-			local schema = newEntity:GetValidProperties()
-			for k, v in pairs(newEntity._privateProperties.Data) do
-				local def = schema[k]
-				if def and def.Replicate then
-					sanitizedInitial[k] = v
-				end
-			end
-			sanitizedInitial._v = newEntity._privateProperties.Version
-
-			Utility.NetworkManager.BroadcastEntityCommand(entityId, "OnEntityCreated", {
-				EntityId = entityId,
-				EntityClassName = entityClassName,
-				InitialData = sanitizedInitial,
-			})
-		end
-	end
-
-	newEntity.Destroyed:Connect(function()
-		if stateConn then stateConn:Disconnect() end
-		local liveId = (newEntity._privateProperties
-			and newEntity._privateProperties.Context
-			and newEntity._privateProperties.Context.EntityId) or entityId
-		if RunService:IsServer() and Utility.NetworkManager then
-			if params.Persistent and Factory.PersistenceManager then
-				Factory.PersistenceManager.SaveState(newEntity)
-			end
-			Utility.NetworkManager.BroadcastEntityCommand(liveId, "OnEntityDestroyed")
-			Utility.NetworkManager.UnregisterEntityCommands(liveId)
-		end
-		Factory.Registry.UnregisterEntity(liveId)
-	end)
-
-	Logger:Log({ Level = "DEBUG", Message = "Created Entity " .. entityId })
-	return newEntity
+if not EntityClass then
+Logger:Log({ Level = "ERROR", Message = "Failed to resolve EntityClass for " .. tostring(entityId) })
+return nil
 end
 
+local existing = Factory.Registry.GetEntity(entityId)
+if existing then
+Logger:Log({
+Level = "WARN",
+Message = string.format(
+"CreateEntity('%s'): entity already exists. Returning existing instance. "
+.. "New params (Context, InitialData) are NOT applied. Use a unique EntityId "
+.. "or call Factory.GetEntity('%s') explicitly.",
+entityId, entityId),
+})
+return existing
+end
+
+local entityClassName = GetClassName(EntityClass)
+
+local function getLiveEntityId(entity)
+return (entity._privateProperties and entity._privateProperties.Context and entity._privateProperties.Context.EntityId) or entityId
+end
+
+local function broadcastEntityCreated(entity)
+if not (RunService:IsServer() and Utility.NetworkManager) then return end
+local sanitizedInitial = {} :: { [string]: any }
+local schema = (entity.GetValidProperties and entity:GetValidProperties()) or {}
+for k, v in pairs(entity._privateProperties.Data) do
+local def = schema[k]
+if def and def.Replicate then
+sanitizedInitial[k] = v
+end
+end
+sanitizedInitial._v = entity._privateProperties.Version
+local liveId = getLiveEntityId(entity)
+Utility.NetworkManager.BroadcastEntityCommand(liveId, "OnEntityCreated", {
+EntityId = liveId,
+EntityClassName = entityClassName,
+InitialData = sanitizedInitial,
+})
+end
+
+local function wireEntityLifecycle(entity)
+local lifecycleToken = entity._privateProperties._lifecycleToken
+local stateConn
+if RunService:IsServer() then
+local ReplicationState = {
+Pending = {} :: { [string]: any },
+Processing = false,
+LastSent = nil,
+}
+
+stateConn = entity.StateUpdated:Connect(function(changes)
+if not changes then return end
+if not entity._privateProperties or not entity._privateProperties.IsValid then return end
+if entity._privateProperties._lifecycleToken ~= lifecycleToken then return end
+
+local schema = entity:GetValidProperties()
+local entityReplication = entity.Definition and entity.Definition.Replication
+if entityReplication and entityReplication.Enabled == false then return end
+
+local entityRateLimit = (entityReplication and entityReplication.RateLimit) or 0
+local processNow = {}
+local processLater = {}
+
+for key, value in pairs(changes) do
+if key == "_v" then continue end
+local def = schema[key]
+if not def or not def.Replicate then
+continue
+end
+
+if entityRateLimit > 0 then
+ReplicationState.Pending[key] = value
+processLater[key] = true
+else
+processNow[key] = value
+end
+end
+
+if next(processNow) and Utility.NetworkManager then
+processNow._v = entity.Version
+Utility.NetworkManager.BroadcastEntityUpdate(getLiveEntityId(entity), processNow)
+end
+
+if next(processLater) and not ReplicationState.Processing then
+ReplicationState.Processing = true
+task.spawn(function()
+while next(ReplicationState.Pending) do
+if not entity._privateProperties or not entity._privateProperties.IsValid then
+table.clear(ReplicationState.Pending)
+break
+end
+if entity._privateProperties._lifecycleToken ~= lifecycleToken then
+table.clear(ReplicationState.Pending)
+break
+end
+
+local now = os.clock()
+local packet = {}
+local lastSent = ReplicationState.LastSent or 0
+local interval = 1 / entityRateLimit
+
+if (now - lastSent) >= interval then
+for key, data in pairs(ReplicationState.Pending) do
+packet[key] = data
+ReplicationState.Pending[key] = nil
+end
+ReplicationState.LastSent = now
+end
+
+if next(packet) and Utility.NetworkManager then
+packet._v = entity.Version
+Utility.NetworkManager.BroadcastEntityUpdate(getLiveEntityId(entity), packet)
+end
+
+task.wait(1 / 60)
+end
+ReplicationState.Processing = false
+end)
+end
+
+if entity._privateProperties and entity._privateProperties.Persistent and Factory.PersistenceManager and next(changes) then
+task.defer(function()
+if entity._privateProperties and entity._privateProperties.IsValid and entity._privateProperties._lifecycleToken == lifecycleToken then
+pcall(Factory.PersistenceManager.SaveState, entity)
+end
+end)
+end
+end)
+
+broadcastEntityCreated(entity)
+end
+
+entity.Destroyed:Connect(function()
+if entity._privateProperties and entity._privateProperties._lifecycleToken ~= lifecycleToken then
+return
+end
+if stateConn then stateConn:Disconnect() end
+local liveId = getLiveEntityId(entity)
+if RunService:IsServer() and Utility.NetworkManager then
+if params.Persistent and Factory.PersistenceManager then
+Factory.PersistenceManager.SaveState(entity)
+end
+Utility.NetworkManager.BroadcastEntityCommand(liveId, "OnEntityDestroyed")
+Utility.NetworkManager.UnregisterEntityCommands(liveId)
+end
+Factory.Registry.UnregisterEntity(liveId)
+end)
+end
+
+local entity
+local pooled = Factory.Registry.GetPooledEntity(entityClassName)
+if pooled then
+local pp = pooled._privateProperties
+pp._lifecycleToken = (pp._lifecycleToken or 0) + 1
+pp.IsValid = true
+table.clear(pp.Data)
+table.clear(pp.Pending)
+if pp._pendingKeys then
+table.clear(pp._pendingKeys)
+else
+pp._pendingKeys = {}
+end
+if pp._cache then table.clear(pp._cache) end
+table.clear(pp.Context)
+pp.Version = 0
+pp.EntityLocked = nil
+pp.Persistent = params.Persistent
+if pp._cleanupTasks then table.clear(pp._cleanupTasks) end
+if pp._versionHistory then table.clear(pp._versionHistory) end
+
+if pp._stateUpdatedEvent then pp._stateUpdatedEvent:Destroy() end
+if pp._entityDestroyedEvent then pp._entityDestroyedEvent:Destroy() end
+local Signal = Utility.Signal
+pp._stateUpdatedEvent = Signal.new()
+pp._entityDestroyedEvent = Signal.new()
+pooled.StateUpdated = pp._stateUpdatedEvent
+pooled.Destroyed = pp._entityDestroyedEvent
+
+for k, v in pairs(entityContext) do
+pp.Context[k] = v
+end
+pp.Context.EntityId = entityId
+
+if params.InitialData then
+for k, v in pairs(params.InitialData) do
+if k ~= "_v" then pp.Data[k] = v end
+end
+if type(params.InitialData._v) == "number" then
+pp.Version = params.InitialData._v
+end
+end
+
+local classGetContext = pp._class and rawget(pp._class, "GetContext")
+if type(classGetContext) == "function" then
+local ok, rebuiltContext = pcall(classGetContext, pooled, {
+Name = entityClassName,
+OwnerId = entityContext.OwnerId,
+Context = entityContext,
+InitialData = params.InitialData,
+})
+if ok and rebuiltContext then
+for contextKey, contextValue in pairs(rebuiltContext) do
+pooled:SetContext(contextKey, contextValue)
+end
+elseif not ok then
+Logger:Log({ Level = "WARN", Message = string.format("GetContext failed while reusing Entity %s: %s", entityId, tostring(rebuiltContext)) })
+end
+end
+
+entity = pooled
+else
+local success, newEntity = xpcall(function()
+return EntityClass.new({
+Name = entityClassName,
+OwnerId = entityContext.OwnerId,
+Context = entityContext,
+InitialData = params.InitialData,
+})
+end, function(err) return debug.traceback(tostring(err)) end)
+
+if not success then
+Logger:Log({ Level = "ERROR", Message = "Failed to instantiate Entity " .. entityId .. ": " .. tostring(newEntity) })
+return nil
+end
+
+newEntity._privateProperties._lifecycleToken = (newEntity._privateProperties._lifecycleToken or 0) + 1
+if type((newEntity :: any).SetContext) == "function" then
+for k, v in pairs(entityContext) do
+if k ~= "OwnerId" and k ~= "Name" then
+pcall(function() (newEntity :: any):SetContext(k, v) end)
+end
+end
+end
+
+entity = newEntity
+end
+
+Factory.Registry.RegisterEntity(entityId, entity)
+entity._privateProperties.Persistent = params.Persistent
+
+if RunService:IsServer() and params.Persistent and Factory.PersistenceManager then
+Factory.PersistenceManager.LoadState(entity, params.PersistenceKey or entityId)
+Logger:Log({ Level = "INFO", Message = "Loaded state for Entity " .. entityId })
+end
+
+wireEntityLifecycle(entity)
+
+Logger:Log({ Level = "DEBUG", Message = "Created Entity " .. entityId })
+return entity
+end
 --[=[
 	@description Creates a StateMachine instance, registers it in the Registry,
 	and wires up automatic cleanup on Completed/Failed/Cancelled signals. On
@@ -641,7 +651,17 @@ function Factory.CreateStateMachine(params: { StateMachineClass: any, StateMachi
 	end
 
 	local existing = Factory.Registry.GetStateMachine(smId)
-	if existing then return existing end
+	if existing then
+		Logger:Log({
+			Level = "WARN",
+			Message = string.format(
+				"CreateStateMachine('%s'): FSM already exists. Returning existing instance. "
+				.. "New params (Context, AutoStart) are NOT applied. Use a unique StateMachineId "
+				.. "or call Factory.GetStateMachine('%s') explicitly.",
+				smId, smId),
+		})
+		return existing
+	end
 
 	local success, newSM = xpcall(StateMachineClass.new, function(err) return debug.traceback(tostring(err)) end, smContext)
 
@@ -700,6 +720,13 @@ function Factory.CreateStateMachine(params: { StateMachineClass: any, StateMachi
 		end)
 		if not ok then
 			Logger:Log({ Level = "ERROR", Message = "Failed to auto-start " .. smId .. ": " .. tostring(err) })
+			cleanup()
+			return nil
+		end
+		if not newSM.IsActive and Factory.Registry.GetStateMachine(smId) == newSM then
+			Logger:Log({ Level = "ERROR", Message = "StateMachine " .. smId .. " never entered an active state during auto-start; cleaning it up." })
+			cleanup()
+			return nil
 		end
 	end
 

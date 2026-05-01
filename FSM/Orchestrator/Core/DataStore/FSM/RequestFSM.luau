@@ -13,6 +13,13 @@ local RequestFSM = {
 	}
 }
 
+--[[
+	@description Registers the queued, processing, retry, success, and failure states
+	for a single DataStore request lifecycle.
+	@return ()
+	@reads self.Context.Orchestrator
+	@writes self._states, self._transitions
+]]
 function RequestFSM:RegisterStates()
 	local Orchestrator = self.Context.Orchestrator
 	-- Lazy load behavior to avoid circular dependency issues at module level if any
@@ -30,7 +37,7 @@ function RequestFSM:RegisterStates()
 		OnEnter = function(fsm)
 			-- Execute the Behavior Tree
 			-- context is shared with FSM
-			local status = RetryBehavior(fsm.Context)
+			RetryBehavior(fsm.Context)
 			-- BT handles transitions to Success/Retrying/Failed
 		end
 	})

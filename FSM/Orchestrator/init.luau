@@ -21,6 +21,7 @@ local Orchestrator = {
 	Factory = nil, -- Expose Class Factory
 	NetworkManager = Core.NetworkManager,
 	Settings = Core.Settings,
+	_serviceManager = nil,
 
 	-- Expose History for legacy support/ServiceManager
 	History = {}
@@ -56,7 +57,33 @@ end
 -------------------------------------------------------------------------------------------
 
 function Orchestrator:RegisterComponents()
-	return Initialize()
+	local initialized = Initialize()
+
+	if initialized and RunService:IsServer() and not self._serviceManager then
+		local serviceManagerModule = script:FindFirstChild("ServiceManager")
+		if serviceManagerModule then
+			local serviceManager = require(serviceManagerModule)
+			serviceManager.RegisterServerHandlers(self)
+			self._serviceManager = serviceManager
+		end
+	end
+
+	return initialized
+end
+
+function Orchestrator:StartServiceManager()
+	if self._serviceManager then return self._serviceManager end
+
+	local serviceManager = require(script.ServiceManager)
+	serviceManager.Initialize(self)
+	serviceManager.Show()
+	self._serviceManager = serviceManager
+
+	return serviceManager
+end
+
+function Orchestrator:GetServiceManager()
+	return self._serviceManager
 end
 
 function Orchestrator.CreateEntity(params: { EntityClass: any, EntityId: string, Context: {any}?, Persistent: boolean?, PersistenceKey: string? })

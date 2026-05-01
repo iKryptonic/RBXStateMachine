@@ -1,3 +1,4 @@
+--!strict
 export type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG"
 
 -- Definition of a property in the schema

@@ -1,3 +1,4 @@
+--!strict
 return {
 	Scheduler = {
 		FrameBudget = 0.015 -- Frame budget

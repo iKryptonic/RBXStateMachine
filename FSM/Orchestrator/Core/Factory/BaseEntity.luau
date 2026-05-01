@@ -57,7 +57,8 @@ local Logger, Signal, _Settings, Initialized;
 
 	@param Util table -- Orchestrator utility table containing Logger, Signal, and Settings
 	@return ()
-	@writes Module-level Logger, Signal, _Settings upvalues
+	@reads Initialized
+	@writes Module-level Logger, Signal, _Settings upvalues, Initialized
 ]=]
 function BaseEntity.Initialize(Util)
 	if Initialized then return end
@@ -114,7 +115,6 @@ function BaseEntity.new(params: { Name: string, OwnerId: string?, Context: { [an
 		_versionHistoryMax = 50,
 	}
 	local proxy = {}
-	local schema = privateProperties.Schema
 
 	local mt = {
 		__index = function(originalTable, key)
@@ -122,6 +122,7 @@ function BaseEntity.new(params: { Name: string, OwnerId: string?, Context: { [an
 			-- legitimate `false` / falsy values and falls through to the next tier.
 			-- E.g. Data[key] = false would skip Data and read Context, breaking
 			-- every boolean read after a write.
+			local schema = privateProperties.Schema or {}
 			local v = privateProperties._cache[key]
 			if v ~= nil then return v end
 			v = privateProperties.Data[key]
@@ -144,6 +145,7 @@ function BaseEntity.new(params: { Name: string, OwnerId: string?, Context: { [an
 				originalTable:Log({ Level = "WARN", Message = string.format("[Entity] Attempt to modify destroyed entity property '%s'.", key) })
 				return
 			end
+			local schema = privateProperties.Schema or {}
 			local def = schema[key]
 			if not def then
 				-- Prevent the entity from being "mutated" unless ApplyChanges is explicitly overridden
@@ -190,8 +192,13 @@ function BaseEntity.new(params: { Name: string, OwnerId: string?, Context: { [an
 
 	proxy._privateProperties = privateProperties
 
-	-- @description Returns the raw data of the entity.Allows for quick lookups without using __index.
-	-- @return { [string]: any } - The raw data of the entity.
+	--[=[
+		@description Returns the entity's committed data table without proxy resolution.
+		Useful for read-only snapshots or replication code that must ignore pending writes.
+		@return { [string]: any } -- Authoritative committed property values
+		@reads privateProperties.Data
+		@writes None
+	]=]
 	proxy.GetRawData = function()
 		return privateProperties.Data
 	end
@@ -236,6 +243,8 @@ function BaseEntity.Extend(extensionParams: { Name: string, Schema: { [string]: 
 
 		@param params table -- { Name: string, OwnerId: string?, [any]: any }
 		@return any -- BaseEntity instance (proxy table)
+		@reads params.InitialData, SubclassAny.GetContext
+		@writes subclassEntity._privateProperties.Data, .Version, .Context
 	]=]
 	function SubclassAny.new(params)
 		local subclassEntity = BaseEntity.new(params, SubclassAny);
@@ -439,16 +448,21 @@ function BaseEntity:UpdateEntity(lockingCallerId: string?)
 		return false
 	end
 
-	-- Build the changes table from the explicit pending key set so nil writes
-	-- (intentional clears) survive into the change set. Without this, a nil
-	-- value in Pending would be invisible to `pairs(Pending)`.
+	-- Snapshot the pending-key set up front. UpdateEntity clears _pendingKeys
+	-- during commit, so any post-commit consumers (changedKeys, history, etc.)
+	-- must read from a stable copy.
+	local pendingKeysSnapshot = {} :: { [string]: boolean }
 	local changes: { [string]: any } = {}
 	if privateProperties._pendingKeys then
 		for k in pairs(privateProperties._pendingKeys) do
+			pendingKeysSnapshot[k] = true
 			changes[k] = privateProperties.Pending[k]
 		end
 	else
 		changes = table.clone(privateProperties.Pending)
+		for k in pairs(changes) do
+			pendingKeysSnapshot[k] = true
+		end
 	end
 
 	-- Build version history snapshot BEFORE committing (so From values reflect
@@ -471,15 +485,11 @@ function BaseEntity:UpdateEntity(lockingCallerId: string?)
 
 	-- Commit changes to authoritative Data. Use the explicit key set so nil
 	-- writes actually clear Data fields.
+	for k in pairs(pendingKeysSnapshot) do
+		privateProperties.Data[k] = privateProperties.Pending[k]
+	end
 	if privateProperties._pendingKeys then
-		for k in pairs(privateProperties._pendingKeys) do
-			privateProperties.Data[k] = privateProperties.Pending[k]
-		end
 		table.clear(privateProperties._pendingKeys)
-	else
-		for k, v in pairs(changes) do
-			privateProperties.Data[k] = v
-		end
 	end
 	table.clear(privateProperties.Pending)
 	table.clear(privateProperties._cache)
@@ -500,10 +510,10 @@ function BaseEntity:UpdateEntity(lockingCallerId: string?)
 		end
 	end
 
-	-- Build changedKeys list from _pendingKeys so consumers know which keys
-	-- changed even when a key was cleared to nil (invisible in `changes`).
+	-- Build changedKeys from the pre-commit snapshot so nil-clears survive and
+	-- re-entrant writes made by StateUpdated listeners don't contaminate this diff.
 	local changedKeys = {}
-	for k in pairs(privateProperties._pendingKeys) do
+	for k in pairs(pendingKeysSnapshot) do
 		table.insert(changedKeys, k)
 	end
 	privateProperties._stateUpdatedEvent:Fire(changes, changedKeys)
@@ -663,9 +673,12 @@ function BaseEntity:Destroy()
 		end
 	end
 	privateProperties._cleanupTasks = {}
+	privateProperties.IsValid = false
+	if privateProperties._pendingKeys then table.clear(privateProperties._pendingKeys) end
+	table.clear(privateProperties.Pending)
+	table.clear(privateProperties._cache)
 
 	privateProperties._entityDestroyedEvent:Fire()
-	privateProperties.IsValid = false
 	task.defer(function()
 		if privateProperties._entityDestroyedEvent then privateProperties._entityDestroyedEvent:Destroy() end
 		if privateProperties._stateUpdatedEvent then privateProperties._stateUpdatedEvent:Destroy() end

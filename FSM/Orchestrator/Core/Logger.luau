@@ -22,8 +22,12 @@ local MAX_LOG_HISTORY = 500
 
 local Initialized, Settings = false, nil
 --[[
-	@description Initializes the registry.
-	@param Logger Logger
+	@description Initializes the Logger module with shared settings.
+	Must be called before creating logger instances that rely on level gating.
+	@param Util table -- Orchestrator utility table containing Settings.Logger
+	@return ()
+	@reads Initialized
+	@writes Settings, Initialized
 ]]
 function Logger.Initialize(Util)
 	if Initialized then return end
@@ -40,8 +44,10 @@ end
 
 --[[
 	@description Creates a new Logger instance.
-	@param params { Name: string? }
-	@return Logger
+	@param params { Name: string? } -- Optional source label; inferred from caller when omitted
+	@return Logger -- Logger instance with independent history buffer
+	@reads params.Name, debug.info
+	@writes self.Source, self.History
 ]]
 function Logger.new(params: { Name: string? })
 	local self = setmetatable({}, Logger)
@@ -61,8 +67,10 @@ end
 
 --[[
 	@description Logs a message with the specified level.
-	@param params { Level: string, Message: string, OperationId: string?, Data: any? }
+	@param params { Level: string, Message: string, OperationId: string?, Data: any? } -- Structured log payload
 	@return ()
+	@reads Settings.DebuggingEnabled, Settings.MinimumLoggingLevel, self.Source
+	@writes self.History
 ]]
 function Logger:Log(params: { Level: string, Message: string, OperationId: string?, Data: any? })
 	ValidateRequest()
@@ -133,7 +141,10 @@ end
 
 --[[
 	@description Sets the minimum logging level.
-	@param level number
+	@param level number -- Threshold where 1=ERROR, 2=WARN, 3=INFO, 4=DEBUG
+	@return ()
+	@reads None
+	@writes Settings.MinimumLoggingLevel
 ]]
 function Logger:SetMinimumLoggingLevel(level: number)
 	Settings.MinimumLoggingLevel = level
@@ -141,7 +152,9 @@ end
 
 --[[
 	@description Returns the log history.
-	@return {LogEntry}
+	@return {LogEntry} -- Shared history buffer in insertion order
+	@reads self.History
+	@writes None
 ]]
 function Logger:GetHistory()
 	return self.History
