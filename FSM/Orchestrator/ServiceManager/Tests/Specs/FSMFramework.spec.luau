@@ -527,10 +527,18 @@ local function spec()
 		end)
 
 		it("source-level guard: TrafficLightFSM uses ScheduleTransition (not task.delay)", function()
-			local node: any = game
-			for _, name in ipairs({"ReplicatedStorage", "StateMachines", "TrafficLightFSM"}) do
-				node = node:FindFirstChild(name)
-				if not node then break end
+			local node: any = nil
+			-- Try both layouts: ServiceManager project and RBXStateMachine repo
+			for _, path in ipairs({
+				{"ReplicatedStorage", "StateMachines", "TrafficLightFSM"},
+				{"ReplicatedStorage", "Examples", "TrafficLightFSMExample"},
+			}) do
+				local n: any = game
+				for _, name in ipairs(path) do
+					n = n:FindFirstChild(name)
+					if not n then break end
+				end
+				if n then node = n; break end
 			end
 			expect(node).never.toBeNil()
 			local source = node:IsA("ModuleScript") and node.Source or ""

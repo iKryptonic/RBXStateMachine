@@ -158,7 +158,7 @@ function GlassGUI:_BuildTitleBar(parent: Frame)
 
 	-- Title text
 	Theme.CreateLabel({
-		Text = '<font color="#3898FF">◆</font> NEXUS ORCHESTRATOR',
+		Text = '<font color="#3898FF">◆</font> SERVICE MANAGER',
 		Size = UDim2.new(0.5, 0, 1, 0),
 		Position = UDim2.new(0, 50, 0, 0),
 		Color = Theme.Colors.TextPrimary,
