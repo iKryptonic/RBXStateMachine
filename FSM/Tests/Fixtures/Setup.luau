@@ -75,24 +75,37 @@ function Setup.Install(): InstallResult
 	cloneIfMissing(entityFolder, "DummyEntity", dummyEntity, created)
 	cloneIfMissing(smFolder, "DummyFSM", dummyFSM, created)
 
-	-- Merge fixture definitions into existing registries
+	-- Merge fixture definitions into existing registries.
+	-- Track which keys we add so Cleanup can remove only fixture keys without
+	-- mutating the production keys that already lived in the merged registry.
 	local existingEntityRegistry = entityFolder:FindFirstChild("EntityRegistry")
 	local existingStateMachineRegistry = smFolder:FindFirstChild("StateMachineRegistry")
-	
+
+	local entityRegistryTable: any = nil
+	local addedEntityKeys: { string } = {}
+	local stateMachineRegistryTable: any = nil
+	local addedStateMachineKeys: { string } = {}
+
 	if existingEntityRegistry then
 		local fixtureEntityDefs = require(entityRegistry)
 		local existingEntityDefs = require(existingEntityRegistry)
-		-- Merge fixture definitions into existing registry
+		entityRegistryTable = existingEntityDefs
 		for key, value in pairs(fixtureEntityDefs) do
+			if existingEntityDefs[key] == nil then
+				table.insert(addedEntityKeys, key)
+			end
 			existingEntityDefs[key] = value
 		end
 	end
-	
+
 	if existingStateMachineRegistry then
 		local fixtureStateMachineDefs = require(stateMachineRegistry)
 		local existingStateMachineDefs = require(existingStateMachineRegistry)
-		-- Merge fixture definitions into existing registry
+		stateMachineRegistryTable = existingStateMachineDefs
 		for key, value in pairs(fixtureStateMachineDefs) do
+			if existingStateMachineDefs[key] == nil then
+				table.insert(addedStateMachineKeys, key)
+			end
 			existingStateMachineDefs[key] = value
 		end
 	end
@@ -102,6 +115,17 @@ function Setup.Install(): InstallResult
 		EntityFolder = entityFolder,
 		StateMachineFolder = smFolder,
 		Cleanup = function()
+			-- Revert registry mutations: remove only the keys we added.
+			if entityRegistryTable then
+				for _, key in ipairs(addedEntityKeys) do
+					entityRegistryTable[key] = nil
+				end
+			end
+			if stateMachineRegistryTable then
+				for _, key in ipairs(addedStateMachineKeys) do
+					stateMachineRegistryTable[key] = nil
+				end
+			end
 			for _, inst in ipairs(created) do
 				inst:Destroy()
 			end

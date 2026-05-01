@@ -6,8 +6,11 @@
 local RunService = game:GetService("RunService")
 local SchedulerModule = require(game:FindFirstChild("Scheduler", true) :: any)
 local TestBase = require(script.Parent:FindFirstChild("TestBase") :: any)
+local TestUtils = require(script.Parent.Parent:FindFirstChild("TestUtils") :: any)
 
 local Test_Scheduler = {}
+
+local waitFor = TestUtils.WaitFor
 
 local ErrorMarginUpperLimit = 0.10
 
@@ -24,14 +27,6 @@ local DefaultSettings = {
 	},
 	FrameBudget = 0.015 -- 15ms budget for tests
 }
-
-local function waitFor(predicate: () -> boolean, timeout: number): boolean
-	local start = os.clock()
-	while not predicate() and (os.clock() - start) < timeout do
-		task.wait()
-	end
-	return predicate()
-end
 
 --[[
 	@summary Executes the Scheduler unit test suite.
@@ -264,7 +259,7 @@ function Test_Scheduler.Run()
 		})
 
 		local ok = waitFor(function() return count == 3 end, 1)
-		local stillExists = scheduler["ScheduleRecurringTask"] ~= nil
+		local stillExists = scheduler:GetTask("ScheduleRecurringTask") ~= nil
 		t:Assert(not stillExists, "Recurring task should be descheduled")
 		t:Assert(ok, "Recurring task should run 3 times")
 	end)

@@ -82,6 +82,39 @@ function TestBase:AssertNotEquals(actual: any, expected: any, message: string?):
 end
 
 --[[
+	@summary Asserts that a value is not nil.
+	@param value any
+	@param message string?
+	@return boolean
+]]
+function TestBase:AssertNotNil(value: any, message: string?): boolean
+	if value == nil then
+		self.Failed += 1
+		warn(string.format("[%s] [FAIL] %s (got nil)", self.Name, message or "Expected non-nil value"))
+		return false
+	end
+	self.Passed += 1
+	return true
+end
+
+--[[
+	@summary Asserts that a function throws an error.
+	@param func () -> ()
+	@param message string?
+	@return boolean
+]]
+function TestBase:AssertThrows(func: () -> (), message: string?): boolean
+	local ok = pcall(func)
+	if ok then
+		self.Failed += 1
+		warn(string.format("[%s] [FAIL] %s (expected error, but none was thrown)", self.Name, message or "Expected function to throw"))
+		return false
+	end
+	self.Passed += 1
+	return true
+end
+
+--[[
 	@summary Runs a test case and logs the result.
 	@param testName string
 	@param testFunc (TestBase) -> ()
@@ -89,11 +122,10 @@ end
 ]]
 function TestBase:RunTest(testName: string, testFunc: (TestBase) -> ())
 	print(string.format("[%s] Test: %s", self.Name, testName))
+	local failedBefore = self.Failed
 	local success, err = pcall(testFunc, self)
 
-	if success then
-		print(string.format("[%s] [PASS] %s", self.Name, testName))
-	else
+	if not success then
 		local msg = tostring(err)
 		if msg:match("^__TEST_SKIP__:") then
 			self.Skipped += 1
@@ -102,6 +134,11 @@ function TestBase:RunTest(testName: string, testFunc: (TestBase) -> ())
 			self.Failed += 1
 			warn(string.format("[%s] [ERROR] %s - %s", self.Name, testName, msg))
 		end
+	elseif self.Failed > failedBefore then
+		-- Assertions failed inside the test body (but no error was thrown)
+		warn(string.format("[%s] [FAIL] %s (%d assertion(s) failed)", self.Name, testName, self.Failed - failedBefore))
+	else
+		print(string.format("[%s] [PASS] %s", self.Name, testName))
 	end
 end
 
