@@ -76,7 +76,7 @@ function Orchestrator:StartServiceManager()
 
 	local serviceManager = require(script.ServiceManager)
 	serviceManager.Initialize(self)
-	serviceManager.Show()
+	-- Don't show by default — use ServiceManager.Toggle() or keybind to open
 	self._serviceManager = serviceManager
 
 	return serviceManager
