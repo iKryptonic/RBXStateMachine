@@ -423,11 +423,13 @@ end
 function BaseEntity:UpdateEntity(lockingCallerId: string?)
 	local privateProperties = self._privateProperties
 	local fastFailReason = ""
+	local isLockContention = false
 	if not privateProperties.IsValid then
 		fastFailReason ..= "Attempt to call UpdateEntity on destroyed entity. "
 	end
 	if privateProperties.EntityLocked and privateProperties.EntityLocked ~= lockingCallerId then
 		fastFailReason ..= "Attempt to call UpdateEntity without holding the lock. "
+		isLockContention = true
 	end
 	-- Detect "no pending" via the explicit key set so that nil writes count as changes
 	local hasPending = false
@@ -444,7 +446,9 @@ function BaseEntity:UpdateEntity(lockingCallerId: string?)
 		fastFailReason ..= "Attempt to call UpdateEntity on immutable entity. "
 	end
 	if fastFailReason ~= "" then
-		self:Log({ Level = "ERROR", Message = "UpdateEntity failed: " .. fastFailReason })
+		-- Lock contention during combat is expected; log as WARN not ERROR
+		local level = if isLockContention then "WARN" else "ERROR"
+		self:Log({ Level = level, Message = "UpdateEntity failed: " .. fastFailReason })
 		return false
 	end
 
