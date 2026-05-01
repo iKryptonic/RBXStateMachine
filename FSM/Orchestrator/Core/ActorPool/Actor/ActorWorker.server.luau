@@ -1,3 +1,4 @@
+--!strict
 --[[
 	@Name ActorWorker
 	@Author iKrypto

@@ -38,7 +38,8 @@ local Logger, Signal, Settings, Initialized;
 
 	@param Util table -- Orchestrator utility table containing Logger, Signal, and Settings
 	@return ()
-	@writes Module-level Logger, Signal, Settings upvalues
+	@reads Initialized
+	@writes Module-level Logger, Signal, Settings upvalues, Initialized
 ]=]
 function BaseStateMachine.Initialize(Util)
 	if Initialized then return end
@@ -144,9 +145,23 @@ function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {
 	self.Id = params.Id
 	self.Name = params.Name or "BaseStateMachine"
 	self.Logger = (Logger and Logger.new({ Name = self.Name })) or error("BaseStateMachine: Logger not initialized. Did you call BaseStateMachine.Initialize(Util)?")
-	self.Context = params.Context or {}
 
-	self.Priority = params.Priority or BaseStateMachine.Priorities.Render
+	-- Context must be a table. Reject non-table assignment defensively so
+	-- user code like `fsm.Context = "oops"` doesn't silently break __index.
+	local ctx = params.Context or {}
+	if type(ctx) ~= "table" then
+		self.Logger:Log({ Level = "WARN", Message = string.format("Context must be a table, got %s. Using empty table.", type(ctx)) })
+		ctx = {}
+	end
+	self.Context = ctx
+
+	-- Priority must be a positive integer. Clamp defensively so a bad value
+	-- doesn't crash the heartbeat's modular-offset math or cause division by zero.
+	local pri = params.Priority or BaseStateMachine.Priorities.Render
+	if type(pri) ~= "number" or pri < 1 then
+		pri = 1
+	end
+	self.Priority = math.floor(pri)
 	self._offset = math.random(0, self.Priority - 1)
 	self._accumulatedDt = 0
 	self._states = {} :: { [string]: any }
@@ -157,7 +172,13 @@ function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {
 	-- Ring buffer of transitions for the visualizer's history panel.
 	-- Each entry: { From: string?, To: string, Time: number }
 	self.TransitionHistory = {} :: { { From: string?, To: string, Time: number } }
-	self._transitionHistoryMax = 100
+	-- Clamp to a sane range so users can't accidentally set this to 10M.
+	local histMax = 100
+	if type(params) == "table" and type((params :: any).TransitionHistoryMax) == "number" then
+		histMax = math.clamp(math.floor((params :: any).TransitionHistoryMax), 10, 500)
+	end
+	self._transitionHistoryMax = histMax
+	self._started = false
 
 	initPerf(self)
 
@@ -261,6 +282,8 @@ function BaseStateMachine.Extend(extensionParams: {className: string, validState
 
 		@param ... any -- Typically a single table { Id/StateMachineId: string, [string]: any }
 		@return BaseStateMachine -- Fully initialized subclass instance
+		@reads extensionParams.className, .validStates, .terminalStates, self.RegisterStates
+		@writes self.Context, self.validStates, self.TerminalStates, self._states, self._transitions
 	]=]
 	function Subclass.new(...)
 		local fsmArguments = {...}
@@ -319,6 +342,16 @@ end
 	@writes self._states, self._transitions
 ]=]
 function BaseStateMachine:AddState(name: string, state: any, validOutcomes: {string}?)
+	if self._started then
+		self.Logger:Log({
+			Level = "WARN",
+			Message = string.format(
+				"AddState('%s') called after :Start(). Late-registered states may miss transitions in flight. "
+				.. "Register all states before calling :Start().",
+				name),
+			OperationId = self.Id,
+		})
+	end
 	if next(self.validStates) and not self.validStates[name] then
 		self.Logger:Log
 		{ 
@@ -529,6 +562,7 @@ end
 function BaseStateMachine:Start(params: { State: string?, Args: {any}? }?)
 	if self.IsActive then return end
 	self.IsActive = true
+	self._started = true
 	local startParams = params or {}
 	
 	local startState = startParams.State or self.initialState or self.InitialState
@@ -560,6 +594,20 @@ function BaseStateMachine:Start(params: { State: string?, Args: {any}? }?)
 		Name = startState, 
 		Args = startParams.Args 
 	}
+
+	if self.IsActive and self._activeStateName == nil then
+		self.IsActive = false
+		ActiveMachines[self] = nil
+		if next(ActiveMachines) == nil and GlobalHeartbeat then
+			GlobalHeartbeat:Disconnect()
+			GlobalHeartbeat = nil
+		end
+		self.Logger:Log({
+			Level = "ERROR",
+			Message = string.format("Failed to enter initial state '%s'. StateMachine stopped to avoid leaking an active machine.", tostring(startState)),
+			OperationId = self.Id,
+		})
+	end
 end
 
 --[=[
@@ -716,6 +764,7 @@ function BaseStateMachine:_Update(dt: number)
 			elseif type(handler) == "function" then
 				-- Wrap in xpcall so a throwing OnTimeout doesn't kill the
 				-- heartbeat (mirrors the rest of the framework's resilience).
+				local timeoutTransitionId = self._transitionId
 				local ok, err = xpcall(handler, xpcallHandler, currentState, self)
 				if not ok then
 					self.Logger:Log({
@@ -725,10 +774,11 @@ function BaseStateMachine:_Update(dt: number)
 						OperationId = self.Id,
 					})
 				end
-				-- After a function handler we don't auto-return — the
-				-- handler may have transitioned or not. Either way let
-				-- OnHeartbeat run this tick if we're still in the state.
+				-- After a function handler we don't auto-return unless the
+				-- handler transitioned. Continuing with the stale currentState
+				-- would run the old OnHeartbeat after a timeout-triggered state flip.
 				if not self.IsActive then return end
+				if self._transitionId ~= timeoutTransitionId then return end
 			end
 		end
 
@@ -797,9 +847,16 @@ function BaseStateMachine:ScheduleTransition(seconds: number, targetState: strin
 	-- FireAt is in StateDuration units (seconds since current state began),
 	-- so the polling check `StateDuration >= FireAt` is independent of
 	-- wallclock and survives FPS drops gracefully.
+	local fireAt = self.StateDuration + seconds
+	-- Skip if an identical timer is already pending (prevents wasteful
+	-- re-scheduling when called from OnHeartbeat every tick).
+	local pending = self._pendingTimedTransition
+	if pending and pending.TargetState == targetState and math.abs(pending.FireAt - fireAt) < 0.001 then
+		return
+	end
 	self._pendingTimedTransition = {
 		TargetState = targetState,
-		FireAt = self.StateDuration + seconds,
+		FireAt = fireAt,
 		Args = args,
 	}
 end
@@ -807,6 +864,7 @@ end
 --[=[
 	@description Cancels any pending timed transition. Idempotent.
 	@return boolean -- true if a transition was cancelled, false if none was pending
+	@reads self._pendingTimedTransition
 	@writes self._pendingTimedTransition
 ]=]
 function BaseStateMachine:CancelScheduledTransition(): boolean
@@ -815,6 +873,21 @@ function BaseStateMachine:CancelScheduledTransition(): boolean
 		return true
 	end
 	return false
+end
+
+local function releaseTransitionGuard(self: any)
+	self._inTransition = false
+	local queue = self._pendingTransitions
+	if queue and #queue > 0 and self.IsActive and not self._destroyed then
+		local nextTransition = table.remove(queue, 1)
+		if nextTransition then
+			task.defer(function()
+				if self.IsActive and not self._destroyed then
+					self:ChangeState(nextTransition)
+				end
+			end)
+		end
+	end
 end
 
 --[=[
@@ -860,7 +933,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 		self.WaitSpan = 0
 		self._transitionId += 1
 		local transitionId = self._transitionId
-		self._inTransition = false -- release guard before yielding via delay
+		releaseTransitionGuard(self)
 		task.delay(delay, function()
 			if self.IsActive and self._transitionId == transitionId then
 				self:ChangeState({ Name = name, Args = args })
@@ -877,7 +950,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 			Message = string.format("Cannot transition to state '%s': Not in validStates.", tostring(name)), 
 			OperationId = self.Id 
 		}
-		self._inTransition = false
+		releaseTransitionGuard(self)
 		return
 	end
 
@@ -900,7 +973,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 					Message = string.format("Illegal transition from '%s' to '%s'", oldState, name), 
 					OperationId = self.Id 
 				}
-				self._inTransition = false
+				releaseTransitionGuard(self)
 				return
 			end
 		end
@@ -914,7 +987,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 			Message = string.format("State '%s' is not registered in the FSM.", tostring(name)), 
 			OperationId = self.Id 
 		}
-		self._inTransition = false
+		releaseTransitionGuard(self)
 		return 
 	end
 
@@ -962,7 +1035,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 	end
 
 	if not self.IsActive then
-		self._inTransition = false
+		releaseTransitionGuard(self)
 		return
 	end
 
@@ -1117,8 +1190,17 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 			if typeof(newState) == "function" then
 				local capturedFn = newState
 				local capturedName = name
+				-- Capture the _transitionId at entry time. If the FSM has
+				-- changed state by the time our deferred frame runs, the
+				-- _transitionId will have advanced and we bail out. This
+				-- prevents deferred OnEnter code from running against a
+				-- stale state after a rapid A→B→C transition sequence where
+				-- A's deferred action hasn't fired yet when B is entered.
+				local entryTransitionId = self._transitionId
 				task.defer(function()
 					if not self.IsActive then return end
+					if self._activeStateName ~= capturedName then return end
+					if self._transitionId ~= entryTransitionId then return end
 					local success, cleanupFunction = xpcall(function()
 						return capturedFn(self, table.unpack(args))
 					end, xpcallHandler)
@@ -1154,7 +1236,24 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 				}
 			elseif typeof(newState) == "table" then
 				if type(newState.OnEnter) == "function" then
-					task.defer(newState.OnEnter, newState, self, table.unpack(args))
+					-- Same stale-state guard as the function-state path above.
+					local capturedOnEnter = newState.OnEnter
+					local capturedState = newState
+					local capturedName2 = name
+					local entryTid2 = self._transitionId
+					task.defer(function()
+						if not self.IsActive then return end
+						if self._activeStateName ~= capturedName2 then return end
+						if self._transitionId ~= entryTid2 then return end
+						local ok, err = xpcall(capturedOnEnter, xpcallHandler, capturedState, self, table.unpack(args))
+						if not ok then
+							self.Logger:Log({
+								Level = "ERROR",
+								Message = string.format("OnEnter error in state '%s': %s", capturedName2, tostring(err)),
+								OperationId = self.Id,
+							})
+						end
+					end)
 					self.Logger:Log
 					{ 
 						Level = "DEBUG", 
@@ -1180,16 +1279,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 	end
 
 	-- ─── RELEASE REENTRANCE GUARD + DRAIN QUEUE ──────────────────────────
-	self._inTransition = false
-	if self._pendingTransitions and #self._pendingTransitions > 0 then
-		local next_ = table.remove(self._pendingTransitions, 1)
-		if next_ and self.IsActive then
-			-- Defer to avoid stack growth when many transitions queue up
-			task.defer(function()
-				if self.IsActive then self:ChangeState(next_) end
-			end)
-		end
-	end
+	releaseTransitionGuard(self)
 end
 -- END RUNTIME
 
@@ -1275,6 +1365,8 @@ function BaseStateMachine:_Teardown()
 		self._legacyCleanup[teardownStateName] = nil
 	end
 
+	self._pendingTimedTransition = nil
+	self.WaitSpan = 0
 	ActiveMachines[self] = nil
 	if next(ActiveMachines) == nil and GlobalHeartbeat then
 		GlobalHeartbeat:Disconnect()
