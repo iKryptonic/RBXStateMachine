@@ -538,8 +538,8 @@ function Initialize()
 							-- Discard out-of-order packet
 							return
 						end
-						-- Warn on version gaps (lossy replication detected)
-						if currentVersion > 0 and (newVersion - currentVersion) > 1 then
+						-- Warn on large version gaps (small gaps are expected during rapid combat updates)
+						if currentVersion > 0 and (newVersion - currentVersion) > 5 then
 							Orchestrator.Logger:Log({
 								Level = "WARN",
 								Message = string.format("Entity %s version gap: jumped from v%d to v%d", tostring(entityId), currentVersion, newVersion),
