@@ -397,10 +397,8 @@ function AttackJob:RegisterStates()
 				return
 			end
 
-			local weaponId = playerEntity.WeaponEqp
-			if typeof(weaponId) ~= "string" or weaponId == "" then
-				weaponId = characterEntity.EquippedRight
-			end
+			-- Only use weapon combos when weapon is actively equipped (drawn), not just selected
+			local weaponId = characterEntity.EquippedRight
 			if typeof(weaponId) ~= "string" or weaponId == "" then
 				weaponId = characterEntity.EquippedLeft
 			end
