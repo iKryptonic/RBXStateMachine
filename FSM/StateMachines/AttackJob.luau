@@ -397,10 +397,13 @@ function AttackJob:RegisterStates()
 				return
 			end
 
-			-- Only use weapon combos when weapon is actively equipped (drawn), not just selected
+			-- Check drawn weapon first, then fall back to selected weapon for combo data
 			local weaponId = characterEntity.EquippedRight
 			if typeof(weaponId) ~= "string" or weaponId == "" then
 				weaponId = characterEntity.EquippedLeft
+			end
+			if typeof(weaponId) ~= "string" or weaponId == "" then
+				weaponId = playerEntity.WeaponEqp
 			end
 			if typeof(weaponId) ~= "string" or weaponId == "" then
 				transitionToFailure(fsm, "No equipped weapon found")
