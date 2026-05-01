@@ -1,0 +1,13 @@
+# Legacy rewrite drafts (archived to branch `archive/fsm-entity-rewrite`)
+FSM and Entity Rewrite/
+
+# Rojo build artifacts
+*.rbxlx
+*.rbxl
+*.rbxm
+*.rbxmx
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
