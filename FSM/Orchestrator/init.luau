@@ -13,13 +13,13 @@ local Core = {
 	Signal = require(script.Core.Signal),
 	Types = require(script.Core.Types),
 	Settings = require(script.Core.Settings),
-	ServiceManager = script.Core.ServiceManager -- Directory
 }; 
 local Strings = Core.Settings.StaticStrings
 
 local Orchestrator = {
 	Logger = nil,
 	Factory = nil, -- Expose Class Factory
+	NetworkManager = Core.NetworkManager,
 	Settings = Core.Settings,
 
 	-- Expose History for legacy support/ServiceManager
@@ -27,19 +27,28 @@ local Orchestrator = {
 }
 
 local Initialized = false
-local function ValidateRequest(context: string?)
-	assert(Initialized, "Orchestrator not initialized")
+local _initializing = false
+local function ValidateRequest(context: string)
+	-- Allow calls during the bootstrap phase (Initialize() runs internal
+	-- helpers that call ValidateRequest before the global Initialized flag
+	-- is set). Without this, InitializeModule/SetSharedVariables fail on
+	-- their first call, leaving Initialized=false forever.
+	if not (Initialized or _initializing) then
+		assert(false, "Orchestrator not initialized")
+	end
 	if context then
 		if context == "Server" and not RunService:IsServer() then
 			Orchestrator.Logger:Log({ Level = "ERROR", Message =  Strings.Error.ServerRequestErrorMessage })
 			error(Strings.Error.ServerRequestErrorMessage)
+			return false
 		end
 		if context == "Client" and not RunService:IsClient() then
 			Orchestrator.Logger:Log({ Level = "ERROR", Message =  Strings.Error.ClientRequestErrorMessage })
 			error(Strings.Error.ClientRequestErrorMessage)
+			return false
 		end
+		return true
 	end
-	return true
 end
 
 -------------------------------------------------------------------------------------------
@@ -85,14 +94,17 @@ function Orchestrator.RetryStateMachine(stateMachineId: string)
 	local oldSM = Core.Factory.Registry.GetStateMachine(stateMachineId)
 	if not oldSM then return end
 
-	-- Deep-clone context before destroying old SM to prevent stale references
-	local context = oldSM.Context and table.clone(oldSM.Context) or {}
+	local context = table.clone(oldSM.Context)
 	local name = oldSM.Name
+	-- BUG FIX: Use Factory.Get to look up the COMPILED CLASS, not the
+	-- instance registry. The previous Registry.GetStateMachine was the
+	-- instance lookup keyed by FSM Id, which always returned nil here,
+	-- silently destroying the old FSM and creating no replacement.
 	local class = Core.Factory.Get("StateMachine", name)
 
 	if not class then return end
 
-	-- Remove old
+	-- Remove old (after we've confirmed we can build a replacement)
 	Core.Factory.Registry.UnregisterStateMachine(stateMachineId)
 	oldSM:Destroy()
 
@@ -153,8 +165,12 @@ function Orchestrator.PoolEntity(entityId: string)
 	local className = entity.Name
 	entity._privateProperties.IsValid = false
 	Core.Factory.Registry.UnregisterEntity(entityId)
+	-- BUG FIX: Only the SERVER may BroadcastEntityCommand. The client receives
+	-- this same broadcast (OnEntityPooled action) and re-invokes PoolEntity,
+	-- which would then trigger NetworkManager.ValidateRequest("Server") and
+	-- assert. Gate the broadcast to the server side.
 	if RunService:IsServer() then
-		pcall(Core.NetworkManager.BroadcastEntityCommand, entityId, "OnEntityPooled")
+		Core.NetworkManager.BroadcastEntityCommand(entityId, "OnEntityPooled")
 	end
 	Core.Factory.Registry.PoolEntity(className, entity)
 	return true
@@ -185,6 +201,9 @@ function Orchestrator.ServerRequest(requestName: string, ...: any)
 	ValidateRequest("Client")
 	return Core.NetworkManager.ServerRequest(requestName, ...)
 end
+
+-- Convenience alias used throughout the codebase
+Orchestrator.Request = Orchestrator.ServerRequest
 
 function Orchestrator.ServerRequestAsync(requestName: string, ...: any)
 	ValidateRequest("Client")
@@ -226,20 +245,7 @@ end
 ---------------------------------- CLIENT METHODS -----------------------------------------
 -------------------------------------------------------------------------------------------
 
-function Orchestrator:AttachServiceManager()
-    -- Legacy shim if user calls it manually, though Init handles it.
-	ValidateRequest("Client")
-	if not Core.Settings.ServiceManager.Enabled then
-		return nil
-	end
 
-	if not shared.fsm then
-		pcall(function() (self :: any):RegisterComponents() end)
-	end
-    
-    -- Return the CLient Entity if it exists
-    return Core.Factory.Registry.GetEntity("ServiceManager") -- Assuming singleton ID
-end
 
 -------------------------------------------------------------------------------------------
 ---------------------------------- INITIALIZATION -----------------------------------------
@@ -255,7 +261,7 @@ local function SetSharedVariables()
 	local Object_mt = getmetatable(OrchestratorObject);
 	
 	Object_mt.__index = function(_, key)
-		-- Yield until initialized, with a timeout and backoff
+		-- Yield until initialized, with a timeout
 		if not Initialized then
 			local start = os.clock()
 			local waitTime = 0.03
@@ -265,7 +271,7 @@ local function SetSharedVariables()
 					break
 				end
 				task.wait(waitTime)
-				waitTime = math.min(waitTime * 2, 0.5) -- exponential backoff
+				waitTime = math.min(waitTime * 2, 0.5)
 			end
 		end
 		return Orchestrator[key]
@@ -288,6 +294,7 @@ local function SetSharedVariables()
 
 		Orchestrator.Scheduler = Core.Scheduler.new()
 		Orchestrator.Factory = Core.Factory
+		Orchestrator.NetworkManager = Core.NetworkManager
 		Orchestrator.StateMachines = Core.Factory.Registry.GetAllStateMachines()
 		Orchestrator.Entities = Core.Factory.Registry.GetAllEntities()
 
@@ -302,22 +309,7 @@ local function SetSharedVariables()
 			Orchestrator.Logger:Log({Message = "DataStore/Persistence initialized", Level = "INFO"})
 		end
 
-        -- Initialize ServiceManager (Sidecar)
-        if Core.Settings.ServiceManager.Enabled then
-            if RunService:IsServer() then
-                Orchestrator.CreateEntity({
-                    EntityClass = "ServiceManagerHostEntity",
-                    EntityId = "ServiceManager",
-                    Context = { Orchestrator = Orchestrator }
-                })
-            elseif RunService:IsClient() then	
-                Orchestrator.CreateEntity({
-                    EntityClass = "ServiceManagerClientEntity",
-                    EntityId = "ServiceManager",
-                    Context = { Orchestrator = Orchestrator, ServiceManager = require(Core.ServiceManager) }
-                }):Initialize()
-            end
-        end
+
 
 	end
 
@@ -331,7 +323,9 @@ local function RegisterCallbacks()
 		local snapshot = {}
 		for id, entity in pairs(Core.Factory.Registry.GetAllEntities()) do
 			local className = (entity and (entity :: any)._privateProperties and (entity :: any)._privateProperties.Name) or (entity :: any).ClassName or (entity :: any).Name
-			-- Sanitize: only include fields with Replicate=true.
+			-- Sanitize: only include fields with Replicate=true. Otherwise we
+			-- leak persistent server-only fields (passwords, tokens, etc.) to
+			-- every connecting client.
 			local sanitized = {}
 			local pp = (entity :: any)._privateProperties
 			if pp and pp.Schema and pp.Data then
@@ -340,6 +334,9 @@ local function RegisterCallbacks()
 						sanitized[k] = pp.Data[k]
 					end
 				end
+				-- Stamp with server's authoritative version so client's
+				-- pp.Version starts correct (otherwise it stays 0, and the
+				-- next replicated update overwrites with no diff baseline).
 				sanitized._v = pp.Version
 			end
 			table.insert(snapshot, {
@@ -353,6 +350,13 @@ local function RegisterCallbacks()
 		return snapshot
 	end
 	Core.NetworkManager.RegisterServerRequest("RequestEntitySnapshot", GetEntitySnapshot)
+
+	-- Debug introspection: lets clients (and tests) read the live _remoteStats
+	-- without needing to share the require-cache. Returns the same table the
+	-- NetworkModule.FetchData reads from.
+	Core.NetworkManager.RegisterServerRequest("__DebugRemoteStats", function()
+		return Core.NetworkManager._remoteStats or {}
+	end)
 end
 
 -- SyncEntitiesFromServer (Client Side)
@@ -364,16 +368,22 @@ local function SyncEntitiesFromServer()
 			for _, data in pairs(snapshot) do
 				local class = Core.Factory.Get("Entity", data.ClassName)
 				if class then
+					-- Pass InitialData so BaseEntity Subclass.new pre-populates
+					-- pp.Data BEFORE GetContext runs. This ensures GetContext
+					-- can read replicated fields (e.g. IsOpen) and derive
+					-- correct cached state (e.g. _closedCFrame).
 					local newEntity = Core.Factory.CreateEntity({
 						EntityClass = class,
 						EntityId = data.Id,
 						Context = { Instance = data.Instance },
 						InitialData = data.Data,
 					})
-					-- Drain any pending updates that arrived before entity was created
+					-- Drain any pending updates that arrived for this entity
+					-- before it was created (see _pendingUpdates buffer below).
 					if newEntity and Orchestrator._pendingUpdates and Orchestrator._pendingUpdates[data.Id] then
 						local queue = Orchestrator._pendingUpdates[data.Id]
 						Orchestrator._pendingUpdates[data.Id] = nil
+						-- Sort by version so they apply in order
 						table.sort(queue, function(a, b) return (a._v or 0) < (b._v or 0) end)
 						for _, changes in ipairs(queue) do
 							pcall(function()
@@ -386,9 +396,13 @@ local function SyncEntitiesFromServer()
 										for k, v in pairs(changes) do
 											if k == "_v" then continue end
 											local def = schema[k]
-											if not def then continue end
+											if not def then
+												warn(string.format("Unknown field '%s' in buffered update for entity %s", tostring(k), tostring(data.Id)))
+												continue
+											end
 											if v ~= nil and def.Type and def.Type ~= "any" and typeof(v) ~= def.Type then
 												if not (typeof(v) == "Instance" and v:IsA(def.Type)) then
+													warn(string.format("Type mismatch for field '%s': expected %s got %s", tostring(k), def.Type, typeof(v)))
 													continue
 												end
 											end
@@ -413,11 +427,8 @@ end
 
 function Initialize()
 	if Initialized then return true end
-
-	-- Use a guard to prevent re-entrant initialization
-	local initializing = rawget(Orchestrator, "_initializing")
-	if initializing then return false end
-	rawset(Orchestrator, "_initializing", true)
+	if _initializing then return false end
+	_initializing = true
 
 	local Success, Result = pcall(function()
 		InitializeModule(Core.Logger)
@@ -460,16 +471,31 @@ function Initialize()
 		Orchestrator.Logger:Log({Message = "Callbacks registered", Level = "INFO"})
 
 		if RunService:IsClient() then
-			-- Pending update buffer: holds EntityUpdateEvents that arrive BEFORE
-			-- the entity has been created on this client. Drained when
-			-- SyncEntitiesFromServer or OnEntityCreated finally creates the entity.
+			-- Pending update buffer: holds EntityUpdateEvents that arrive
+			-- BEFORE the entity has been created on this client (e.g. a delta
+			-- arrives during the snapshot round-trip). Drained when
+			-- SyncEntitiesFromServer or OnEntityCreated finally creates the
+			-- entity.
 			Orchestrator._pendingUpdates = Orchestrator._pendingUpdates or {}
 
 			if Core.NetworkManager.EntityUpdateEvent then
 				Core.NetworkManager.EntityUpdateEvent.OnClientEvent:Connect(function(entityId, changes)
+					-- Track inbound update for the dashboard's "View Calls" drill-down
+					if Core.NetworkManager.RecordInboundCall then
+						Core.NetworkManager.RecordInboundCall("EntityUpdateEvent", "S→C", entityId, changes)
+					end
 					local entity = Core.Factory.Registry.GetEntity(entityId)
 					if not entity then
-						-- Buffer for replay after creation (cap at 64 per entity)
+						-- Buffer for replay after creation. Cap per-entity to
+						-- 64 to avoid unbounded growth on a stuck snapshot.
+						local MAX_PENDING_ENTITIES = 256
+						if not Orchestrator._pendingUpdates[entityId] then
+							local count = 0
+							for _ in pairs(Orchestrator._pendingUpdates) do count += 1 end
+							if count >= MAX_PENDING_ENTITIES then
+								return
+							end
+						end
 						Orchestrator._pendingUpdates[entityId] = Orchestrator._pendingUpdates[entityId] or {}
 						local q = Orchestrator._pendingUpdates[entityId]
 						table.insert(q, changes)
@@ -480,10 +506,10 @@ function Initialize()
 					-- Version Check
 					local newVersion = changes._v
 					if newVersion then
-						local currentVersion = entity.Version or 0
+						local currentVersion = (entity._privateProperties and entity._privateProperties.Version) or 0
 						if newVersion <= currentVersion then
 							-- Discard out-of-order packet
-							return 
+							return
 						end
 						-- Warn on version gaps (lossy replication detected)
 						if currentVersion > 0 and (newVersion - currentVersion) > 1 then
@@ -498,7 +524,29 @@ function Initialize()
 					end
 
 					if entity._privateProperties then
-						-- Validate against schema and write only known, type-correct fields
+						-- Build version history snapshot BEFORE writing Data
+						-- so From values reflect pre-update state.
+						if entity._privateProperties._versionHistory then
+							local schema = entity._privateProperties.Schema or {}
+							local snapshot = {} :: { [string]: any }
+							for k, v in pairs(changes) do
+								if k ~= "_v" then
+									snapshot[k] = { From = entity._privateProperties.Data[k], To = v }
+								end
+							end
+							table.insert(entity._privateProperties._versionHistory, {
+								Version = newVersion or (entity._privateProperties.Version or 0),
+								Time = os.clock(),
+								Changes = snapshot,
+							})
+							while #entity._privateProperties._versionHistory > (entity._privateProperties._versionHistoryMax or 50) do
+								table.remove(entity._privateProperties._versionHistory, 1)
+							end
+						end
+
+						-- Validate against schema and write only known fields
+						-- to Data. Unknown / mistyped keys are dropped with a
+						-- warning rather than silently corrupting state.
 						local schema = entity._privateProperties.Schema or {}
 						for k, v in pairs(changes) do
 							if k == "_v" then continue end
@@ -523,7 +571,8 @@ function Initialize()
 						end
 					end
 
-					-- Strip _v before ApplyChanges so subclasses don't see it as a property
+					-- Strip _v before ApplyChanges so subclasses iterating
+					-- changes don't see _v as a property.
 					local visualChanges = table.clone(changes)
 					visualChanges._v = nil
 					entity:ApplyChanges(visualChanges)
@@ -539,9 +588,12 @@ function Initialize()
 								EntityClass = class,
 								EntityId = entityId,
 								Context = { Instance = data.Instance },
+								-- Pass through replicated initial state so
+								-- BaseEntity Subclass.new pre-populates pp.Data
+								-- BEFORE GetContext runs.
 								InitialData = data.InitialData,
 							})
-							-- Drain any updates that arrived before this entity was created
+							-- Drain any updates that arrived before this create
 							if ent and Orchestrator._pendingUpdates[entityId] then
 								local queue = Orchestrator._pendingUpdates[entityId]
 								Orchestrator._pendingUpdates[entityId] = nil
@@ -556,9 +608,13 @@ function Initialize()
 											for k, v in pairs(changes) do
 												if k == "_v" then continue end
 												local def = schema[k]
-												if not def then continue end
+												if not def then
+													warn(string.format("Unknown field '%s' in buffered update for entity %s", tostring(k), tostring(entityId)))
+													continue
+												end
 												if v ~= nil and def.Type and def.Type ~= "any" and typeof(v) ~= def.Type then
 													if not (typeof(v) == "Instance" and v:IsA(def.Type)) then
+														warn(string.format("Type mismatch for field '%s': expected %s got %s", tostring(k), def.Type, typeof(v)))
 														continue
 													end
 												end
@@ -573,6 +629,8 @@ function Initialize()
 							end
 						end
 					elseif action == "OnEntityPooled" then
+						-- Pool the LOCAL client-side entity without re-broadcasting
+						-- (PoolEntity has a server-only gate for the broadcast).
 						Orchestrator.PoolEntity(entityId)
 					elseif action == "OnEntityDestroyed" then
 						Orchestrator.DeleteEntity(entityId)
@@ -587,12 +645,15 @@ function Initialize()
 	return true
 	end)
 
-	rawset(Orchestrator, "_initializing", nil)
-	if Success then
-		Initialized = true
+	if not Success then
+		warn("[Orchestrator] initialization failed: " .. tostring(Result))
+		if Orchestrator.Logger then
+			Orchestrator.Logger:Log({Message = "Orchestrator initialization failed: " .. tostring(Result), Level = "ERROR"})
+		end
+		_initializing = false
 	else
-		Orchestrator.Logger:Log({Message = "Orchestrator initialization failed: " .. tostring(Result), Level = "ERROR"})
-		Initialized = false
+		_initializing = false
+		Initialized = true
 	end
 	return Result
 end

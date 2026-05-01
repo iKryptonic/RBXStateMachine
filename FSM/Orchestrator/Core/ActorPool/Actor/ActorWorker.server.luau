@@ -22,10 +22,11 @@ Jobs.SortByKey = function(input)
     local desc = input.descending
 
     table.sort(list, function(a, b)
-        if desc then
-            return a[key] > b[key]
-        end
-        return a[key] < b[key]
+        local av, bv = a[key], b[key]
+        if av == nil then return false end
+        if bv == nil then return true end
+        if desc then return av > bv end
+        return av < bv
     end)
 
     return list

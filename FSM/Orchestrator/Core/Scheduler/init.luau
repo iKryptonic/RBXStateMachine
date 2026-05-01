@@ -24,10 +24,14 @@ local TaskPool = require(script.TaskPool)
 local PerformanceManager = require(script.PerformanceManager)
 
 local freeThreads = {}
+local totalThreads = 0
+local peakThreads = 0
+local activeThreads = 0
 
 local function runTask(func, thread, ...)
-    func(...)
-    table_insert(freeThreads, thread)
+	func(...)
+	activeThreads = math.max(0, activeThreads - 1)
+	table_insert(freeThreads, thread)
 end
 
 local function yielder()
@@ -84,14 +88,14 @@ do
 			History = table.create(100),
 			_historyIndex = 1,
 			_heaps = {},
-			_connections = {}, -- RunService connections (separate from _running)
-			_running = {}, -- Currently executing tasks
+			_running = {},
+			_connections = {},
 			_taskCount = 0, -- O(1) tracking
 			TaskStats = {},
 			LastFrameStats = { FrameTime = 0, TaskCount = 0, Budget = 0 },
-			Settings = settings or {
+			Settings = settings or Scheduler.Settings or {
 				FrameBudget = 0.005,
-				PriorityWeight = 0.001,
+				PriorityWeight = 0.001, -- How much 1 priority point "shifts" time
 			},
 			Logger = nil,
 		}, Scheduler)
@@ -114,17 +118,22 @@ do
         t.Event = params.Event or "Heartbeat" 
         t.NextRun = os_clock() + t.Delay
         t.CreationTime = os_clock()
+        t.TotalMemory = 0
+        t.MaxMemory = 0
 
-        if self.Tasks[t.Name] then
-            -- Overwriting an existing task — don't double-count
+        local isNew = not self.Tasks[t.Name]
+        if not isNew then
+            -- If overwriting, we should ideally release the old one, 
+            -- but since it's in the Heap, lazy removal handles it.
             self.Tasks[t.Name] = nil 
-            self._taskCount -= 1
         end
 
         self.Tasks[t.Name] = t
+        if isNew then
+            self._taskCount += 1
+        end
         if not self._heaps[t.Event] then self._heaps[t.Event] = {} end
         self:_heapPush(self._heaps[t.Event], t)
-        self._taskCount += 1
         
         return t
     end
@@ -137,13 +146,10 @@ do
 		self.Tasks = {}
 		self._heaps = {}
 		self.History = {}
-		self._taskCount = 0
 		self.LastFrameStats = { FrameTime = 0, TaskCount = 0, Budget = 0 }
-		if self.TaskStats then
-			table.clear(self.TaskStats)
-		else
-			self.TaskStats = {}
-		end
+		if self.TaskStats then table.clear(self.TaskStats) end
+		self._historyIndex = 1
+		self._taskCount = 0
 	end
 
 	--[[
@@ -175,8 +181,8 @@ do
 		self = ResolveScheduler(self)
 		if self.Tasks[name] then
 			self:AddToHistory(self.Tasks[name], "Cancelled", 0, "")
-			self.Tasks[name] = nil
 			self._taskCount -= 1
+			self.Tasks[name] = nil
 			local logger = self.Logger or Scheduler.Logger
 			if logger then
 				logger:Log({
@@ -219,13 +225,10 @@ do
 			task = taskOrName
 		end
 		if not task then return end
-		local logger = self.Logger or Scheduler.Logger
-		if logger then
-			logger:Log({
-				Level = "INFO",
-				Message = string.format("Manually Executed: %s", task.Name),
-			})
-		end
+		self.Logger:Log({
+			Level = "INFO",
+			Message = string.format("Manually Executed: %s", task.Name),
+		})
 		self:_internalExecute(task)
 	end
 
@@ -281,6 +284,8 @@ do
 				task.RunCount = 0
 				task.TotalRunTime = 0
 				task.MaxRunTime = 0
+				task.TotalMemory = 0
+				task.MaxMemory = 0
 				local logger = self.Logger or Scheduler.Logger
 				if logger then
 					logger:Log({
@@ -300,36 +305,77 @@ do
 		return HttpService:GenerateGUID(false)
 	end
 
+	function Scheduler:GetThreadPoolStats()
+		return {
+			TotalThreads = totalThreads,
+			FreeThreads = #freeThreads,
+			ActiveThreads = activeThreads,
+			PeakThreads = peakThreads,
+		}
+	end
+
 	--[[
 		@description Internal execution wrapper with performance tracking and error capture.
 		@param t Task
 		@return ()
 	]]
 	function Scheduler:_internalExecute(t)
-		local schedulerRef = self
-
-		task_spawn(function()
-			local start = os_clock()
-			schedulerRef._running[t.Name] = t
-			
-			local s, e = xpcall(t.Action, ERROR_HANDLER)
-			
-			local dur = os_clock() - start
-			schedulerRef._running[t.Name] = nil
-
-			if schedulerRef.Tasks[t.Name] == t then
-				t.RunCount += 1
-				t.TotalRunTime += dur
-				if dur > t.MaxRunTime then t.MaxRunTime = dur end
-				
-				if not t.IsRecurringTask then
-					schedulerRef:AddToHistory(t, s and "Completed" or "Failed", dur, not s and tostring(e) or nil)
-					schedulerRef.Tasks[t.Name] = nil
-					schedulerRef._taskCount -= 1
-					TaskPool.Release(t)
-				end
+		local thread
+		if #freeThreads > 0 then
+			thread = table_remove(freeThreads)
+		else
+			thread = coroutine.create(yielder)
+			coroutine.resume(thread) -- Start the yielder
+			totalThreads += 1
+			if totalThreads > peakThreads then
+				peakThreads = totalThreads
 			end
-		end)
+		end
+		activeThreads += 1
+
+		-- We wrap the logic in a non-allocating wrapper
+		task_spawn(thread, function()
+			local ok, execErr = pcall(function()
+				local start = os_clock()
+				local startMem = collectgarbage("count")
+				self._running[t.Name] = t
+				-- Record the most recent execution wallclock so the dashboard
+				-- can derive an "active vs idle" state without needing to
+				-- track its own delta against `RunCount` (the server-context
+				-- snapshot doesn't have access to a previous-tick delta).
+				t.LastRunTime = start
+
+				local s, e = xpcall(t.Action, ERROR_HANDLER)
+				
+				local dur = os_clock() - start
+				local endMem = collectgarbage("count")
+				local memDelta = math.max(0, endMem - startMem) -- Ignore negative delta if GC ran
+				
+				self._running[t.Name] = nil
+
+				if self.Tasks[t.Name] == t then
+					t.RunCount += 1
+					t.TotalRunTime += dur
+					if dur > t.MaxRunTime then t.MaxRunTime = dur end
+					
+					t.TotalMemory = (t.TotalMemory or 0) + memDelta
+					if memDelta > (t.MaxMemory or 0) then t.MaxMemory = memDelta end
+					
+					if not t.IsRecurringTask then
+						self:AddToHistory(t, s and "Completed" or "Failed", dur, not s and tostring(e) or nil)
+						self.Tasks[t.Name] = nil
+						self._taskCount -= 1
+						TaskPool.Release(t)
+					end
+				end
+			end)
+			-- pcall ensures this closure never throws, so runTask
+			-- always reaches its own activeThreads decrement and thread return.
+			if not ok then
+				self._running[t.Name] = nil
+				warn("[Scheduler] Task execution error: " .. tostring(execErr))
+			end
+		end, thread)
 	end
 
 	--[[
@@ -501,33 +547,19 @@ do
 				end)
 			end
 		end
-		local logger = self.Logger or Scheduler.Logger
-		if logger then
-			logger:Log({
-				Level = "INFO",
-				Message = "Scheduler started."
-			})
-		end
+		self.Logger:Log({
+			Level = "INFO",
+			Message = "Scheduler started."
+		})
 	end
 
-	--[[
-		@description Stops the scheduler and disconnects all RunService connections.
-		@return ()
-	]]
 	function Scheduler:Stop()
-		for name, connection in pairs(self._connections) do
-			if typeof(connection) == "RBXScriptConnection" then
-				connection:Disconnect()
+		for state, conn in pairs(self._connections) do
+			if conn and typeof(conn) == "RBXScriptConnection" then
+				conn:Disconnect()
 			end
 		end
-		self._connections = {}
-		local logger = self.Logger or Scheduler.Logger
-		if logger then
-			logger:Log({
-				Level = "INFO",
-				Message = "Scheduler stopped."
-			})
-		end
+		table.clear(self._connections)
 	end
 end
 return Scheduler
