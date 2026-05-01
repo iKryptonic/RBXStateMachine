@@ -32,13 +32,11 @@ type Pending = {
 	@return ActorPool -- The pool instance.
 ]]
 function ActorPool.new(workers: { Actor })
-    assert(workers and #workers > 0, "ActorPool requires at least one worker Actor")
     local self = setmetatable({}, ActorPool)
     self._workers = workers
     self._rr = 0
     self._nextId = 0
     self._pending = {} :: { [number]: Pending }
-    self._submitTimeout = 30 -- seconds
 
     for _, actor in ipairs(workers) do
         actor:BindToMessage("JobResult", function(jobId: number, ok: boolean, payload: any)
@@ -64,6 +62,7 @@ end
 	@return Actor -- The chosen worker.
 ]]
 function ActorPool:_pickWorker(): Actor
+    assert(#self._workers > 0, "ActorPool has no workers")
     self._rr = (self._rr % #self._workers) + 1
     return self._workers[self._rr]
 end
@@ -94,13 +93,13 @@ function ActorPool:Submit(job: Job): Result
 
     worker:SendMessage("RunJob", jobId, job.name, job.input)
 
-    -- Blocking wait with timeout to prevent permanent thread leak
+    -- Simple blocking wait with timeout
+    local TIMEOUT = 30
     local startTime = os.clock()
-    local timeout = self._submitTimeout or 30
     while not done do
-        if os.clock() - startTime > timeout then
+        if os.clock() - startTime > TIMEOUT then
             self._pending[jobId] = nil
-            return { ok = false, error = string.format("Job '%s' timed out after %ds", job.name, timeout) }
+            return { ok = false, error = "Job timed out after " .. TIMEOUT .. "s" }
         end
         task.wait()
     end

@@ -1,7 +1,20 @@
 --!strict
--- @Name BehaviorTree
--- @Author iKrypto
--- @Description Lightweight Behavior Tree (BT) implementation for complex AI logic.
+--[=[
+	@Name BehaviorTree
+	@Author iKrypto
+	@Description Lightweight Behavior Tree (BT) implementation for composing
+	complex decision logic from simple node functions. Provides standard composite
+	nodes (Selector, Sequence), decorators (Inverter, Succeeder), and utility
+	leaf constructors (SetState, Condition). Each node is a function
+	`(context) -> BehaviorTreeStatus`.
+
+	@usage
+	local tree = BehaviorTree.Sequence({
+		BehaviorTree.Condition(function(ctx) return ctx.Health > 0 end),
+		BehaviorTree.SetState("Attacking"),
+	})
+	local status = tree(myContext)
+]=]
 local BehaviorTree = {}
 
 BehaviorTree.BehaviorTreeStatus = {
@@ -10,13 +23,20 @@ BehaviorTree.BehaviorTreeStatus = {
 	Running = "Running",
 }
 
-local Logger, Signal, Settings, Initialized;
+local Logger, Initialized;
+
+--[=[
+	@description Initializes the BehaviorTree module with shared utilities.
+	Must be called once before any BT nodes are constructed.
+
+	@param Util table -- Orchestrator utility table containing Logger, Signal, and Settings
+	@return ()
+	@writes Module-level Logger, Signal, Settings upvalues
+]=]
 function BehaviorTree.Initialize(Util)
 	if Initialized then return end
 	Initialized = true
-	Settings = Util.Settings
 	Logger = Util.Logger.new({ Name = "BehaviorTree"} )
-	Signal = Util.Signal
 
 	Logger:Log({ Level = "INFO", Message = "BehaviorTree initialized" })
 end
@@ -24,13 +44,18 @@ end
 local function ValidateRequest()
 	assert(Initialized, "BehaviorTree not initialized")
 	assert(type(Logger) == "table", "Logger not initialized")
-	assert(type(Signal) == "table", "Signal not initialized")
-	assert(type(Settings) == "table", "Settings not initialized")
 end
 
---[[
-	@description Runs children until one succeeds.
-]]
+--[=[
+	@description Composite node that runs children in order until one does NOT
+	return Failure. Returns the first non-Failure status, or Failure if all fail.
+	("OR" logic)
+
+	@param children { (context: any) -> string } -- Array of child node functions
+	@return (context: any) -> string -- Composite node function
+	@reads None
+	@writes None
+]=]
 function BehaviorTree.Selector(children: { (context: any) -> string }): (context: any) -> string
 	ValidateRequest()
 	return function(context)
@@ -44,9 +69,16 @@ function BehaviorTree.Selector(children: { (context: any) -> string }): (context
 	end
 end
 
---[[
-	@description Runs children until one fails.
-]]
+--[=[
+	@description Composite node that runs children in order until one does NOT
+	return Success. Returns the first non-Success status, or Success if all pass.
+	("AND" logic)
+
+	@param children { (context: any) -> string } -- Array of child node functions
+	@return (context: any) -> string -- Composite node function
+	@reads None
+	@writes None
+]=]
 function BehaviorTree.Sequence(children: { (context: any) -> string }): (context: any) -> string
 	ValidateRequest()
 	return function(context)
@@ -60,9 +92,15 @@ function BehaviorTree.Sequence(children: { (context: any) -> string }): (context
 	end
 end
 
---[[
-	@description Inverts Success/Failure. Returns Running as-is.
-]]
+--[=[
+	@description Decorator that inverts the child's result: Success becomes
+	Failure and vice versa. Running is passed through unchanged.
+
+	@param child (context: any) -> string -- Child node function
+	@return (context: any) -> string -- Decorated node function
+	@reads None
+	@writes None
+]=]
 function BehaviorTree.Inverter(child: (context: any) -> string): (context: any) -> string
 	ValidateRequest()
 	return function(context)
@@ -76,9 +114,15 @@ function BehaviorTree.Inverter(child: (context: any) -> string): (context: any) 
 	end
 end
 
---[[
-	@description Always returns Success.
-]]
+--[=[
+	@description Decorator that converts any final result to Success.
+	Running is passed through unchanged to allow tick-based progress.
+
+	@param child (context: any) -> string -- Child node function
+	@return (context: any) -> string -- Decorated node function
+	@reads None
+	@writes None
+]=]
 function BehaviorTree.Succeeder(child: (context: any) -> string): (context: any) -> string
 	ValidateRequest()
 	return function(context)
@@ -90,9 +134,15 @@ function BehaviorTree.Succeeder(child: (context: any) -> string): (context: any)
 	end
 end
 
---[[
-	@description Utility to change FSM state.
-]]
+--[=[
+	@description Utility leaf node that sets the FSM's State property if it
+	differs from the target, then returns Success.
+
+	@param stateName string -- Target state name to assign to `fsm.State`
+	@return (fsm: any) -> string -- Leaf node function
+	@reads fsm.State
+	@writes fsm.State
+]=]
 function BehaviorTree.SetState(stateName: string): (fsm: any) -> string
 	ValidateRequest()
 	return function(fsm)
@@ -103,9 +153,15 @@ function BehaviorTree.SetState(stateName: string): (fsm: any) -> string
 	end
 end
 
---[[
-	@description Utility to check a condition.
-]]
+--[=[
+	@description Utility leaf node that evaluates a boolean predicate.
+	Returns Success if the predicate returns true, Failure otherwise.
+
+	@param predicate (context: any) -> boolean -- Condition to evaluate
+	@return (context: any) -> string -- Leaf node function
+	@reads None (predicate-defined)
+	@writes None
+]=]
 function BehaviorTree.Condition(predicate: (context: any) -> boolean): (context: any) -> string
 	ValidateRequest()
 	return function(context)

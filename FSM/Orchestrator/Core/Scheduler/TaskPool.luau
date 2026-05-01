@@ -51,6 +51,11 @@ function TaskPool.Release(t: Task)
     -- IMPORTANT: Nil out the Action to prevent closure/environment leaks
     t.Action = nil :: any
     t.Name = ""
+    t.RunCount = 0
+    t.TotalRunTime = 0
+    t.MaxRunTime = 0
+    t.TotalMemory = 0
+    t.MaxMemory = 0
     
     TaskPool._count += 1
     TaskPool._storage[TaskPool._count] = t

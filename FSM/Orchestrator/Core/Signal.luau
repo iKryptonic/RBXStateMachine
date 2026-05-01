@@ -30,6 +30,8 @@ function Signal:Connect(handler: (...any) -> ()): any
 			if index then
 				table.remove(handlers, index)
 			end
+			conn._handler = nil
+			conn._signal = nil
 		end,
 	}
 	table.insert(self._handlers, connection)
@@ -52,11 +54,14 @@ end
 -- @param ... The arguments to fire the signal with.
 -- @returns void
 function Signal:Fire(...: any)
-	-- Iterate backwards to allow disconnection during firing
+	-- Snapshot the handler list so that Disconnect/Destroy during firing is safe
 	local handlers = self._handlers
-	for i = #handlers, 1, -1 do
-		local conn = handlers[i]
-		task.spawn(conn._handler, ...)
+	local snapshot = table.move(handlers, 1, #handlers, 1, table.create(#handlers))
+	for i = #snapshot, 1, -1 do
+		local conn = snapshot[i]
+		if conn and conn._handler then
+			task.spawn(conn._handler, ...)
+		end
 	end
 end
 
