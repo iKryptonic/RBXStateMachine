@@ -44,14 +44,27 @@ local DOUBLE_JUMP_STAMINA_COST = 20
 
 local function getCharacterParts(fsm: any): (BasePart?, Humanoid?)
 	local orchestrator = (shared :: any).fsm
-	if not orchestrator then
+	local character = nil
+
+	if orchestrator then
+		local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
+		if charEntity and charEntity.Instance then
+			character = charEntity.Instance
+		end
+	end
+
+	-- Fallback: LocalPlayer.Character
+	if not character then
+		local Players = game:GetService("Players")
+		local localPlayer = Players.LocalPlayer
+		if localPlayer then
+			character = localPlayer.Character
+		end
+	end
+
+	if not character then
 		return nil, nil
 	end
-	local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-	if not charEntity or not charEntity.Instance then
-		return nil, nil
-	end
-	local character = charEntity.Instance
 	local rootPart = character:FindFirstChild("HumanoidRootPart")
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	return rootPart :: BasePart?, humanoid :: Humanoid?
