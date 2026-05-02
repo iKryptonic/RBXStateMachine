@@ -10,7 +10,7 @@ local HttpService = game:GetService("HttpService")
 local MeleeAttackJob = {
 	Name = "MeleeAttackJob",
 	className = "MeleeAttackJob",
-	validStates = { "Validate", "AcquireLock", "Execute", "ReleaseLock", "Completed", "Failed" },
+	validStates = { "Validate", "AcquireLock", "Execute", "DamageScan", "ReleaseLock", "Completed", "Failed" },
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
@@ -86,6 +86,44 @@ local function scanMeleeRange(orchestrator: any, attackerCharEntityId: string, a
 	return victims
 end
 
+local function appendAnimationIntent(charEntity: any, fsm: any, phase: any)
+	local IntentSchema = getSharedModule("IntentSchema")
+	if not IntentSchema then
+		return
+	end
+
+	IntentSchema.AppendIntent(charEntity, {
+		Kind = "Animation",
+		Payload = { Name = phase.Name, Speed = phase.Speed, FadeTime = 0.1 },
+		SourceCharId = fsm.CharacterEntityId,
+	}, fsm.Id)
+end
+
+local function emitDueAnimationPhases(fsm: any, elapsed: number)
+	local phases = fsm.Context._phases
+	local phaseStartTimes = fsm.Context._phaseStartTimes
+	local charEntity = fsm.Context._charEntity
+	local nextPhaseIndex = fsm.Context._nextPhaseIndex or 1
+	if typeof(phases) ~= "table" or typeof(phaseStartTimes) ~= "table" or not charEntity then
+		return
+	end
+
+	while nextPhaseIndex <= #phases do
+		local phaseStart = phaseStartTimes[nextPhaseIndex]
+		if typeof(phaseStart) ~= "number" or elapsed + 0.0001 < phaseStart then
+			break
+		end
+
+		local phase = phases[nextPhaseIndex]
+		if typeof(phase) == "table" then
+			appendAnimationIntent(charEntity, fsm, phase)
+		end
+		nextPhaseIndex += 1
+	end
+
+	fsm.Context._nextPhaseIndex = nextPhaseIndex
+end
+
 function MeleeAttackJob:RegisterStates()
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -156,7 +194,6 @@ function MeleeAttackJob:RegisterStates()
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
 			local comboSlot = fsm.Context._comboSlot
-			local root = fsm.Context._root
 			local damage = DEFAULT_MELEE_DAMAGE[comboSlot] or 5
 			local staminaCost = fsm.Context._staminaCost or damage
 			if (charEntity.Stamina or 0) < staminaCost then
@@ -181,40 +218,49 @@ function MeleeAttackJob:RegisterStates()
 			charEntity:SetContext("_MeleePointers", pointers)
 
 			local phases = seqDef.Moves[pointer]
-			local totalDuration = 0
-			for _, p in ipairs(phases) do totalDuration += p.Duration end
-
-			-- Emit each phase as a timed animation intent
-			local IntentSchema = getSharedModule("IntentSchema")
-			if IntentSchema then
-				local elapsed = 0
-				for _, phase in ipairs(phases) do
-					if elapsed > 0 then
-						task.delay(elapsed, function()
-							if not fsm.IsActive then return end
-							IntentSchema.AppendIntent(charEntity, {
-								Kind = "Animation",
-								Payload = { Name = phase.Name, Speed = phase.Speed, FadeTime = 0.1 },
-								SourceCharId = fsm.CharacterEntityId,
-							}, fsm.Id)
-						end)
-					else
-						IntentSchema.AppendIntent(charEntity, {
-							Kind = "Animation",
-							Payload = { Name = phase.Name, Speed = phase.Speed, FadeTime = 0.1 },
-							SourceCharId = fsm.CharacterEntityId,
-						}, fsm.Id)
-					end
-					elapsed += phase.Duration
-				end
+			if typeof(phases) ~= "table" or #phases == 0 then
+				fsm.State = "ReleaseLock"
+				return
 			end
 
-			-- Scan for victims and deal damage at mid-point via DamageJob
-			task.delay(totalDuration * 0.5, function()
-				if not fsm.IsActive then return end
-				local orchestrator = getOrchestrator()
-				local attackerRoot = fsm.Context._root
-				if not attackerRoot or not attackerRoot.Parent then return end
+			local phaseStartTimes = {}
+			local totalDuration = 0
+			for index, phase in ipairs(phases) do
+				phaseStartTimes[index] = totalDuration
+				totalDuration += phase.Duration
+			end
+
+			fsm.Context._damage = damage
+			fsm.Context._phases = phases
+			fsm.Context._phaseStartTimes = phaseStartTimes
+			fsm.Context._nextPhaseIndex = 1
+			fsm.Context._attackDuration = totalDuration
+			fsm.Context._damageScanOffset = totalDuration * 0.5
+
+			emitDueAnimationPhases(fsm, 0)
+			if totalDuration <= 0 then
+				fsm.State = "DamageScan"
+				return
+			end
+
+			fsm:ScheduleTransition(fsm.Context._damageScanOffset, "DamageScan")
+		end,
+		OnHeartbeat = function(_, fsm)
+			emitDueAnimationPhases(fsm, fsm.StateDuration)
+		end,
+	}, { "DamageScan", "ReleaseLock", "Failed" })
+
+	self:AddState("DamageScan", {
+		OnEnter = function(_, fsm)
+			local comboSlot = fsm.Context._comboSlot
+			local damage = fsm.Context._damage or (DEFAULT_MELEE_DAMAGE[comboSlot] or 5)
+			local damageScanOffset = fsm.Context._damageScanOffset or 0
+			local totalDuration = fsm.Context._attackDuration or 0
+			emitDueAnimationPhases(fsm, damageScanOffset)
+
+			local orchestrator = getOrchestrator()
+			local attackerRoot = fsm.Context._root
+			if attackerRoot and attackerRoot.Parent then
 				local knockbackDir = attackerRoot.CFrame.LookVector
 				local victims = scanMeleeRange(orchestrator, fsm.CharacterEntityId, attackerRoot, DEFAULT_MELEE_RADIUS)
 				for _, victim in ipairs(victims) do
@@ -222,7 +268,6 @@ function MeleeAttackJob:RegisterStates()
 					local victimRoot = victim.Instance and victim.Instance:FindFirstChild("HumanoidRootPart")
 					local victimUserId = victim.UserId
 					if victimHumanoid and victimHumanoid.Health > 0 and typeof(victimUserId) == "number" then
-						-- Use DamageJob for proper HitReact + damage numbers
 						local damageJob = orchestrator.CreateStateMachine({
 							StateMachineClass = "DamageJob",
 							StateMachineId = string.format("MeleeDmg_%s_%s", fsm.Id, tostring(victimUserId)),
@@ -236,16 +281,24 @@ function MeleeAttackJob:RegisterStates()
 						if damageJob then
 							damageJob:Start({ State = "Validate" })
 						end
-						-- Knockback relative to attacker's facing
 						if victimRoot then
 							local knockForce = knockbackDir * 25 + Vector3.new(0, 10, 0)
 							victimRoot.AssemblyLinearVelocity = victimRoot.AssemblyLinearVelocity + knockForce
 						end
 					end
 				end
-			end)
+			end
 
-			fsm:ScheduleTransition(totalDuration, "ReleaseLock")
+			local remainingDuration = math.max(totalDuration - damageScanOffset, 0)
+			if remainingDuration > 0 then
+				fsm:ScheduleTransition(remainingDuration, "ReleaseLock")
+			else
+				fsm.State = "ReleaseLock"
+			end
+		end,
+		OnHeartbeat = function(_, fsm)
+			local damageScanOffset = fsm.Context._damageScanOffset or 0
+			emitDueAnimationPhases(fsm, damageScanOffset + fsm.StateDuration)
 		end,
 	}, { "ReleaseLock", "Failed" })
 
