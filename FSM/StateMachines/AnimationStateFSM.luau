@@ -90,13 +90,23 @@ function AnimationStateFSM:RegisterStates()
 	self:AddState("Completed", {
 		OnEnter = function(_, fsm)
 			writeObservedState(fsm, "Idle")
-			fsm:Log({ Level = "INFO", Message = string.format("AnimationStateFSM completed for %s", tostring(fsm.CharacterEntityId)) })
+			fsm:Log({
+				Level = "INFO",
+				Message = string.format("AnimationStateFSM completed for %s", tostring(fsm.CharacterEntityId)),
+			})
 		end,
 	}, {})
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm, reason)
-			fsm:Log({ Level = "ERROR", Message = string.format("AnimationStateFSM failed for %s: %s", tostring(fsm.CharacterEntityId), tostring(reason or "unknown error")) })
+			fsm:Log({
+				Level = "ERROR",
+				Message = string.format(
+					"AnimationStateFSM failed for %s: %s",
+					tostring(fsm.CharacterEntityId),
+					tostring(reason or "unknown error")
+				),
+			})
 		end,
 	}, {})
 end

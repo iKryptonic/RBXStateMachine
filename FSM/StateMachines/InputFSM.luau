@@ -1,6 +1,6 @@
 --!strict
 -- @Name InputFSM
--- @Author Copilot
+-- @Author iKrypto
 -- @Description Client-side FSM managing input mode state.
 --   States: Normal → ComboMode → Normal (timeout)
 --           Normal → HeldAttack → Normal (key release)
@@ -18,7 +18,9 @@ local KEYSTROKE_TIMEOUT = 1.75
 
 local function writeInputMode(fsm: any, mode: string)
 	local orchestrator = (shared :: any).fsm
-	if not orchestrator then return end
+	if not orchestrator then
+		return
+	end
 	local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 	if charEntity then
 		charEntity.ActionOverlay = if mode == "Normal" then (charEntity.ActionOverlay or "None") else mode
@@ -70,7 +72,9 @@ function InputFSM.EnterComboMode(fsm: any): boolean
 end
 
 function InputFSM.EnterHeldAttack(fsm: any): boolean
-	if fsm.State ~= "Normal" then return false end
+	if fsm.State ~= "Normal" then
+		return false
+	end
 	fsm.State = "HeldAttack"
 	return true
 end

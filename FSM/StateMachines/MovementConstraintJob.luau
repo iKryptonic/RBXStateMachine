@@ -1,4 +1,6 @@
 --!strict
+-- @Name MovementConstraintJob
+-- @Description FSM state machine module.
 
 local MovementConstraintJob = {
 	Name = "MovementConstraintJob",

@@ -8,7 +8,23 @@
 local MeleeAttackJob = {
 	Name = "MeleeAttackJob",
 	className = "MeleeAttackJob",
-	validStates = { "Validate", "AcquireLock", "ValidateStamina", "DeductStamina", "ResolveSequence", "EmitPhaseAnimation", "ScheduleDamageWindow", "WaitForDamageWindow", "ScanVictims", "ProcessVictim", "ApplyKnockback", "WaitForRecovery", "ReleaseLock", "Completed", "Failed" },
+	validStates = {
+		"Validate",
+		"AcquireLock",
+		"ValidateStamina",
+		"DeductStamina",
+		"ResolveSequence",
+		"EmitPhaseAnimation",
+		"ScheduleDamageWindow",
+		"WaitForDamageWindow",
+		"ScanVictims",
+		"ProcessVictim",
+		"ApplyKnockback",
+		"WaitForRecovery",
+		"ReleaseLock",
+		"Completed",
+		"Failed",
+	},
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
@@ -25,27 +41,36 @@ local MELEE_SEQUENCES = {
 	[1] = {
 		Type = "Alternate",
 		Moves = {
-			{{ Name = "RightPunch", Speed = 0.5, Duration = 0.43 }},
-			{{ Name = "LeftPunch", Speed = 0.5, Duration = 0.43 }},
+			{ { Name = "RightPunch", Speed = 0.5, Duration = 0.43 } },
+			{ { Name = "LeftPunch", Speed = 0.5, Duration = 0.43 } },
 		},
 	},
 	[2] = {
 		Type = "Sequence",
 		Moves = {
-			{{ Name = "LeftKnee1", Speed = 0.25, Duration = 0.22 }, { Name = "LeftKnee2", Speed = 0.5, Duration = 0.5 }},
+			{
+				{ Name = "LeftKnee1", Speed = 0.25, Duration = 0.22 },
+				{ Name = "LeftKnee2", Speed = 0.5, Duration = 0.5 },
+			},
 		},
 	},
 	[3] = {
 		Type = "Sequence",
 		Moves = {
-			{{ Name = "Uppercut1", Speed = 0.25, Duration = 0.22 }, { Name = "Uppercut2", Speed = 0.5, Duration = 0.5 }},
+			{
+				{ Name = "Uppercut1", Speed = 0.25, Duration = 0.22 },
+				{ Name = "Uppercut2", Speed = 0.5, Duration = 0.5 },
+			},
 		},
 	},
 	[4] = {
 		Type = "Alternate",
 		Moves = {
-			{{ Name = "RightKick1", Speed = 0.25, Duration = 0.25 }, { Name = "RightKick2", Speed = 0.5, Duration = 0.5 }},
-			{{ Name = "LeftKick", Speed = 0.25, Duration = 0.22 }},
+			{
+				{ Name = "RightKick1", Speed = 0.25, Duration = 0.25 },
+				{ Name = "RightKick2", Speed = 0.5, Duration = 0.5 },
+			},
+			{ { Name = "LeftKick", Speed = 0.25, Duration = 0.22 } },
 		},
 	},
 }
@@ -73,18 +98,31 @@ local function queueRelease(fsm: any, nextState: string, reason: string?)
 	fsm.State = "ReleaseLock"
 end
 
-local function scanMeleeRange(orchestrator: any, attackerCharEntityId: string, attackerRoot: BasePart, radius: number): { any }
+local function scanMeleeRange(
+	orchestrator: any,
+	attackerCharEntityId: string,
+	attackerRoot: BasePart,
+	radius: number
+): { any }
 	local victims = {}
 	local entities = if type(orchestrator.GetEntities) == "function" then orchestrator.GetEntities() else {}
 	for entityId, entity in pairs(entities) do
-		if entityId == attackerCharEntityId then continue end
+		if entityId == attackerCharEntityId then
+			continue
+		end
 		local character = entity and entity.Instance
-		if not character or not character:IsA("Model") then continue end
+		if not character or not character:IsA("Model") then
+			continue
+		end
 		local humanoid = character:FindFirstChildOfClass("Humanoid")
 		local root = character:FindFirstChild("HumanoidRootPart")
-		if not humanoid or humanoid.Health <= 0 or not root then continue end
+		if not humanoid or humanoid.Health <= 0 or not root then
+			continue
+		end
 		local offset = root.Position - attackerRoot.Position
-		if offset.Magnitude <= 0 or offset.Magnitude >= radius then continue end
+		if offset.Magnitude <= 0 or offset.Magnitude >= radius then
+			continue
+		end
 		if attackerRoot.CFrame.LookVector:Dot(offset.Unit) > 0 then
 			table.insert(victims, entity)
 		end
@@ -171,7 +209,10 @@ function MeleeAttackJob:RegisterStates()
 			local comboSlot = math.clamp(tonumber(fsm.ComboSlot) or 1, 1, 4)
 			local equippedRight = charEntity.EquippedRight
 			local equippedLeft = charEntity.EquippedLeft
-			if (typeof(equippedRight) == "string" and equippedRight ~= "") or (typeof(equippedLeft) == "string" and equippedLeft ~= "") then
+			if
+				(typeof(equippedRight) == "string" and equippedRight ~= "")
+				or (typeof(equippedLeft) == "string" and equippedLeft ~= "")
+			then
 				fsm:Fail("Weapon is drawn — use AttackJob instead")
 				return
 			end

@@ -1,4 +1,7 @@
 --!strict
+-- @Name InputModeFSM
+-- @Description FSM state machine module.
+
 local InputModeFSM = {
 	Name = "InputModeFSM",
 	className = "InputModeFSM",

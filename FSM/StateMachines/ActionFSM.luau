@@ -1,6 +1,6 @@
 --!strict
 -- @Name ActionFSM
--- @Author Copilot
+-- @Author iKrypto
 -- @Description Client-side FSM managing action overlays (melee, dash, flip, hit react).
 --   Writes ActionOverlay to CharacterEntity for ServiceManager observability.
 --   Replaces imperative _attackBusy flag and ad-hoc cooldown logic.
@@ -8,14 +8,26 @@
 local ActionFSM = {
 	Name = "ActionFSM",
 	className = "ActionFSM",
-	validStates = { "None", "MeleeWindup", "MeleeStrike", "MeleeRecovery", "Dashing", "Flipping", "HitReact", "Completed", "Failed" },
+	validStates = {
+		"None",
+		"MeleeWindup",
+		"MeleeStrike",
+		"MeleeRecovery",
+		"Dashing",
+		"Flipping",
+		"HitReact",
+		"Completed",
+		"Failed",
+	},
 	terminalStates = { "Completed", "Failed" },
 	initialState = "None",
 }
 
 local function getCharEntity(fsm: any): any?
 	local orchestrator = (shared :: any).fsm
-	if not orchestrator then return nil end
+	if not orchestrator then
+		return nil
+	end
 	return orchestrator.GetEntity(fsm.CharacterEntityId)
 end
 
@@ -124,8 +136,14 @@ function ActionFSM:RegisterStates()
 end
 
 -- Public API: request a melee attack sequence
-function ActionFSM.RequestMelee(fsm: any, phases: { { Name: string, Speed: number, Duration: number } }, onAnimate: (string, number?, number?) -> ())
-	if fsm.State ~= "None" then return false end
+function ActionFSM.RequestMelee(
+	fsm: any,
+	phases: { { Name: string, Speed: number, Duration: number } },
+	onAnimate: (string, number?, number?) -> ()
+)
+	if fsm.State ~= "None" then
+		return false
+	end
 	fsm.Context._movePhases = phases
 	fsm.Context._onAnimate = onAnimate
 
@@ -138,14 +156,18 @@ function ActionFSM.RequestMelee(fsm: any, phases: { { Name: string, Speed: numbe
 end
 
 function ActionFSM.RequestDash(fsm: any, direction: string)
-	if fsm.State ~= "None" then return false end
+	if fsm.State ~= "None" then
+		return false
+	end
 	fsm.Context._dashDirection = direction
 	fsm.State = "Dashing"
 	return true
 end
 
 function ActionFSM.RequestFlip(fsm: any)
-	if fsm.State ~= "None" then return false end
+	if fsm.State ~= "None" then
+		return false
+	end
 	fsm.State = "Flipping"
 	return true
 end

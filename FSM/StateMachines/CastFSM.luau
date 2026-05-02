@@ -1,4 +1,6 @@
 --!strict
+-- @Name CastFSM
+-- @Description FSM state machine module.
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -6,7 +8,22 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CastFSM = {
 	Name = "CastFSM",
 	className = "CastFSM",
-	validStates = { "Idle", "ValidateAbility", "ValidateResources", "AcquireLock", "DeductResources", "EmitCastAnimation", "WaitCastDuration", "ValidateNotInterrupted", "ExecuteEffect", "EmitFinishAnimation", "SetCooldown", "ReleaseLock", "Completed", "Failed" },
+	validStates = {
+		"Idle",
+		"ValidateAbility",
+		"ValidateResources",
+		"AcquireLock",
+		"DeductResources",
+		"EmitCastAnimation",
+		"WaitCastDuration",
+		"ValidateNotInterrupted",
+		"ExecuteEffect",
+		"EmitFinishAnimation",
+		"SetCooldown",
+		"ReleaseLock",
+		"Completed",
+		"Failed",
+	},
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Idle",
 }
@@ -193,7 +210,15 @@ local function resolveCastDef(fsm: any, orchestrator: any): any?
 	return castDef
 end
 
-local function appendIntent(orchestrator: any, characterEntity: any, kind: string, payload: { [string]: any }, sourceCharId: string, targetCharId: string?, lockId: string?)
+local function appendIntent(
+	orchestrator: any,
+	characterEntity: any,
+	kind: string,
+	payload: { [string]: any },
+	sourceCharId: string,
+	targetCharId: string?,
+	lockId: string?
+)
 	local intentSchema = getSharedModule(orchestrator, "IntentSchema")
 	intentSchema.AppendIntent(characterEntity, {
 		Kind = kind,
@@ -260,7 +285,13 @@ local function scanVictims(orchestrator: any, sourceCharId: string, origin: Vect
 	return victims
 end
 
-local function createDamageJob(orchestrator: any, attackerCharEntityId: string, victimEntity: any, attackName: string, baseDamage: number)
+local function createDamageJob(
+	orchestrator: any,
+	attackerCharEntityId: string,
+	victimEntity: any,
+	attackName: string,
+	baseDamage: number
+)
 	local victimUserId = victimEntity and victimEntity.UserId
 	if typeof(victimUserId) ~= "number" then
 		return
@@ -293,7 +324,13 @@ local function applyHealthChange(charEntity: any, humanoid: Humanoid, amount: nu
 	charEntity:UpdateEntity(lockId)
 end
 
-local function applyResourceRestore(charEntity: any, fieldName: string, maxFieldName: string, amount: number, lockId: string?)
+local function applyResourceRestore(
+	charEntity: any,
+	fieldName: string,
+	maxFieldName: string,
+	amount: number,
+	lockId: string?
+)
 	local current = tonumber(charEntity[fieldName]) or 0
 	local maximum = tonumber(charEntity[maxFieldName]) or current
 	charEntity[fieldName] = clampResource(current + amount, maximum)
@@ -355,7 +392,11 @@ local function consumeOneInContainer(container: any, itemId: string): (boolean, 
 		end
 		if typeof(value) == "table" and (value.Id == itemId or value.ItemId == itemId) then
 			local itemClone = table.clone(value)
-			local countField = if itemClone.Count ~= nil then "Count" elseif itemClone.Quantity ~= nil then "Quantity" elseif itemClone.Amount ~= nil then "Amount" else nil
+			local countField = if itemClone.Count ~= nil
+				then "Count"
+				elseif itemClone.Quantity ~= nil then "Quantity"
+				elseif itemClone.Amount ~= nil then "Amount"
+				else nil
 			if countField then
 				local nextCount = (tonumber(itemClone[countField]) or 1) - 1
 				if nextCount > 0 then
@@ -390,7 +431,11 @@ local function consumeOneInContainer(container: any, itemId: string): (boolean, 
 		end
 		if typeof(value) == "table" and (value.Id == itemId or value.ItemId == itemId) then
 			local itemClone = table.clone(value)
-			local countField = if itemClone.Count ~= nil then "Count" elseif itemClone.Quantity ~= nil then "Quantity" elseif itemClone.Amount ~= nil then "Amount" else nil
+			local countField = if itemClone.Count ~= nil
+				then "Count"
+				elseif itemClone.Quantity ~= nil then "Quantity"
+				elseif itemClone.Amount ~= nil then "Amount"
+				else nil
 			if countField then
 				local nextCount = (tonumber(itemClone[countField]) or 1) - 1
 				if nextCount > 0 then
@@ -486,7 +531,13 @@ local function spawnProjectile(orchestrator: any, fsm: any, castDef: any, charEn
 		end
 
 		if victimEntity then
-			createDamageJob(orchestrator, fsm.CharacterEntityId, victimEntity, castDef.Id, tonumber(castDef.Damage) or 0)
+			createDamageJob(
+				orchestrator,
+				fsm.CharacterEntityId,
+				victimEntity,
+				castDef.Id,
+				tonumber(castDef.Damage) or 0
+			)
 		end
 
 		if hitConnection then
@@ -497,7 +548,15 @@ local function spawnProjectile(orchestrator: any, fsm: any, castDef: any, charEn
 	end)
 end
 
-local function executeCastEffect(orchestrator: any, fsm: any, castDef: any, charEntity: any, playerEntity: any, humanoid: Humanoid, rootPart: BasePart)
+local function executeCastEffect(
+	orchestrator: any,
+	fsm: any,
+	castDef: any,
+	charEntity: any,
+	playerEntity: any,
+	humanoid: Humanoid,
+	rootPart: BasePart
+)
 	local effectType = castDef.EffectType
 	local attackName = castDef.Id or castDef.Name or "Cast"
 
@@ -543,7 +602,13 @@ local function executeCastEffect(orchestrator: any, fsm: any, castDef: any, char
 		bodyVelocity.Parent = rootPart
 		Debris:AddItem(bodyVelocity, dashDuration)
 		if targetEntity then
-			createDamageJob(orchestrator, fsm.CharacterEntityId, targetEntity, attackName, tonumber(castDef.Damage) or 0)
+			createDamageJob(
+				orchestrator,
+				fsm.CharacterEntityId,
+				targetEntity,
+				attackName,
+				tonumber(castDef.Damage) or 0
+			)
 		end
 	elseif effectType == "TargetedAoE" then
 		local origin = resolveTargetPosition(orchestrator, charEntity, rootPart)
@@ -621,7 +686,11 @@ function CastFSM:RegisterStates()
 				return
 			end
 
-			if castDef.SourceType == "Ability" and typeof(castDef.WeaponType) == "string" and castDef.WeaponType ~= "" then
+			if
+				castDef.SourceType == "Ability"
+				and typeof(castDef.WeaponType) == "string"
+				and castDef.WeaponType ~= ""
+			then
 				local equippedWeaponType = resolveWeaponType(charEntity)
 				if equippedWeaponType ~= castDef.WeaponType then
 					fsm:Fail("Incorrect weapon type")
@@ -637,7 +706,12 @@ function CastFSM:RegisterStates()
 			end
 
 			if castDef.SourceType == "Consumable" then
-				if not (containerHasItem(playerEntity.Inventory, castDef.Id) or containerHasItem(playerEntity.BagContents, castDef.Id)) then
+				if
+					not (
+						containerHasItem(playerEntity.Inventory, castDef.Id)
+						or containerHasItem(playerEntity.BagContents, castDef.Id)
+					)
+				then
 					fsm:Fail("Consumable not found")
 					return
 				end
@@ -811,7 +885,9 @@ function CastFSM:RegisterStates()
 				fsm.State = "ReleaseLock"
 				return
 			end
-			local cooldowns = if typeof(charEntity.AbilityCooldowns) == "table" then table.clone(charEntity.AbilityCooldowns) else {}
+			local cooldowns = if typeof(charEntity.AbilityCooldowns) == "table"
+				then table.clone(charEntity.AbilityCooldowns)
+				else {}
 			cooldowns[castDef.Id] = os.clock() + (tonumber(castDef.Cooldown) or 0)
 			charEntity.AbilityCooldowns = cooldowns
 			charEntity:SetContext("_abilityCooldowns", cooldowns)

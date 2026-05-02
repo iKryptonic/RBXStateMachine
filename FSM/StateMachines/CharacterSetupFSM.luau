@@ -6,7 +6,18 @@
 local CharacterSetupFSM = {
 	Name = "CharacterSetupFSM",
 	className = "CharacterSetupFSM",
-	validStates = { "Validating", "DisablingDefaults", "AwaitingEntities", "InitControllers", "InitFSMs", "BindingEvents", "Active", "TearingDown", "Completed", "Failed" },
+	validStates = {
+		"Validating",
+		"DisablingDefaults",
+		"AwaitingEntities",
+		"InitControllers",
+		"InitFSMs",
+		"BindingEvents",
+		"Active",
+		"TearingDown",
+		"Completed",
+		"Failed",
+	},
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validating",
 }
@@ -105,10 +116,18 @@ function CharacterSetupFSM:RegisterStates()
 
 			local parts = getRequiredParts(character)
 			local missing = {}
-			if not parts.Humanoid then table.insert(missing, "Humanoid") end
-			if not parts.RootPart then table.insert(missing, "HumanoidRootPart") end
-			if not parts.Torso then table.insert(missing, "Torso") end
-			if not parts.Head then table.insert(missing, "Head") end
+			if not parts.Humanoid then
+				table.insert(missing, "Humanoid")
+			end
+			if not parts.RootPart then
+				table.insert(missing, "HumanoidRootPart")
+			end
+			if not parts.Torso then
+				table.insert(missing, "Torso")
+			end
+			if not parts.Head then
+				table.insert(missing, "Head")
+			end
 			for limbName, limb in pairs(parts.Limbs) do
 				if not limb then
 					table.insert(missing, limbName)
@@ -126,7 +145,10 @@ function CharacterSetupFSM:RegisterStates()
 			fsm.Context.Torso = parts.Torso
 			fsm.Context.Head = parts.Head
 			fsm.Context.Limbs = parts.Limbs
-			fsm:Log({ Level = "INFO", Message = string.format("CharacterSetupFSM validated %s", character:GetFullName()) })
+			fsm:Log({
+				Level = "INFO",
+				Message = string.format("CharacterSetupFSM validated %s", character:GetFullName()),
+			})
 			fsm.State = "DisablingDefaults"
 		end,
 	}, { "DisablingDefaults", "Failed" })
@@ -148,7 +170,13 @@ function CharacterSetupFSM:RegisterStates()
 				animator.Parent = nil
 			end
 
-			fsm:Log({ Level = "INFO", Message = string.format("CharacterSetupFSM disabled defaults for %s", tostring(fsm.CharacterEntityId or character.Name)) })
+			fsm:Log({
+				Level = "INFO",
+				Message = string.format(
+					"CharacterSetupFSM disabled defaults for %s",
+					tostring(fsm.CharacterEntityId or character.Name)
+				),
+			})
 			fsm.State = "AwaitingEntities"
 		end,
 	}, { "AwaitingEntities", "Failed" })
@@ -156,7 +184,13 @@ function CharacterSetupFSM:RegisterStates()
 	self:AddState("AwaitingEntities", {
 		OnEnter = function(_, fsm)
 			fsm.Context._awaitStartedAt = os.clock()
-			fsm:Log({ Level = "INFO", Message = string.format("CharacterSetupFSM awaiting entities for %s", tostring(fsm.CharacterEntityId or "unknown")) })
+			fsm:Log({
+				Level = "INFO",
+				Message = string.format(
+					"CharacterSetupFSM awaiting entities for %s",
+					tostring(fsm.CharacterEntityId or "unknown")
+				),
+			})
 			fsm:ScheduleTransition(10, "Failed", { "Timed out waiting for CharacterEntity/PlayerEntity" })
 		end,
 		OnHeartbeat = function(_, fsm)
@@ -165,13 +199,23 @@ function CharacterSetupFSM:RegisterStates()
 				return
 			end
 
-			local charEntity = if typeof(fsm.CharacterEntityId) == "string" then orchestrator.GetEntity(fsm.CharacterEntityId) else nil
-			local playerEntity = if typeof(fsm.PlayerEntityId) == "string" then orchestrator.GetEntity(fsm.PlayerEntityId) else nil
+			local charEntity = if typeof(fsm.CharacterEntityId) == "string"
+				then orchestrator.GetEntity(fsm.CharacterEntityId)
+				else nil
+			local playerEntity = if typeof(fsm.PlayerEntityId) == "string"
+				then orchestrator.GetEntity(fsm.PlayerEntityId)
+				else nil
 			if charEntity and playerEntity then
 				fsm:CancelScheduledTransition()
 				fsm.Context.CharacterEntity = charEntity
 				fsm.Context.PlayerEntity = playerEntity
-				fsm:Log({ Level = "INFO", Message = string.format("CharacterSetupFSM resolved entities for %s", tostring(fsm.CharacterEntityId)) })
+				fsm:Log({
+					Level = "INFO",
+					Message = string.format(
+						"CharacterSetupFSM resolved entities for %s",
+						tostring(fsm.CharacterEntityId)
+					),
+				})
 				fsm.State = "InitControllers"
 			end
 		end,
@@ -188,7 +232,13 @@ function CharacterSetupFSM:RegisterStates()
 			fsm.Context.InputRouter = bundle.InputRouter
 			fsm.Context.InventoryGui = bundle.InventoryGui
 			fsm.Context.TargetingSystem = bundle.TargetingSystem
-			fsm:Log({ Level = "INFO", Message = string.format("CharacterSetupFSM initialized controller bundle for %s", tostring(fsm.CharacterEntityId)) })
+			fsm:Log({
+				Level = "INFO",
+				Message = string.format(
+					"CharacterSetupFSM initialized controller bundle for %s",
+					tostring(fsm.CharacterEntityId)
+				),
+			})
 			fsm.State = "InitFSMs"
 		end,
 	}, { "InitFSMs", "Failed" })
@@ -203,7 +253,13 @@ function CharacterSetupFSM:RegisterStates()
 			fsm.Context.InputFSM = bundle.InputFSM
 			fsm.Context.InputModeFSM = bundle.InputModeFSM
 			fsm.Context.AnimationStateFSM = bundle.AnimationStateFSM
-			fsm:Log({ Level = "INFO", Message = string.format("CharacterSetupFSM initialized FSM bundle for %s", tostring(fsm.CharacterEntityId)) })
+			fsm:Log({
+				Level = "INFO",
+				Message = string.format(
+					"CharacterSetupFSM initialized FSM bundle for %s",
+					tostring(fsm.CharacterEntityId)
+				),
+			})
 			fsm.State = "BindingEvents"
 		end,
 	}, { "BindingEvents", "Failed" })
@@ -211,14 +267,20 @@ function CharacterSetupFSM:RegisterStates()
 	self:AddState("BindingEvents", {
 		OnEnter = function(_, fsm)
 			fsm.Context.Connections = safeInvoke(fsm.Context.BindEvents, fsm) or {}
-			fsm:Log({ Level = "INFO", Message = string.format("CharacterSetupFSM bound events for %s", tostring(fsm.CharacterEntityId)) })
+			fsm:Log({
+				Level = "INFO",
+				Message = string.format("CharacterSetupFSM bound events for %s", tostring(fsm.CharacterEntityId)),
+			})
 			fsm.State = "Active"
 		end,
 	}, { "Active", "Failed" })
 
 	self:AddState("Active", {
 		OnEnter = function(_, fsm)
-			fsm:Log({ Level = "INFO", Message = string.format("CharacterSetupFSM active for %s", tostring(fsm.CharacterEntityId)) })
+			fsm:Log({
+				Level = "INFO",
+				Message = string.format("CharacterSetupFSM active for %s", tostring(fsm.CharacterEntityId)),
+			})
 		end,
 		OnHeartbeat = function(_, fsm)
 			local character = fsm.Context.Character
@@ -256,20 +318,33 @@ function CharacterSetupFSM:RegisterStates()
 			})
 			safeInvoke(fsm.Context.RestoreDefaults, fsm)
 			restoreDefaults(fsm)
-			fsm:Log({ Level = "INFO", Message = string.format("CharacterSetupFSM tore down %s", tostring(fsm.CharacterEntityId)) })
+			fsm:Log({
+				Level = "INFO",
+				Message = string.format("CharacterSetupFSM tore down %s", tostring(fsm.CharacterEntityId)),
+			})
 			fsm.State = "Completed"
 		end,
 	}, { "Completed" })
 
 	self:AddState("Completed", {
 		OnEnter = function(_, fsm)
-			fsm:Log({ Level = "INFO", Message = string.format("CharacterSetupFSM completed for %s", tostring(fsm.CharacterEntityId)) })
+			fsm:Log({
+				Level = "INFO",
+				Message = string.format("CharacterSetupFSM completed for %s", tostring(fsm.CharacterEntityId)),
+			})
 		end,
 	}, {})
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm, reason)
-			fsm:Log({ Level = "ERROR", Message = string.format("CharacterSetupFSM failed for %s: %s", tostring(fsm.CharacterEntityId), tostring(reason or "unknown error")) })
+			fsm:Log({
+				Level = "ERROR",
+				Message = string.format(
+					"CharacterSetupFSM failed for %s: %s",
+					tostring(fsm.CharacterEntityId),
+					tostring(reason or "unknown error")
+				),
+			})
 			destroyManaged(fsm.Context.Connections)
 			safeInvoke(fsm.Context.RestoreDefaults, fsm)
 			restoreDefaults(fsm)

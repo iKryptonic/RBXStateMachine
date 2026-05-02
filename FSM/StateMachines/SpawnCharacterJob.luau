@@ -11,7 +11,13 @@ local SpawnCharacterJob = {
 	initialState = "Validate",
 }
 
-local function createAndStartStateMachine(orchestrator: any, className: string, stateMachineId: string, context: { [string]: any }, initialState: string)
+local function createAndStartStateMachine(
+	orchestrator: any,
+	className: string,
+	stateMachineId: string,
+	context: { [string]: any },
+	initialState: string
+)
 	local machine = orchestrator.CreateStateMachine({
 		StateMachineClass = className,
 		StateMachineId = stateMachineId,
@@ -89,12 +95,23 @@ function SpawnCharacterJob:RegisterStates()
 				for hand, itemId in equipped do
 					local itemText = tostring(itemId)
 					if itemText ~= "" and itemText ~= "0" and hand ~= nil then
-						createAndStartStateMachine(orchestrator, "EquipJob", "SpawnEquip_" .. tostring(fsm.CharacterEntityId) .. "_" .. tostring(hand) .. "_" .. tostring(os.clock()), {
-							CharacterEntityId = fsm.CharacterEntityId,
-							PlayerEntityId = fsm.PlayerEntityId,
-							ItemId = itemText,
-							Hand = tostring(hand),
-						}, "ValidateRequest")
+						createAndStartStateMachine(
+							orchestrator,
+							"EquipJob",
+							"SpawnEquip_"
+								.. tostring(fsm.CharacterEntityId)
+								.. "_"
+								.. tostring(hand)
+								.. "_"
+								.. tostring(os.clock()),
+							{
+								CharacterEntityId = fsm.CharacterEntityId,
+								PlayerEntityId = fsm.PlayerEntityId,
+								ItemId = itemText,
+								Hand = tostring(hand),
+							},
+							"ValidateRequest"
+						)
 					end
 				end
 			end

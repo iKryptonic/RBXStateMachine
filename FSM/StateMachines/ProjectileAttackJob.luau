@@ -9,7 +9,26 @@ local Debris = game:GetService("Debris")
 local ProjectileAttackJob = {
 	Name = "ProjectileAttackJob",
 	className = "ProjectileAttackJob",
-	validStates = { "Validate", "AcquireLock", "ValidateMana", "DeductMana", "EmitChargeAnimation", "WaitCharge", "ValidateForFire", "EmitFireAnimation", "SpawnProjectile", "ConfigurePhysics", "RegisterHitDetection", "WaitForImpact", "ProcessHit", "ApplyProjectileKnockback", "DestroyProjectile", "ReleaseLock", "Completed", "Failed" },
+	validStates = {
+		"Validate",
+		"AcquireLock",
+		"ValidateMana",
+		"DeductMana",
+		"EmitChargeAnimation",
+		"WaitCharge",
+		"ValidateForFire",
+		"EmitFireAnimation",
+		"SpawnProjectile",
+		"ConfigurePhysics",
+		"RegisterHitDetection",
+		"WaitForImpact",
+		"ProcessHit",
+		"ApplyProjectileKnockback",
+		"DestroyProjectile",
+		"ReleaseLock",
+		"Completed",
+		"Failed",
+	},
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
@@ -24,22 +43,32 @@ local function getSharedModule(orchestrator: any, name: string)
 	local getModule = orchestrator and orchestrator.GetModule
 	if type(getModule) == "function" then
 		local module = getModule(name)
-		if module ~= nil then return module end
+		if module ~= nil then
+			return module
+		end
 	end
 	local RS = game:GetService("ReplicatedStorage")
 	local mod = RS:FindFirstChild(name, true)
-	if mod and mod:IsA("ModuleScript") then return require(mod) end
+	if mod and mod:IsA("ModuleScript") then
+		return require(mod)
+	end
 	return nil
 end
 
 local function getItemData(weaponId: string): any?
 	local RS = game:GetService("ReplicatedStorage")
 	local assets = RS:FindFirstChild("Assets")
-	if not assets then return nil end
+	if not assets then
+		return nil
+	end
 	local item = assets:FindFirstChild(weaponId, true)
-	if not item then return nil end
+	if not item then
+		return nil
+	end
 	local dataModule = item:FindFirstChild("Data")
-	if not dataModule or not dataModule:IsA("ModuleScript") then return nil end
+	if not dataModule or not dataModule:IsA("ModuleScript") then
+		return nil
+	end
 	local ok, data = pcall(require, dataModule)
 	return if ok then data else nil
 end
@@ -47,7 +76,9 @@ end
 local function getProjectileTemplate(weaponId: string): BasePart?
 	local RS = game:GetService("ReplicatedStorage")
 	local assets = RS:FindFirstChild("Assets")
-	if not assets then return nil end
+	if not assets then
+		return nil
+	end
 	local names = { "Arrow", weaponId .. "Projectile", "UnleashArrow", "ZephyrProjectile" }
 	for _, name in ipairs(names) do
 		local template = assets:FindFirstChild(name)
@@ -278,7 +309,8 @@ function ProjectileAttackJob:RegisterStates()
 			projectile.CanCollide = false
 			projectile.CanQuery = false
 			projectile.CanTouch = true
-			projectile.AssemblyLinearVelocity = rootPart.CFrame.LookVector * (fsm.Context._speed or DEFAULT_PROJECTILE_SPEED)
+			projectile.AssemblyLinearVelocity = rootPart.CFrame.LookVector
+				* (fsm.Context._speed or DEFAULT_PROJECTILE_SPEED)
 			projectile.Parent = workspace
 			Debris:AddItem(projectile, fsm.Context._lifetime or DEFAULT_PROJECTILE_LIFETIME)
 			fsm.State = "RegisterHitDetection"

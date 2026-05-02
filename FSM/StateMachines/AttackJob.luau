@@ -8,7 +8,19 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local AttackJob = {
 	Name = "AttackJob",
 	className = "AttackJob",
-	validStates = { "Validate", "AcquireCombatLock", "ResolveAttackDef", "ApplyMovementConstraints", "EmitWindupIntent", "PlayTimeline", "EmitRecoveryIntent", "RollbackConstraints", "ReleaseCombatLock", "Completed", "Failed" },
+	validStates = {
+		"Validate",
+		"AcquireCombatLock",
+		"ResolveAttackDef",
+		"ApplyMovementConstraints",
+		"EmitWindupIntent",
+		"PlayTimeline",
+		"EmitRecoveryIntent",
+		"RollbackConstraints",
+		"ReleaseCombatLock",
+		"Completed",
+		"Failed",
+	},
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
@@ -114,7 +126,15 @@ local function buildIntentPayload(kind: string, rawIntent: { [string]: any }): {
 	return nil
 end
 
-local function appendIntent(orchestrator: any, characterEntity: any, kind: string, payload: { [string]: any }, sourceCharId: string, targetCharId: string?, lockId: string?)
+local function appendIntent(
+	orchestrator: any,
+	characterEntity: any,
+	kind: string,
+	payload: { [string]: any },
+	sourceCharId: string,
+	targetCharId: string?,
+	lockId: string?
+)
 	local IntentSchema = getSharedModule(orchestrator, "IntentSchema")
 	IntentSchema.AppendIntent(characterEntity, {
 		Kind = kind,
@@ -124,7 +144,13 @@ local function appendIntent(orchestrator: any, characterEntity: any, kind: strin
 	}, lockId)
 end
 
-local function appendOptionalIntent(orchestrator: any, characterEntity: any, intentDef: any, sourceCharId: string, lockId: string?)
+local function appendOptionalIntent(
+	orchestrator: any,
+	characterEntity: any,
+	intentDef: any,
+	sourceCharId: string,
+	lockId: string?
+)
 	if typeof(intentDef) ~= "table" then
 		return
 	end
@@ -163,7 +189,12 @@ local function getItemData(weaponId: string): any?
 	return nil
 end
 
-local function getSequentialCombo(characterEntity: any, comboSlot: number, weaponId: string, comboDef: any): (any?, number?)
+local function getSequentialCombo(
+	characterEntity: any,
+	comboSlot: number,
+	weaponId: string,
+	comboDef: any
+): (any?, number?)
 	local comboPointers = characterEntity._ComboPointers
 	if typeof(comboPointers) ~= "table" then
 		comboPointers = {}
@@ -199,7 +230,12 @@ local function getSequentialCombo(characterEntity: any, comboSlot: number, weapo
 	return comboDef[pointerState.Pointer], pointerState.Pointer
 end
 
-local function scanMeleeRange(orchestrator: any, attackerCharEntityId: string, attackerRoot: BasePart, radius: number): { any }
+local function scanMeleeRange(
+	orchestrator: any,
+	attackerCharEntityId: string,
+	attackerRoot: BasePart,
+	radius: number
+): { any }
 	local victims = {}
 	local entities = if type(orchestrator.GetEntities) == "function" then orchestrator.GetEntities() else {}
 	for entityId, entity in pairs(entities) do
@@ -290,7 +326,13 @@ local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: numb
 
 		local damageJob = orchestrator.CreateStateMachine({
 			StateMachineClass = "DamageJob",
-			StateMachineId = string.format("%s/Damage/%d/%s/%s", fsm.Id, frameNumber, victimId, HttpService:GenerateGUID(false)),
+			StateMachineId = string.format(
+				"%s/Damage/%d/%s/%s",
+				fsm.Id,
+				frameNumber,
+				victimId,
+				HttpService:GenerateGUID(false)
+			),
 			Context = {
 				AttackerCharEntityId = fsm.CharacterEntityId,
 				VictimUserId = victimUserId,
@@ -395,7 +437,9 @@ function AttackJob:RegisterStates()
 				return
 			end
 
-			local playerEntityId = if typeof(fsm.PlayerEntityId) == "string" and fsm.PlayerEntityId ~= "" then fsm.PlayerEntityId else characterEntity.PlayerEntityId
+			local playerEntityId = if typeof(fsm.PlayerEntityId) == "string" and fsm.PlayerEntityId ~= ""
+				then fsm.PlayerEntityId
+				else characterEntity.PlayerEntityId
 			if typeof(playerEntityId) ~= "string" or playerEntityId == "" then
 				transitionToFailure(fsm, "PlayerEntityId is required")
 				return
@@ -484,7 +528,8 @@ function AttackJob:RegisterStates()
 			local selectedCombo = comboDef
 			local comboPointer = 1
 			if comboDef.Type == "Sequential" then
-				local resolvedCombo, resolvedPointer = getSequentialCombo(characterEntity, comboSlot, weaponId, comboDef)
+				local resolvedCombo, resolvedPointer =
+					getSequentialCombo(characterEntity, comboSlot, weaponId, comboDef)
 				if typeof(resolvedCombo) ~= "table" or typeof(resolvedPointer) ~= "number" then
 					transitionToFailure(fsm, "Sequential combo could not be resolved")
 					return
@@ -520,15 +565,26 @@ function AttackJob:RegisterStates()
 
 			fsm.Context._priorConstraints = {
 				CanMove = characterEntity.CanMove == true,
-				MoveSpeedCap = if typeof(characterEntity.MoveSpeedCap) == "number" then characterEntity.MoveSpeedCap else 16,
+				MoveSpeedCap = if typeof(characterEntity.MoveSpeedCap) == "number"
+					then characterEntity.MoveSpeedCap
+					else 16,
 				MouseLocked = characterEntity.MouseLocked == true,
 			}
 
 			local attackDef = fsm.Context._selectedCombo
-			local movementPatch = if typeof(attackDef) == "table" and typeof(attackDef.MovementConstraints) == "table" then attackDef.MovementConstraints else DEFAULT_CONSTRAINTS
-			characterEntity.CanMove = if typeof(movementPatch.CanMove) == "boolean" then movementPatch.CanMove else DEFAULT_CONSTRAINTS.CanMove
-			characterEntity.MoveSpeedCap = if typeof(movementPatch.MoveSpeedCap) == "number" then movementPatch.MoveSpeedCap else DEFAULT_CONSTRAINTS.MoveSpeedCap
-			characterEntity.MouseLocked = if typeof(movementPatch.MouseLocked) == "boolean" then movementPatch.MouseLocked else DEFAULT_CONSTRAINTS.MouseLocked
+			local movementPatch = if typeof(attackDef) == "table"
+					and typeof(attackDef.MovementConstraints) == "table"
+				then attackDef.MovementConstraints
+				else DEFAULT_CONSTRAINTS
+			characterEntity.CanMove = if typeof(movementPatch.CanMove) == "boolean"
+				then movementPatch.CanMove
+				else DEFAULT_CONSTRAINTS.CanMove
+			characterEntity.MoveSpeedCap = if typeof(movementPatch.MoveSpeedCap) == "number"
+				then movementPatch.MoveSpeedCap
+				else DEFAULT_CONSTRAINTS.MoveSpeedCap
+			characterEntity.MouseLocked = if typeof(movementPatch.MouseLocked) == "boolean"
+				then movementPatch.MouseLocked
+				else DEFAULT_CONSTRAINTS.MouseLocked
 			if not characterEntity:UpdateEntity(fsm.Id) then
 				transitionToFailure(fsm, "Failed to apply movement constraints")
 				return
@@ -544,7 +600,13 @@ function AttackJob:RegisterStates()
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity then
 				local attackDef = fsm.Context._selectedCombo
-				appendOptionalIntent(fsm:GetOrchestrator(), characterEntity, if typeof(attackDef) == "table" then attackDef.WindupIntent else nil, fsm.CharacterEntityId, fsm.Id)
+				appendOptionalIntent(
+					fsm:GetOrchestrator(),
+					characterEntity,
+					if typeof(attackDef) == "table" then attackDef.WindupIntent else nil,
+					fsm.CharacterEntityId,
+					fsm.Id
+				)
 			end
 			fsm.State = "PlayTimeline"
 		end,
@@ -569,7 +631,9 @@ function AttackJob:RegisterStates()
 				return
 			end
 
-			fsm.Context._timelineElapsed = (if typeof(fsm.Context._timelineElapsed) == "number" then fsm.Context._timelineElapsed else 0) + dt
+			fsm.Context._timelineElapsed = (
+				if typeof(fsm.Context._timelineElapsed) == "number" then fsm.Context._timelineElapsed else 0
+			) + dt
 			local frame = math.floor(fsm.Context._timelineElapsed * 60 + 0.5)
 			if frame < (fsm.Context._timelineFrame or 0) then
 				frame = fsm.Context._timelineFrame
@@ -607,7 +671,13 @@ function AttackJob:RegisterStates()
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity then
 				local attackDef = fsm.Context._selectedCombo
-				appendOptionalIntent(fsm:GetOrchestrator(), characterEntity, if typeof(attackDef) == "table" then attackDef.RecoveryIntent else nil, fsm.CharacterEntityId, fsm.Id)
+				appendOptionalIntent(
+					fsm:GetOrchestrator(),
+					characterEntity,
+					if typeof(attackDef) == "table" then attackDef.RecoveryIntent else nil,
+					fsm.CharacterEntityId,
+					fsm.Id
+				)
 			end
 			fsm.State = "RollbackConstraints"
 		end,
@@ -665,7 +735,6 @@ function AttackJob:RegisterStates()
 	end, {})
 end
 
-function AttackJob:OnCleanup()
-end
+function AttackJob:OnCleanup() end
 
 return AttackJob
