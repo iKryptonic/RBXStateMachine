@@ -117,6 +117,17 @@ function ProjectileAttackJob:RegisterStates()
 				return
 			end
 
+			-- Check mana
+			local manaCost = (itemData.ManaCost) or 10
+			if (charEntity.Mana or 0) < manaCost then
+				fsm:Fail("Not enough mana")
+				return
+			end
+			-- Deduct mana
+			charEntity.Mana = (charEntity.Mana or 50) - manaCost
+			charEntity:UpdateEntity()
+			fsm.Context._manaCost = manaCost
+
 			fsm.Context._charEntity = charEntity
 			fsm.Context._character = character
 			fsm.Context._humanoid = humanoid

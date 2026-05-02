@@ -58,6 +58,18 @@ function DashFSM:RegisterStates()
 				return
 			end
 
+			local orchestrator = (shared :: any).fsm
+			local charEntity = orchestrator and orchestrator.GetEntity(fsm.CharacterEntityId)
+			if charEntity then
+				local staminaCost = 15
+				if (charEntity.Stamina or 0) < staminaCost then
+					fsm.State = "Ready"
+					return
+				end
+				charEntity.Stamina = (charEntity.Stamina or 100) - staminaCost
+				pcall(function() charEntity:UpdateEntity() end)
+			end
+
 			-- Calculate impulse direction
 			local lookVector = rootPart.CFrame.LookVector
 			local rightVector = rootPart.CFrame.RightVector
