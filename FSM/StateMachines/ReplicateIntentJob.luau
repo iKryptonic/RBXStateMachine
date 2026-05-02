@@ -95,6 +95,9 @@ end
 local function validateAllowedPayload(kind: string, payload: { [string]: any }, allowLists: any): string?
 	if kind == "Animation" then
 		local name = payload.Name
+		if allowLists.AllowAllAnimations == true then
+			return nil
+		end
 		if typeof(name) ~= "string" or allowLists.ValidAnimationNames[name] ~= true then
 			return "Animation intent uses an allowlist-blocked animation"
 		end
