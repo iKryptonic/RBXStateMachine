@@ -5,6 +5,10 @@
 --   States: Grounded → InAir → ValidateFlip → DeductFlipStamina → PlayFlipSound → TriggerFlipAnimation → ApplyUpwardForce → RotateCharacter → Flipping → PlayLandSound → TriggerLandAnimation → Cooldown → Grounded
 
 local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
+assert(Helpers, "Helpers folder not found")
+local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 
 local JumpFSM = {
 	Name = "JumpFSM",
@@ -138,7 +142,11 @@ function JumpFSM:RegisterStates()
 				return
 			end
 
-			charEntity.Stamina = math.max(0, stamina - DOUBLE_JUMP_STAMINA_COST)
+			if not ResourceHelpers.deductStamina(charEntity, DOUBLE_JUMP_STAMINA_COST) then
+				fsm.Context._flipRequested = false
+				fsm.State = "InAir"
+				return
+			end
 			pcall(function()
 				charEntity:UpdateEntity()
 			end)

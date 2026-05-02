@@ -3,6 +3,10 @@
 -- @Description FSM state machine module.
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
+assert(Helpers, "Helpers folder not found")
+local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
+local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
 -- @Name LoadPlayerJob
 -- @Author iKrypto
 -- @Description Handles player initialization: creates PlayerEntity (persistent), waits for character, creates CharacterEntity, registers command handlers
@@ -64,45 +68,6 @@ local function createAndStartStateMachine(
 	return machine
 end
 
-local function getSharedModule(orchestrator: any, name: string)
-	local getModule = orchestrator and orchestrator.GetModule
-	if type(getModule) == "function" then
-		local module = getModule(name)
-		if module ~= nil then
-			return module
-		end
-	end
-
-	local sharedFolder = ReplicatedStorage:FindFirstChild("shared")
-	if sharedFolder then
-		local moduleScript = sharedFolder:FindFirstChild(name)
-		if moduleScript and moduleScript:IsA("ModuleScript") then
-			return require(moduleScript)
-		end
-	end
-	return error("Shared module not found: " .. name)
-end
-
-local function syncCharacterHumanoid(charEntity: any)
-	local character = charEntity and charEntity.Instance
-	if not character or not character:IsA("Model") then
-		return
-	end
-
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then
-		return
-	end
-
-	if typeof(charEntity.MaxHealth) == "number" and charEntity.MaxHealth > 0 then
-		humanoid.MaxHealth = charEntity.MaxHealth
-	end
-	if typeof(charEntity.Health) == "number" then
-		charEntity.Health = math.clamp(charEntity.Health, 0, humanoid.MaxHealth)
-		humanoid.Health = charEntity.Health
-	end
-end
-
 -- Initialization helper only: seeds persistent player defaults before behavioral states run.
 local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player: Player, userId: number)
 	playerEntity:SetContext("Instance", player)
@@ -155,7 +120,7 @@ local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player:
 		dirty = true
 	end
 
-	local talentTreeDefs = getSharedModule(orchestrator, "TalentTreeDefs")
+	local talentTreeDefs = ModuleLoader.requireSharedModule(orchestrator, "TalentTreeDefs")
 	local remainingSkillPoints = talentTreeDefs.GetRemainingSkillPoints(playerEntity)
 	if type(playerEntity.SkillPoints) ~= "number" or playerEntity.SkillPoints ~= remainingSkillPoints then
 		playerEntity.SkillPoints = remainingSkillPoints
@@ -307,7 +272,7 @@ local function applyCharacterDefaults(charEntity: any, character: Model, userId:
 		dirty = true
 	end
 
-	syncCharacterHumanoid(charEntity)
+	EntityHelpers.syncHumanoidFromEntity(charEntity)
 	if dirty then
 		charEntity:UpdateEntity()
 	end
@@ -463,7 +428,7 @@ function LoadPlayerJob:RegisterStates()
 			local playerEntity = orchestrator.GetEntity(playerEntityId)
 			if playerEntity then
 				local passiveEffects =
-					getSharedModule(orchestrator, "TalentTreeDefs").GetMergedPassiveEffects(playerEntity)
+					ModuleLoader.requireSharedModule(orchestrator, "TalentTreeDefs").GetMergedPassiveEffects(playerEntity)
 				local appliedPassiveBonuses = false
 				for stat, bonus in pairs(passiveEffects) do
 					if typeof(bonus) == "number" and typeof(charEntity[stat]) == "number" then
@@ -472,7 +437,7 @@ function LoadPlayerJob:RegisterStates()
 					end
 				end
 				if appliedPassiveBonuses then
-					syncCharacterHumanoid(charEntity)
+					EntityHelpers.syncHumanoidFromEntity(charEntity)
 					charEntity:UpdateEntity()
 				end
 			end
@@ -701,7 +666,7 @@ function LoadPlayerJob:RegisterStates()
 					return
 				end
 
-				local talentTreeDefs = getSharedModule(orchestrator, "TalentTreeDefs")
+				local talentTreeDefs = ModuleLoader.requireSharedModule(orchestrator, "TalentTreeDefs")
 				local playerEntity = orchestrator.GetEntity(playerEntityId)
 				if not playerEntity then
 					return
@@ -735,7 +700,7 @@ function LoadPlayerJob:RegisterStates()
 								charEntity[stat] = (tonumber(charEntity[stat]) or 0) + bonus
 							end
 						end
-						syncCharacterHumanoid(charEntity)
+						EntityHelpers.syncHumanoidFromEntity(charEntity)
 						charEntity:UpdateEntity()
 					end
 				end
@@ -775,7 +740,7 @@ function LoadPlayerJob:RegisterStates()
 						return
 					end
 
-					local statusEffectHelper = getSharedModule(orchestrator, "StatusEffectHelper")
+					local statusEffectHelper = ModuleLoader.requireSharedModule(orchestrator, "StatusEffectHelper")
 					local requestedEffectId = tostring(effectId or "")
 					local targetId = if typeof(targetCharEntityId) == "string" and targetCharEntityId ~= ""
 						then targetCharEntityId
