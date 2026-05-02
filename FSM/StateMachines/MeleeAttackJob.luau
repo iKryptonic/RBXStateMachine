@@ -200,7 +200,7 @@ function MeleeAttackJob:RegisterStates()
 				end
 			end
 
-			-- Scan for victims and deal damage at mid-point
+			-- Scan for victims and deal damage at mid-point via DamageJob
 			task.delay(totalDuration * 0.5, function()
 				if not fsm.IsActive then return end
 				local orchestrator = getOrchestrator()
@@ -209,12 +209,25 @@ function MeleeAttackJob:RegisterStates()
 				local knockbackDir = attackerRoot.CFrame.LookVector
 				local victims = scanMeleeRange(orchestrator, fsm.CharacterEntityId, attackerRoot, DEFAULT_MELEE_RADIUS)
 				for _, victim in ipairs(victims) do
-					local victimChar = victim.Instance
-					local victimHumanoid = victimChar and victimChar:FindFirstChildOfClass("Humanoid")
-					local victimRoot = victimChar and victimChar:FindFirstChild("HumanoidRootPart")
-					if victimHumanoid and victimHumanoid.Health > 0 then
-						victimHumanoid:TakeDamage(damage)
-						-- Knockback relative to attacker's facing direction
+					local victimHumanoid = victim.Instance and victim.Instance:FindFirstChildOfClass("Humanoid")
+					local victimRoot = victim.Instance and victim.Instance:FindFirstChild("HumanoidRootPart")
+					local victimUserId = victim.UserId
+					if victimHumanoid and victimHumanoid.Health > 0 and typeof(victimUserId) == "number" then
+						-- Use DamageJob for proper HitReact + damage numbers
+						local damageJob = orchestrator.CreateStateMachine({
+							StateMachineClass = "DamageJob",
+							StateMachineId = string.format("MeleeDmg_%s_%s", fsm.Id, tostring(victimUserId)),
+							Context = {
+								AttackerCharEntityId = fsm.CharacterEntityId,
+								VictimUserId = victimUserId,
+								AttackName = "Melee_" .. tostring(comboSlot),
+								BaseDamage = damage,
+							},
+						})
+						if damageJob then
+							damageJob:Start({ State = "Validate" })
+						end
+						-- Knockback relative to attacker's facing
 						if victimRoot then
 							local knockForce = knockbackDir * 25 + Vector3.new(0, 10, 0)
 							victimRoot.AssemblyLinearVelocity = victimRoot.AssemblyLinearVelocity + knockForce
