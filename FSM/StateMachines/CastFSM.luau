@@ -17,7 +17,16 @@ local CastFSM = {
 		"EmitCastAnimation",
 		"WaitCastDuration",
 		"ValidateNotInterrupted",
-		"ExecuteEffect",
+		"Execute",
+		"ExecuteMeleeSingle",
+		"ExecuteMeleeAoE",
+		"ExecuteProjectile",
+		"ExecuteSelfHeal",
+		"ExecuteInstantHeal",
+		"ExecuteInstantStamina",
+		"ExecuteInstantMana",
+		"ExecuteDash",
+		"ExecuteTargetedAoE",
 		"EmitFinishAnimation",
 		"SetCooldown",
 		"ReleaseLock",
@@ -548,79 +557,44 @@ local function spawnProjectile(orchestrator: any, fsm: any, castDef: any, charEn
 	end)
 end
 
-local function executeCastEffect(
-	orchestrator: any,
-	fsm: any,
-	castDef: any,
-	charEntity: any,
-	playerEntity: any,
-	humanoid: Humanoid,
-	rootPart: BasePart
-)
-	local effectType = castDef.EffectType
-	local attackName = castDef.Id or castDef.Name or "Cast"
+local EFFECT_STATE_BY_TYPE = {
+	MeleeSingle = "ExecuteMeleeSingle",
+	MeleeAoE = "ExecuteMeleeAoE",
+	Projectile = "ExecuteProjectile",
+	SelfHeal = "ExecuteSelfHeal",
+	InstantHeal = "ExecuteInstantHeal",
+	InstantStamina = "ExecuteInstantStamina",
+	InstantMana = "ExecuteInstantMana",
+	Dash = "ExecuteDash",
+	TargetedAoE = "ExecuteTargetedAoE",
+}
 
-	if effectType == "MeleeSingle" then
-		local radius = tonumber(castDef.EffectRadius) or DEFAULT_MELEE_RADIUS
-		local victims = scanVictims(orchestrator, fsm.CharacterEntityId, rootPart.Position, radius)
-		local victim = victims[1]
-		if victim then
-			createDamageJob(orchestrator, fsm.CharacterEntityId, victim, attackName, tonumber(castDef.Damage) or 0)
-		end
-	elseif effectType == "MeleeAoE" then
-		local radius = tonumber(castDef.EffectRadius) or DEFAULT_MELEE_RADIUS
-		for _, victim in ipairs(scanVictims(orchestrator, fsm.CharacterEntityId, rootPart.Position, radius)) do
-			createDamageJob(orchestrator, fsm.CharacterEntityId, victim, attackName, tonumber(castDef.Damage) or 0)
-		end
-	elseif effectType == "Projectile" then
-		spawnProjectile(orchestrator, fsm, castDef, charEntity, rootPart)
-	elseif effectType == "SelfHeal" then
-		applyHealthChange(charEntity, humanoid, tonumber(castDef.HealAmount) or 0, fsm.Id)
-	elseif effectType == "InstantHeal" then
-		applyHealthChange(charEntity, humanoid, tonumber(castDef.HealAmount) or 0, fsm.Id)
-	elseif effectType == "InstantStamina" then
-		applyResourceRestore(charEntity, "Stamina", "MaxStamina", tonumber(castDef.RestoreAmount) or 0, fsm.Id)
-	elseif effectType == "InstantMana" then
-		applyResourceRestore(charEntity, "Mana", "MaxMana", tonumber(castDef.RestoreAmount) or 0, fsm.Id)
-	elseif effectType == "Dash" then
-		local targetEntity = resolveTargetEntity(orchestrator, charEntity)
-		local dashDirection = rootPart.CFrame.LookVector
-		if targetEntity and targetEntity.Instance and targetEntity.Instance:IsA("Model") then
-			local _, targetRoot = getHumanoidAndRoot(targetEntity.Instance)
-			if targetRoot then
-				local offset = targetRoot.Position - rootPart.Position
-				if offset.Magnitude > 0.01 then
-					dashDirection = offset.Unit
-				end
-			end
-		end
-		local dashDistance = tonumber(castDef.DashDistance) or 20
-		local dashDuration = DEFAULT_DASH_DURATION
-		local bodyVelocity = Instance.new("BodyVelocity")
-		bodyVelocity.MaxForce = Vector3.new(1e5, 0, 1e5)
-		bodyVelocity.Velocity = dashDirection * (dashDistance / dashDuration)
-		bodyVelocity.Parent = rootPart
-		Debris:AddItem(bodyVelocity, dashDuration)
-		if targetEntity then
-			createDamageJob(
-				orchestrator,
-				fsm.CharacterEntityId,
-				targetEntity,
-				attackName,
-				tonumber(castDef.Damage) or 0
-			)
-		end
-	elseif effectType == "TargetedAoE" then
-		local origin = resolveTargetPosition(orchestrator, charEntity, rootPart)
-		local radius = tonumber(castDef.AoERadius) or tonumber(castDef.EffectRadius) or DEFAULT_MELEE_RADIUS
-		for _, victim in ipairs(scanVictims(orchestrator, fsm.CharacterEntityId, origin, radius)) do
-			createDamageJob(orchestrator, fsm.CharacterEntityId, victim, attackName, tonumber(castDef.Damage) or 0)
-		end
+local function getCastAttackName(castDef: any): string
+	return castDef.Id or castDef.Name or "Cast"
+end
+
+local function resolveExecuteContext(fsm: any)
+	local orchestrator = fsm:GetOrchestrator()
+	local castDef = fsm.Context._castDef
+	local charEntity = fsm.Context._charEntity
+	local playerEntity = fsm.Context._playerEntity
+	local humanoid = fsm.Context._humanoid
+	local rootPart = fsm.Context._rootPart
+	if not orchestrator or not castDef or not charEntity or not humanoid or not rootPart then
+		fsm.Context._releaseReason = "Execute context missing"
+		fsm.State = "ReleaseLock"
+		return nil
 	end
 
-	if castDef.SourceType == "Consumable" then
-		consumePlayerItem(playerEntity, castDef.Id, tonumber(fsm.Context._slotIndex))
-	end
+	return {
+		Orchestrator = orchestrator,
+		CastDef = castDef,
+		CharEntity = charEntity,
+		PlayerEntity = playerEntity,
+		Humanoid = humanoid,
+		RootPart = rootPart,
+		AttackName = getCastAttackName(castDef),
+	}
 end
 
 function CastFSM:RegisterStates()
@@ -835,23 +809,235 @@ function CastFSM:RegisterStates()
 				fsm.State = "ReleaseLock"
 				return
 			end
-			fsm.State = "ExecuteEffect"
+			fsm.State = "Execute"
 		end,
-	}, { "ExecuteEffect", "ReleaseLock" })
+	}, { "Execute", "ReleaseLock" })
 
-	self:AddState("ExecuteEffect", {
+	self:AddState("Execute", {
 		OnEnter = function(_, fsm)
 			local castDef = fsm.Context._castDef
-			local charEntity = fsm.Context._charEntity
-			local playerEntity = fsm.Context._playerEntity
-			local humanoid = fsm.Context._humanoid
-			local rootPart = fsm.Context._rootPart
-			if not castDef or not charEntity or not humanoid or not rootPart then
-				fsm.Context._releaseReason = "Execute context missing"
+			local effectType = castDef and castDef.EffectType
+			local nextState = EFFECT_STATE_BY_TYPE[effectType]
+			if nextState then
+				fsm.State = nextState
+			else
+				fsm.Context._releaseReason = "Unknown effect type: " .. tostring(effectType)
 				fsm.State = "ReleaseLock"
+			end
+		end,
+	}, {
+		"ExecuteMeleeSingle",
+		"ExecuteMeleeAoE",
+		"ExecuteProjectile",
+		"ExecuteSelfHeal",
+		"ExecuteInstantHeal",
+		"ExecuteInstantStamina",
+		"ExecuteInstantMana",
+		"ExecuteDash",
+		"ExecuteTargetedAoE",
+		"ReleaseLock",
+	})
+
+	self:AddState("ExecuteMeleeSingle", {
+		OnEnter = function(_, fsm)
+			local executeContext = resolveExecuteContext(fsm)
+			if not executeContext then
 				return
 			end
-			executeCastEffect(fsm:GetOrchestrator(), fsm, castDef, charEntity, playerEntity, humanoid, rootPart)
+
+			local radius = tonumber(executeContext.CastDef.EffectRadius) or DEFAULT_MELEE_RADIUS
+			local victim = scanVictims(
+				executeContext.Orchestrator,
+				fsm.CharacterEntityId,
+				executeContext.RootPart.Position,
+				radius
+			)[1]
+			if victim then
+				createDamageJob(
+					executeContext.Orchestrator,
+					fsm.CharacterEntityId,
+					victim,
+					executeContext.AttackName,
+					tonumber(executeContext.CastDef.Damage) or 0
+				)
+			end
+			fsm.State = "EmitFinishAnimation"
+		end,
+	}, { "EmitFinishAnimation", "ReleaseLock" })
+
+	self:AddState("ExecuteMeleeAoE", {
+		OnEnter = function(_, fsm)
+			local executeContext = resolveExecuteContext(fsm)
+			if not executeContext then
+				return
+			end
+
+			local radius = tonumber(executeContext.CastDef.EffectRadius) or DEFAULT_MELEE_RADIUS
+			for _, victim in ipairs(
+				scanVictims(executeContext.Orchestrator, fsm.CharacterEntityId, executeContext.RootPart.Position, radius)
+			) do
+				createDamageJob(
+					executeContext.Orchestrator,
+					fsm.CharacterEntityId,
+					victim,
+					executeContext.AttackName,
+					tonumber(executeContext.CastDef.Damage) or 0
+				)
+			end
+			fsm.State = "EmitFinishAnimation"
+		end,
+	}, { "EmitFinishAnimation", "ReleaseLock" })
+
+	self:AddState("ExecuteProjectile", {
+		OnEnter = function(_, fsm)
+			local executeContext = resolveExecuteContext(fsm)
+			if not executeContext then
+				return
+			end
+
+			spawnProjectile(
+				executeContext.Orchestrator,
+				fsm,
+				executeContext.CastDef,
+				executeContext.CharEntity,
+				executeContext.RootPart
+			)
+			fsm.State = "EmitFinishAnimation"
+		end,
+	}, { "EmitFinishAnimation", "ReleaseLock" })
+
+	self:AddState("ExecuteSelfHeal", {
+		OnEnter = function(_, fsm)
+			local executeContext = resolveExecuteContext(fsm)
+			if not executeContext then
+				return
+			end
+
+			applyHealthChange(
+				executeContext.CharEntity,
+				executeContext.Humanoid,
+				tonumber(executeContext.CastDef.HealAmount) or 0,
+				fsm.Id
+			)
+			fsm.State = "EmitFinishAnimation"
+		end,
+	}, { "EmitFinishAnimation", "ReleaseLock" })
+
+	self:AddState("ExecuteInstantHeal", {
+		OnEnter = function(_, fsm)
+			local executeContext = resolveExecuteContext(fsm)
+			if not executeContext then
+				return
+			end
+
+			applyHealthChange(
+				executeContext.CharEntity,
+				executeContext.Humanoid,
+				tonumber(executeContext.CastDef.HealAmount) or 0,
+				fsm.Id
+			)
+			fsm.State = "EmitFinishAnimation"
+		end,
+	}, { "EmitFinishAnimation", "ReleaseLock" })
+
+	self:AddState("ExecuteInstantStamina", {
+		OnEnter = function(_, fsm)
+			local executeContext = resolveExecuteContext(fsm)
+			if not executeContext then
+				return
+			end
+
+			applyResourceRestore(
+				executeContext.CharEntity,
+				"Stamina",
+				"MaxStamina",
+				tonumber(executeContext.CastDef.RestoreAmount) or 0,
+				fsm.Id
+			)
+			fsm.State = "EmitFinishAnimation"
+		end,
+	}, { "EmitFinishAnimation", "ReleaseLock" })
+
+	self:AddState("ExecuteInstantMana", {
+		OnEnter = function(_, fsm)
+			local executeContext = resolveExecuteContext(fsm)
+			if not executeContext then
+				return
+			end
+
+			applyResourceRestore(
+				executeContext.CharEntity,
+				"Mana",
+				"MaxMana",
+				tonumber(executeContext.CastDef.RestoreAmount) or 0,
+				fsm.Id
+			)
+			fsm.State = "EmitFinishAnimation"
+		end,
+	}, { "EmitFinishAnimation", "ReleaseLock" })
+
+	self:AddState("ExecuteDash", {
+		OnEnter = function(_, fsm)
+			local executeContext = resolveExecuteContext(fsm)
+			if not executeContext then
+				return
+			end
+
+			local targetEntity = resolveTargetEntity(executeContext.Orchestrator, executeContext.CharEntity)
+			local dashDirection = executeContext.RootPart.CFrame.LookVector
+			if targetEntity and targetEntity.Instance and targetEntity.Instance:IsA("Model") then
+				local _, targetRoot = getHumanoidAndRoot(targetEntity.Instance)
+				if targetRoot then
+					local offset = targetRoot.Position - executeContext.RootPart.Position
+					if offset.Magnitude > 0.01 then
+						dashDirection = offset.Unit
+					end
+				end
+			end
+
+			local dashDistance = tonumber(executeContext.CastDef.DashDistance) or 20
+			local bodyVelocity = Instance.new("BodyVelocity")
+			bodyVelocity.MaxForce = Vector3.new(1e5, 0, 1e5)
+			bodyVelocity.Velocity = dashDirection * (dashDistance / DEFAULT_DASH_DURATION)
+			bodyVelocity.Parent = executeContext.RootPart
+			Debris:AddItem(bodyVelocity, DEFAULT_DASH_DURATION)
+			if targetEntity then
+				createDamageJob(
+					executeContext.Orchestrator,
+					fsm.CharacterEntityId,
+					targetEntity,
+					executeContext.AttackName,
+					tonumber(executeContext.CastDef.Damage) or 0
+				)
+			end
+			fsm.State = "EmitFinishAnimation"
+		end,
+	}, { "EmitFinishAnimation", "ReleaseLock" })
+
+	self:AddState("ExecuteTargetedAoE", {
+		OnEnter = function(_, fsm)
+			local executeContext = resolveExecuteContext(fsm)
+			if not executeContext then
+				return
+			end
+
+			local origin = resolveTargetPosition(
+				executeContext.Orchestrator,
+				executeContext.CharEntity,
+				executeContext.RootPart
+			)
+			local radius = tonumber(executeContext.CastDef.AoERadius)
+				or tonumber(executeContext.CastDef.EffectRadius)
+				or DEFAULT_MELEE_RADIUS
+			for _, victim in ipairs(scanVictims(executeContext.Orchestrator, fsm.CharacterEntityId, origin, radius)) do
+				createDamageJob(
+					executeContext.Orchestrator,
+					fsm.CharacterEntityId,
+					victim,
+					executeContext.AttackName,
+					tonumber(executeContext.CastDef.Damage) or 0
+				)
+			end
 			fsm.State = "EmitFinishAnimation"
 		end,
 	}, { "EmitFinishAnimation", "ReleaseLock" })
@@ -880,10 +1066,14 @@ function CastFSM:RegisterStates()
 		OnEnter = function(_, fsm)
 			local castDef = fsm.Context._castDef
 			local charEntity = fsm.Context._charEntity
+			local playerEntity = fsm.Context._playerEntity
 			if not castDef or not charEntity then
 				fsm.Context._releaseReason = "Cooldown context missing"
 				fsm.State = "ReleaseLock"
 				return
+			end
+			if castDef.SourceType == "Consumable" and playerEntity then
+				consumePlayerItem(playerEntity, castDef.Id, tonumber(fsm.Context._slotIndex))
 			end
 			local cooldowns = if typeof(charEntity.AbilityCooldowns) == "table"
 				then table.clone(charEntity.AbilityCooldowns)
