@@ -417,6 +417,15 @@ function LoadPlayerJob:RegisterStates()
 				}, "Validate")
 			end)
 
+			registerEntityCommand(orchestrator, charEntityId, "RequestMeleeAttack", function(player, comboSlot)
+				if not isAuthorized(player) then return end
+				createAndStartStateMachine("MeleeAttackJob", "Melee_" .. charEntityId .. "_" .. tostring(os.clock()), {
+					CharacterEntityId = charEntityId,
+					PlayerEntityId = playerEntityId,
+					ComboSlot = comboSlot,
+				}, "Validate")
+			end)
+
 			registerEntityCommand(orchestrator, charEntityId, "ToggleWeapon", function(player)
 				if not isAuthorized(player) then return end
 				createAndStartStateMachine("ToggleWeaponJob", "Toggle_" .. charEntityId .. "_" .. tostring(os.clock()), {
