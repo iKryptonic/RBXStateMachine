@@ -26,6 +26,10 @@ local CharacterEntity = {
 		CCLock         = { Type = "boolean", Replicate = false, Persist = false },
 		ActionSeq      = { Type = "number",  Replicate = true,  Persist = false },
 		RecentActions  = { Type = "any",     Replicate = true,  Persist = false },
+		-- Client-side observability fields (written by render loop, visible in ServiceManager)
+		LocomotionState = { Type = "string",  Replicate = false, Persist = false },
+		ActionOverlay   = { Type = "string",  Replicate = false, Persist = false },
+		SprintIntent    = { Type = "boolean", Replicate = false, Persist = false },
 	},
 }
 
@@ -51,6 +55,9 @@ function CharacterEntity:GetContext(params: { [any]: any })
 		CCLock = false,
 		ActionSeq = 0,
 		RecentActions = {},
+		LocomotionState = "Idle",
+		ActionOverlay = "None",
+		SprintIntent = false,
 	}
 end
 
