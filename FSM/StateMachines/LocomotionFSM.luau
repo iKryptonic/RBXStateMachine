@@ -117,6 +117,9 @@ function LocomotionFSM:RegisterStates()
 			end, TargetState = "Idle" },
 		},
 	}, { "Idle", "Walking", "Running" })
+
+	self:AddState("Completed", function() end, {})
+	self:AddState("Failed", function() end, {})
 end
 
 return LocomotionFSM
