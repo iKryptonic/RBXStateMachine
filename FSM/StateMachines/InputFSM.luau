@@ -54,6 +54,9 @@ function InputFSM:RegisterStates()
 			writeInputMode(fsm, "None")
 		end,
 	}, { "Normal" })
+
+	self:AddState("Completed", function() end, {})
+	self:AddState("Failed", function() end, {})
 end
 
 -- Public API

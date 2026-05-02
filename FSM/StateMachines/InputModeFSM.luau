@@ -32,6 +32,9 @@ function InputModeFSM:RegisterStates()
 			writeInputMode(fsm, false, "UI")
 		end,
 	}, { "CombatInput" })
+
+	self:AddState("Completed", function() end, {})
+	self:AddState("Failed", function() end, {})
 end
 
 function InputModeFSM.SetCombatInput(fsm: any)

@@ -23,7 +23,7 @@ local RequestFSM = {
 function RequestFSM:RegisterStates()
 	local Orchestrator = self.Context.Orchestrator
 	-- Lazy load behavior to avoid circular dependency issues at module level if any
-	local RetryBehavior = require(script.Parent.RetryBehavior).Create(Orchestrator)
+	local RetryBehavior = require(script.Parent.Parent.RetryBehavior).Create(Orchestrator)
 
 	self:AddState("Queued", {
 		OnEnter = function(fsm)
