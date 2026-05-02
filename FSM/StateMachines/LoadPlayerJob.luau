@@ -229,7 +229,7 @@ function LoadPlayerJob:RegisterStates()
 				return
 			end
 
-			if player.UserId <= 0 then
+			if player.UserId == 0 then
 				fsm:Fail("Invalid UserId: " .. tostring(player.UserId))
 				return
 			end
