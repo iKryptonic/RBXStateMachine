@@ -120,6 +120,8 @@ function MeleeAttackJob:RegisterStates()
 				return
 			end
 
+			local comboSlot = math.clamp(tonumber(fsm.ComboSlot) or 1, 1, 4)
+
 			-- Weapon must NOT be drawn for melee
 			local equippedRight = charEntity.EquippedRight
 			local equippedLeft = charEntity.EquippedLeft
@@ -128,7 +130,16 @@ function MeleeAttackJob:RegisterStates()
 				return
 			end
 
-			local comboSlot = math.clamp(tonumber(fsm.ComboSlot) or 1, 1, 4)
+			-- Check stamina
+			local staminaCost = DEFAULT_MELEE_DAMAGE[comboSlot] or 5 -- cost = damage value
+			if (charEntity.Stamina or 0) < staminaCost then
+				fsm:Fail("Not enough stamina")
+				return
+			end
+			-- Deduct stamina
+			charEntity.Stamina = (charEntity.Stamina or 100) - staminaCost
+			charEntity:UpdateEntity()
+
 			fsm.Context._charEntity = charEntity
 			fsm.Context._character = character
 			fsm.Context._humanoid = humanoid
