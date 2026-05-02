@@ -10,30 +10,13 @@ local ToggleWeaponJob = {
 	initialState = "Validate",
 }
 
-local sharedAny = shared :: any
-
--- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
-local function getOrchestrator()
-	local lower = sharedAny.fsm
-	if lower ~= nil then
-		return lower.Orchestrator or lower
-	end
-
-	local upper = sharedAny.FSM
-	if upper ~= nil and upper.Orchestrator then
-		return upper.Orchestrator
-	end
-
-	error("Orchestrator not found. Check RegisterComponents.")
-end
-
-local function beginChildJob(fsm: any, stateName: string, childClass: any, initialState: string, context: { [string]: any }, failureLabel: string)
+local function beginChildJob(fsm: any, orchestrator: any, stateName: string, childClass: any, initialState: string, context: { [string]: any }, failureLabel: string)
 	if not childClass then
 		fsm:Fail(failureLabel .. " job is unavailable")
 		return
 	end
 
-	local subJob = getOrchestrator().CreateStateMachine({
+	local subJob = orchestrator.CreateStateMachine({
 		StateMachineClass = childClass,
 		StateMachineId = string.format("%s_%s_%s", tostring(fsm.Id or "ToggleWeaponJob"), stateName, HttpService:GenerateGUID(false)),
 		Context = context,
@@ -78,7 +61,7 @@ function ToggleWeaponJob:RegisterStates()
 				return
 			end
 
-			local charEntity = getOrchestrator().GetEntity(fsm.CharacterEntityId)
+			local charEntity = fsm:GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
 				fsm:Fail("CharacterEntity not found")
 				return
@@ -93,7 +76,7 @@ function ToggleWeaponJob:RegisterStates()
 				return
 			end
 
-			local playerEntity = getOrchestrator().GetEntity(playerEntityId)
+			local playerEntity = fsm:GetEntity(playerEntityId)
 			if not playerEntity then
 				fsm:Fail("PlayerEntity not found")
 				return
@@ -135,7 +118,7 @@ function ToggleWeaponJob:RegisterStates()
 
 	self:AddState("RunEquip", {
 		OnEnter = function(_, fsm)
-			beginChildJob(fsm, "RunEquip", "EquipJob", "ValidateRequest", {
+			beginChildJob(fsm, fsm:GetOrchestrator(), "RunEquip", "EquipJob", "ValidateRequest", {
 				CharacterEntityId = fsm.CharacterEntityId,
 				PlayerEntityId = fsm.PlayerEntityId,
 				ItemId = fsm.ItemId,
@@ -146,7 +129,7 @@ function ToggleWeaponJob:RegisterStates()
 
 	self:AddState("RunUnEquip", {
 		OnEnter = function(_, fsm)
-			beginChildJob(fsm, "RunUnEquip", "UnEquipJob", "ValidateRequest", {
+			beginChildJob(fsm, fsm:GetOrchestrator(), "RunUnEquip", "UnEquipJob", "ValidateRequest", {
 				CharacterEntityId = fsm.CharacterEntityId,
 				PlayerEntityId = fsm.PlayerEntityId,
 				ItemId = fsm.CharacterEntity.EquippedRight,

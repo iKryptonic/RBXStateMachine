@@ -11,23 +11,6 @@ local PlayerTeardownFSM = {
 	initialState = "CancelSMs",
 }
 
-local sharedAny = shared :: any
-
--- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
-local function getOrchestrator()
-	local lower = sharedAny.fsm
-	if lower ~= nil then
-		return lower.Orchestrator or lower
-	end
-
-	local upper = sharedAny.FSM
-	if upper ~= nil and upper.Orchestrator then
-		return upper.Orchestrator
-	end
-
-	error("Orchestrator not found. Check RegisterComponents.")
-end
-
 local function getStateMachines(orchestrator: any): { [string]: any }
 	if type(orchestrator.GetStateMachines) == "function" then
 		local ok, result = pcall(function()
@@ -36,13 +19,6 @@ local function getStateMachines(orchestrator: any): { [string]: any }
 		if ok and type(result) == "table" then
 			return result
 		end
-	end
-
-	if type(sharedAny.fsm) == "table" and type(sharedAny.fsm.StateMachines) == "table" then
-		return sharedAny.fsm.StateMachines
-	end
-	if type(sharedAny.FSM) == "table" and type(sharedAny.FSM.StateMachines) == "table" then
-		return sharedAny.FSM.StateMachines
 	end
 
 	return {}
@@ -139,7 +115,7 @@ end
 function PlayerTeardownFSM:RegisterStates()
 	self:AddState("CancelSMs", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local cancelled = 0
 			local cancelledIds = {}
 
@@ -171,7 +147,7 @@ function PlayerTeardownFSM:RegisterStates()
 
 	self:AddState("FlushEntities", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local flushedCount = 0
 			local entityIds = { fsm.PlayerEntityId, fsm.CharacterEntityId }
 
@@ -194,7 +170,7 @@ function PlayerTeardownFSM:RegisterStates()
 
 	self:AddState("DeleteEntities", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local deletedIds = {}
 
 			for _, entityId in ipairs({ fsm.CharacterEntityId, fsm.PlayerEntityId }) do

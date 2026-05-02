@@ -11,23 +11,7 @@ local SpawnCharacterJob = {
 	initialState = "Validate",
 }
 
--- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
-local function getOrchestrator()
-	local lower = (shared :: any).fsm
-	if lower ~= nil then
-		return lower.Orchestrator or lower
-	end
-
-	local upper = (shared :: any).FSM
-	if upper ~= nil and upper.Orchestrator then
-		return upper.Orchestrator
-	end
-
-	error("Orchestrator is not registered")
-end
-
-local function createAndStartStateMachine(className: string, stateMachineId: string, context: { [string]: any }, initialState: string)
-	local orchestrator = getOrchestrator()
+local function createAndStartStateMachine(orchestrator: any, className: string, stateMachineId: string, context: { [string]: any }, initialState: string)
 	local machine = orchestrator.CreateStateMachine({
 		StateMachineClass = className,
 		StateMachineId = stateMachineId,
@@ -62,8 +46,8 @@ function SpawnCharacterJob:RegisterStates()
 
 	self:AddState("BindEntity", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
-			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
+			local orchestrator = fsm:GetOrchestrator()
+			local charEntity = fsm:GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
 				fsm:Fail("CharacterEntity not found: " .. tostring(fsm.CharacterEntityId))
 				return
@@ -92,8 +76,8 @@ function SpawnCharacterJob:RegisterStates()
 
 	self:AddState("ApplyLoadout", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
-			local playerEntity = orchestrator.GetEntity(fsm.PlayerEntityId)
+			local orchestrator = fsm:GetOrchestrator()
+			local playerEntity = fsm:GetEntity(fsm.PlayerEntityId)
 			if not playerEntity then
 				fsm:Log({ Level = "WARN", Message = "PlayerEntity not found, skipping loadout" })
 				fsm.State = "Completed"
@@ -105,7 +89,7 @@ function SpawnCharacterJob:RegisterStates()
 				for hand, itemId in equipped do
 					local itemText = tostring(itemId)
 					if itemText ~= "" and itemText ~= "0" and hand ~= nil then
-						createAndStartStateMachine("EquipJob", "SpawnEquip_" .. tostring(fsm.CharacterEntityId) .. "_" .. tostring(hand) .. "_" .. tostring(os.clock()), {
+						createAndStartStateMachine(orchestrator, "EquipJob", "SpawnEquip_" .. tostring(fsm.CharacterEntityId) .. "_" .. tostring(hand) .. "_" .. tostring(os.clock()), {
 							CharacterEntityId = fsm.CharacterEntityId,
 							PlayerEntityId = fsm.PlayerEntityId,
 							ItemId = itemText,
