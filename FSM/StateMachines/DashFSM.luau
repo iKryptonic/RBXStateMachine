@@ -32,9 +32,9 @@ local DashFSM = {
 	initialState = "Ready",
 }
 
-local IMPULSE = 200
-local IMPULSE_DURATION = 0.35
-local ACTIVE_DURATION = 0.4
+local IMPULSE = 75
+local IMPULSE_DURATION = 0.1
+local ACTIVE_DURATION = 0.25
 local COOLDOWN = 0.75
 local DASH_STAMINA_COST = 15
 local DASH_SOUND_ID = "rbxassetid://541909814"
@@ -87,8 +87,6 @@ function DashFSM:RegisterStates()
 			local direction = fsm.Context._dashDirection
 			local charEntity = getCharacterEntity(fsm)
 			local rootPart = getRootPart(fsm)
-			print(string.format("[DashFSM] ValidateDash: dir=%s entity=%s root=%s",
-				tostring(direction), tostring(charEntity ~= nil), tostring(rootPart ~= nil)))
 			if not direction or not rootPart or not charEntity then
 				fsm.State = "Ready"
 				return
@@ -135,32 +133,23 @@ function DashFSM:RegisterStates()
 		OnEnter = function(_, fsm)
 			local direction = fsm.Context._dashDirection
 			local rootPart = fsm.Context._rootPart
-			print(string.format("[DashFSM] ApplyImpulse: dir=%s root=%s", tostring(direction), tostring(rootPart ~= nil)))
 			if not direction or not rootPart or not rootPart.Parent then
-				print("[DashFSM] ApplyImpulse BAIL: missing root or direction")
 				fsm.State = "Ready"
 				return
 			end
 
 			local impulseDir = getImpulseDirection(rootPart, direction)
 			if not impulseDir then
-				print("[DashFSM] ApplyImpulse BAIL: no impulse direction")
 				fsm.State = "Ready"
 				return
 			end
 
-			-- Freeze WalkSpeed to prevent Humanoid controller from fighting the impulse
-			local humanoid = rootPart.Parent and rootPart.Parent:FindFirstChildOfClass("Humanoid")
-			if humanoid then
-				fsm.Context._savedWalkSpeed = humanoid.WalkSpeed
-				humanoid.WalkSpeed = 0
-			end
-
-			-- Use AssemblyLinearVelocity directly (matches legacy dash behavior)
-			local vel = impulseDir * IMPULSE
-			rootPart.AssemblyLinearVelocity = Vector3.new(vel.X, rootPart.AssemblyLinearVelocity.Y, vel.Z)
-
-			print(string.format("[DashFSM] ApplyImpulse: velocity=%s", tostring(vel)))
+			-- BodyVelocity impulse (matches legacy DashController)
+			local bodyVelocity = Instance.new("BodyVelocity")
+			bodyVelocity.MaxForce = Vector3.new(math.huge, 0, math.huge)
+			bodyVelocity.Velocity = impulseDir * IMPULSE
+			bodyVelocity.Parent = rootPart
+			Debris:AddItem(bodyVelocity, IMPULSE_DURATION)
 			fsm.State = "PlaySound"
 		end,
 	}, { "PlaySound", "Ready" })
@@ -208,24 +197,7 @@ function DashFSM:RegisterStates()
 
 	self:AddState("DashActive", {
 		OnEnter = function(_, fsm)
-			fsm.Context._dashStartTime = os.clock()
-		end,
-		OnHeartbeat = function(_, fsm, _dt)
-			local elapsed = os.clock() - (fsm.Context._dashStartTime or os.clock())
-			if elapsed >= ACTIVE_DURATION then
-				fsm.State = "ClearOverlay"
-				return
-			end
-			-- Sustain velocity each frame (matches legacy 8-tick loop)
-			local rootPart = fsm.Context._rootPart
-			local direction = fsm.Context._dashDirection
-			if rootPart and rootPart.Parent and direction then
-				local impulseDir = getImpulseDirection(rootPart, direction)
-				if impulseDir then
-					local vel = impulseDir * IMPULSE
-					rootPart.AssemblyLinearVelocity = Vector3.new(vel.X, rootPart.AssemblyLinearVelocity.Y, vel.Z)
-				end
-			end
+			fsm:ScheduleTransition(ACTIVE_DURATION, "ClearOverlay")
 		end,
 	}, { "ClearOverlay" })
 
@@ -234,14 +206,6 @@ function DashFSM:RegisterStates()
 			local charEntity = fsm.Context._charEntity or getCharacterEntity(fsm)
 			if charEntity then
 				charEntity.ActionOverlay = "None"
-			end
-			-- Restore WalkSpeed
-			local rootPart = fsm.Context._rootPart
-			if rootPart and rootPart.Parent then
-				local humanoid = rootPart.Parent:FindFirstChildOfClass("Humanoid")
-				if humanoid and fsm.Context._savedWalkSpeed then
-					humanoid.WalkSpeed = fsm.Context._savedWalkSpeed
-				end
 			end
 			fsm.State = "Cooldown"
 		end,
@@ -261,8 +225,59 @@ function DashFSM.TryDash(fsm: any, direction: string): boolean
 	if fsm.State ~= "Ready" then
 		return false
 	end
+
+	-- Validate
+	local charEntity = getCharacterEntity(fsm)
+	local rootPart = getRootPart(fsm)
+	if not direction or not rootPart or not charEntity then
+		return false
+	end
+
+	-- Check stamina
+	local stamina = tonumber(charEntity.Stamina) or 0
+	if stamina < DASH_STAMINA_COST then
+		return false
+	end
+
+	-- Deduct stamina
+	if not ResourceHelpers.deductStamina(charEntity, DASH_STAMINA_COST) then
+		return false
+	end
+	pcall(function() charEntity:UpdateEntity() end)
+
+	-- Apply impulse immediately (BodyVelocity, matching legacy)
+	local impulseDir = getImpulseDirection(rootPart, direction)
+	if impulseDir then
+		local bodyVelocity = Instance.new("BodyVelocity")
+		bodyVelocity.MaxForce = Vector3.new(math.huge, 0, math.huge)
+		bodyVelocity.Velocity = impulseDir * IMPULSE
+		bodyVelocity.Parent = rootPart
+		Debris:AddItem(bodyVelocity, IMPULSE_DURATION)
+	end
+
+	-- Sound
+	local sound = Instance.new("Sound")
+	sound.SoundId = DASH_SOUND_ID
+	sound.Volume = 0.5
+	sound.Parent = rootPart
+	sound:Play()
+	Debris:AddItem(sound, 2)
+
+	-- Animation
+	local onAnimate = fsm.Context._onAnimate
+	local animationName = DIRECTION_MAP[direction] or "Dashing"
+	if onAnimate then
+		onAnimate(animationName)
+	end
+
+	-- Write overlay and transition to active/cooldown via FSM states
+	if charEntity then
+		charEntity.ActionOverlay = "Dash_" .. direction
+	end
+	fsm.Context._charEntity = charEntity
+	fsm.Context._rootPart = rootPart
 	fsm.Context._dashDirection = direction
-	fsm.State = "ValidateDash"
+	fsm.State = "DashActive"
 	return true
 end
 
