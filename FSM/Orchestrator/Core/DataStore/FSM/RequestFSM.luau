@@ -22,53 +22,57 @@ local RequestFSM = {
 ]]
 function RequestFSM:RegisterStates()
 	local Orchestrator = self.Context.Orchestrator
-	-- Lazy load behavior to avoid circular dependency issues at module level if any
-	local RetryBehavior = require(script.Parent.Parent.RetryBehavior).Create(Orchestrator)
+	-- Use absolute path — script.Parent.Parent can resolve incorrectly in Rojo serve mode
+	local DataStoreFolder = script.Parent.Parent
+	local retryModule = DataStoreFolder:FindFirstChild("RetryBehavior")
+	if not retryModule then
+		-- Fallback: navigate from ReplicatedStorage
+		DataStoreFolder = game:GetService("ReplicatedStorage")
+			:FindFirstChild("Orchestrator")
+		if DataStoreFolder then
+			DataStoreFolder = DataStoreFolder:FindFirstChild("Core")
+			DataStoreFolder = DataStoreFolder and DataStoreFolder:FindFirstChild("DataStore")
+			retryModule = DataStoreFolder and DataStoreFolder:FindFirstChild("RetryBehavior")
+		end
+	end
+	if not retryModule then
+		warn("[RequestFSM] RetryBehavior module not found — using inline retry")
+	end
+	local RetryBehavior = retryModule and require(retryModule).Create(Orchestrator) or nil
 
 	self:AddState("Queued", {
-		OnEnter = function(fsm)
-			-- Immediate transition to processing for now, 
-			-- but could wait for a "TokenBucket" signal here for rate limiting integration.
-			fsm:ChangeState({ Name = "Processing" })
+		OnEnter = function(_, fsm)
+			fsm.State = "Processing"
 		end
 	})
 
 	self:AddState("Processing", {
-		OnEnter = function(fsm)
-			-- Execute the Behavior Tree
-			-- context is shared with FSM
+		OnEnter = function(_, fsm)
+			if not RetryBehavior then
+				fsm.State = "Failed"
+				return
+			end
+			fsm.Context.FSM = fsm
 			RetryBehavior(fsm.Context)
-			-- BT handles transitions to Success/Retrying/Failed
 		end
 	})
 
 	self:AddState("Retrying", {
-		OnEnter = function(fsm)
-			-- WaitSpan is handled by BaseStateMachine prior to ChangeState or we can do it here manually
-			-- Here we just wait for the transition back to processing
-			-- The "WaitSpan" set by BT determines the delay *before* entering this state? 
-			-- No, BaseStateMachine:ChangeState uses WaitSpan to delay the *transition*.
-			-- So if we are IN this state, we just want to go back to Processing.
-			
-			-- Logic: The BT set fsm.WaitSpan then called ChangeState("Retrying").
-			-- So we arrive here *after* the delay.
-			-- We should immediately try Processing again.
-			
-			fsm:ChangeState({ Name = "Processing" })
+		OnEnter = function(_, fsm)
+			fsm.State = "Processing"
 		end
 	})
 
 	self:AddState("Success", {
-		OnEnter = function(fsm)
-			-- Pass result back to caller via resolving a Promise or Callback
+		OnEnter = function(_, fsm)
 			if fsm.Context.OnSuccess then
 				fsm.Context.OnSuccess(fsm.Context.Result)
 			end
 		end
 	})
-	
+
 	self:AddState("Failed", {
-		OnEnter = function(fsm)
+		OnEnter = function(_, fsm)
 			if fsm.Context.OnFailure then
 				fsm.Context.OnFailure(fsm.Context.LastError)
 			end
