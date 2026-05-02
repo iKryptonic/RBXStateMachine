@@ -1,151 +1,213 @@
 --!strict
 -- @Name DashFSM
--- @Author Copilot
+-- @Author iKrypto
 -- @Description Client-side FSM managing dash lifecycle.
---   States: Ready → Dashing → Cooldown → Ready
---   Replaces imperative DashController with observable state machine.
+--   States: Ready → ValidateDash → ValidateStamina → DeductStamina → ApplyImpulse → PlaySound → TriggerAnimation → WriteOverlay → DashActive → ClearOverlay → Cooldown → Ready
 
 local Debris = game:GetService("Debris")
 
 local DashFSM = {
-	Name = "DashFSM",
-	className = "DashFSM",
-	validStates = { "Ready", "Dashing", "Cooldown", "Completed", "Failed" },
-	terminalStates = { "Completed", "Failed" },
-	initialState = "Ready",
+Name = "DashFSM",
+className = "DashFSM",
+validStates = { "Ready", "ValidateDash", "ValidateStamina", "DeductStamina", "ApplyImpulse", "PlaySound", "TriggerAnimation", "WriteOverlay", "DashActive", "ClearOverlay", "Cooldown", "Completed", "Failed" },
+terminalStates = { "Completed", "Failed" },
+initialState = "Ready",
 }
 
 local IMPULSE = 75
 local IMPULSE_DURATION = 0.1
+local ACTIVE_DURATION = 0.25
 local COOLDOWN = 0.75
+local DASH_STAMINA_COST = 15
 local DASH_SOUND_ID = "rbxassetid://541909814"
 
 local DIRECTION_MAP = {
-	W = "Dashing",
-	A = "DashLeft",
-	S = "DashEnd",
-	D = "DashRight",
+W = "Dashing",
+A = "DashLeft",
+S = "DashEnd",
+D = "DashRight",
 }
 
-local function getCharacterParts(fsm: any): (BasePart?, Humanoid?)
-	local orchestrator = (shared :: any).fsm
-	if not orchestrator then return nil, nil end
-	local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-	if not charEntity or not charEntity.Instance then return nil, nil end
-	local rootPart = charEntity.Instance:FindFirstChild("HumanoidRootPart")
-	local humanoid = charEntity.Instance:FindFirstChildOfClass("Humanoid")
-	return rootPart :: BasePart?, humanoid :: Humanoid?
+local function getCharacterEntity(fsm: any): any?
+local orchestrator = (shared :: any).fsm
+if not orchestrator then return nil end
+return orchestrator.GetEntity(fsm.CharacterEntityId)
+end
+
+local function getRootPart(fsm: any): BasePart?
+local charEntity = getCharacterEntity(fsm)
+if not charEntity or not charEntity.Instance then
+return nil
+end
+return charEntity.Instance:FindFirstChild("HumanoidRootPart") :: BasePart?
+end
+
+local function getImpulseDirection(rootPart: BasePart, direction: string): Vector3?
+local lookVector = rootPart.CFrame.LookVector
+local rightVector = rootPart.CFrame.RightVector
+if direction == "W" then
+return lookVector
+elseif direction == "S" then
+return -lookVector
+elseif direction == "A" then
+return -rightVector
+elseif direction == "D" then
+return rightVector
+end
+return nil
 end
 
 function DashFSM:RegisterStates()
-	self:AddState("Ready", {
-		OnEnter = function(_, fsm)
-			fsm.Context._dashDirection = nil
-		end,
-	}, { "Dashing" })
+self:AddState("Ready", {
+OnEnter = function(_, fsm)
+fsm.Context._dashDirection = nil
+fsm.Context._charEntity = nil
+fsm.Context._rootPart = nil
+end,
+}, { "ValidateDash" })
 
-	self:AddState("Dashing", {
-		OnEnter = function(_, fsm)
-			local direction = fsm.Context._dashDirection
-			if not direction then
-				fsm.State = "Ready"
-				return
-			end
-
-			local rootPart, _ = getCharacterParts(fsm)
-			if not rootPart or not rootPart.Parent then
-				fsm.State = "Ready"
-				return
-			end
-
-			local orchestrator = (shared :: any).fsm
-			local charEntity = orchestrator and orchestrator.GetEntity(fsm.CharacterEntityId)
-			if charEntity then
-				local staminaCost = 15
-				if (charEntity.Stamina or 0) < staminaCost then
-					fsm.State = "Ready"
-					return
-				end
-				charEntity.Stamina = math.max(0, (charEntity.Stamina or 100) - staminaCost)
-				pcall(function() charEntity:UpdateEntity() end)
-			end
-
-			-- Calculate impulse direction
-			local lookVector = rootPart.CFrame.LookVector
-			local rightVector = rootPart.CFrame.RightVector
-			local impulseDir: Vector3
-			if direction == "W" then
-				impulseDir = lookVector
-			elseif direction == "S" then
-				impulseDir = -lookVector
-			elseif direction == "A" then
-				impulseDir = -rightVector
-			elseif direction == "D" then
-				impulseDir = rightVector
-			else
-				fsm.State = "Ready"
-				return
-			end
-
-			-- Apply impulse
-			local bodyVelocity = Instance.new("BodyVelocity")
-			bodyVelocity.MaxForce = Vector3.new(math.huge, 0, math.huge)
-			bodyVelocity.Velocity = impulseDir * IMPULSE
-			bodyVelocity.Parent = rootPart
-			Debris:AddItem(bodyVelocity, IMPULSE_DURATION)
-
-			-- Sound
-			local sound = Instance.new("Sound")
-			sound.SoundId = DASH_SOUND_ID
-			sound.Volume = 0.5
-			sound.Parent = rootPart
-			sound:Play()
-			Debris:AddItem(sound, 2)
-
-			-- Play animation via callback
-			local onAnimate = fsm.Context._onAnimate
-			local animationName = DIRECTION_MAP[direction] or "Dashing"
-			if onAnimate then
-				onAnimate(animationName)
-			end
-
-			-- Write observable state
-			local orchestrator = (shared :: any).fsm
-			if orchestrator then
-				local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-				if charEntity then
-					charEntity.ActionOverlay = "Dash_" .. direction
-				end
-			end
-		end,
-		Timeout = 0.25,
-		OnTimeout = "Cooldown",
-	}, { "Cooldown", "Ready" })
-
-	self:AddState("Cooldown", {
-		OnEnter = function(_, fsm)
-			-- Clear overlay
-			local orchestrator = (shared :: any).fsm
-			if orchestrator then
-				local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-				if charEntity then
-					charEntity.ActionOverlay = "None"
-				end
-			end
-		end,
-		Timeout = COOLDOWN,
-		OnTimeout = "Ready",
-	}, { "Ready" })
+self:AddState("ValidateDash", {
+OnEnter = function(_, fsm)
+local direction = fsm.Context._dashDirection
+local charEntity = getCharacterEntity(fsm)
+local rootPart = getRootPart(fsm)
+if not direction or not rootPart or not charEntity then
+fsm.State = "Ready"
+return
 end
 
--- Public API: request a dash (called from InputRouter)
+fsm.Context._charEntity = charEntity
+fsm.Context._rootPart = rootPart
+fsm.State = "ValidateStamina"
+end,
+}, { "ValidateStamina", "Ready" })
+
+self:AddState("ValidateStamina", {
+OnEnter = function(_, fsm)
+local charEntity = fsm.Context._charEntity or getCharacterEntity(fsm)
+local stamina = tonumber(charEntity and charEntity.Stamina) or 0
+if not charEntity or stamina < DASH_STAMINA_COST then
+fsm.State = "Ready"
+return
+end
+fsm.State = "DeductStamina"
+end,
+}, { "DeductStamina", "Ready" })
+
+self:AddState("DeductStamina", {
+OnEnter = function(_, fsm)
+local charEntity = fsm.Context._charEntity
+if not charEntity then
+fsm.State = "Ready"
+return
+end
+
+charEntity.Stamina = math.max(0, (tonumber(charEntity.Stamina) or 0) - DASH_STAMINA_COST)
+pcall(function()
+charEntity:UpdateEntity()
+end)
+fsm.State = "ApplyImpulse"
+end,
+}, { "ApplyImpulse", "Ready" })
+
+self:AddState("ApplyImpulse", {
+OnEnter = function(_, fsm)
+local direction = fsm.Context._dashDirection
+local rootPart = fsm.Context._rootPart
+if not direction or not rootPart or not rootPart.Parent then
+fsm.State = "Ready"
+return
+end
+
+local impulseDir = getImpulseDirection(rootPart, direction)
+if not impulseDir then
+fsm.State = "Ready"
+return
+end
+
+local bodyVelocity = Instance.new("BodyVelocity")
+bodyVelocity.MaxForce = Vector3.new(math.huge, 0, math.huge)
+bodyVelocity.Velocity = impulseDir * IMPULSE
+bodyVelocity.Parent = rootPart
+Debris:AddItem(bodyVelocity, IMPULSE_DURATION)
+fsm.State = "PlaySound"
+end,
+}, { "PlaySound", "Ready" })
+
+self:AddState("PlaySound", {
+OnEnter = function(_, fsm)
+local rootPart = fsm.Context._rootPart
+if rootPart and rootPart.Parent then
+local sound = Instance.new("Sound")
+sound.SoundId = DASH_SOUND_ID
+sound.Volume = 0.5
+sound.Parent = rootPart
+sound:Play()
+Debris:AddItem(sound, 2)
+end
+fsm.State = "TriggerAnimation"
+end,
+}, { "TriggerAnimation" })
+
+self:AddState("TriggerAnimation", {
+OnEnter = function(_, fsm)
+local direction = fsm.Context._dashDirection
+local onAnimate = fsm.Context._onAnimate
+local animationName = DIRECTION_MAP[direction] or "Dashing"
+if onAnimate then
+onAnimate(animationName)
+end
+fsm.State = "WriteOverlay"
+end,
+}, { "WriteOverlay" })
+
+self:AddState("WriteOverlay", {
+OnEnter = function(_, fsm)
+local charEntity = fsm.Context._charEntity
+local direction = fsm.Context._dashDirection
+if not charEntity or not direction then
+fsm.State = "Ready"
+return
+end
+
+charEntity.ActionOverlay = "Dash_" .. direction
+fsm.State = "DashActive"
+end,
+}, { "DashActive", "Ready" })
+
+self:AddState("DashActive", {
+OnEnter = function(_, fsm)
+fsm:ScheduleTransition(ACTIVE_DURATION, "ClearOverlay")
+end,
+}, { "ClearOverlay" })
+
+self:AddState("ClearOverlay", {
+OnEnter = function(_, fsm)
+local charEntity = fsm.Context._charEntity or getCharacterEntity(fsm)
+if charEntity then
+charEntity.ActionOverlay = "None"
+end
+fsm.State = "Cooldown"
+end,
+}, { "Cooldown" })
+
+self:AddState("Cooldown", {
+OnEnter = function(_, fsm)
+fsm:ScheduleTransition(COOLDOWN, "Ready")
+end,
+}, { "Ready" })
+
+self:AddState("Completed", function() end, {})
+self:AddState("Failed", function() end, {})
+end
+
 function DashFSM.TryDash(fsm: any, direction: string): boolean
-	if fsm.State ~= "Ready" then
-		return false
-	end
-	fsm.Context._dashDirection = direction
-	fsm.State = "Dashing"
-	return true
+if fsm.State ~= "Ready" then
+return false
+end
+fsm.Context._dashDirection = direction
+fsm.State = "ValidateDash"
+return true
 end
 
 return DashFSM

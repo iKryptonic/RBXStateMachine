@@ -5,9 +5,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local StatusEffectFSM = {
     Name = "StatusEffectFSM",
     className = "StatusEffectFSM",
-    validStates = { "Active", "Expired", "Failed" },
+    validStates = { "ValidateInput", "LoadEntities", "LoadEffectDef", "InitializeContext", "UpdateEffectsRegistry", "ApplyStatModifiers", "ApplyStatusFlags", "SyncResources", "BroadcastUpdate", "Ticking", "RemoveStatModifiers", "RemoveStatusFlags", "CleanupRegistry", "BroadcastCleanup", "Expired", "Failed" },
     terminalStates = { "Expired", "Failed" },
-    initialState = "Active",
+    initialState = "ValidateInput",
 }
 
 local function getOrchestrator()
@@ -67,6 +67,18 @@ local function getHumanoid(charEntity: any): Humanoid?
     return nil
 end
 
+local function clampResources(charEntity: any)
+    if typeof(charEntity.Health) == "number" and typeof(charEntity.MaxHealth) == "number" then
+        charEntity.Health = math.clamp(charEntity.Health, 0, charEntity.MaxHealth)
+    end
+    if typeof(charEntity.Stamina) == "number" and typeof(charEntity.MaxStamina) == "number" then
+        charEntity.Stamina = math.clamp(charEntity.Stamina, 0, charEntity.MaxStamina)
+    end
+    if typeof(charEntity.Mana) == "number" and typeof(charEntity.MaxMana) == "number" then
+        charEntity.Mana = math.clamp(charEntity.Mana, 0, charEntity.MaxMana)
+    end
+end
+
 local function syncHumanoid(charEntity: any)
     local humanoid = getHumanoid(charEntity)
     if not humanoid then
@@ -84,110 +96,79 @@ local function syncHumanoid(charEntity: any)
     end
 end
 
-local function hasOtherFlagProvider(charEntity: any, instanceId: string, flagName: string): boolean
-    local defs = getStatusEffectDefs()
-    local activeEffects = charEntity and charEntity.ActiveStatusEffects
-    if typeof(activeEffects) ~= "table" then
+local function getContext(fsm: any): any
+    fsm.Context = fsm.Context or {}
+    return fsm.Context
+end
+
+local function reverseStatModifiers(fsm: any): boolean
+    local context = getContext(fsm)
+    local charEntity = context._charEntity or fsm.CharacterEntity
+    local originals = context._statModifierOriginals
+    if not charEntity or typeof(originals) ~= "table" or context._statModifiersRemoved then
         return false
     end
 
-    for _, entry in ipairs(activeEffects) do
-        if typeof(entry) ~= "table" or entry.InstanceId == instanceId then
-            continue
-        end
-        local def = defs.Get(entry.EffectId)
-        local flags = def and def.ApplyFlags
-        if typeof(flags) == "table" and flags[flagName] ~= nil then
-            return true
-        end
+    local changed = false
+    for stat, originalValue in pairs(originals) do
+        charEntity[stat] = originalValue
+        changed = true
     end
-    return false
+
+    context._statModifiersRemoved = true
+    return changed
 end
 
-local function hasOtherStun(charEntity: any, instanceId: string): boolean
-    local activeEffects = charEntity and charEntity.ActiveStatusEffects
-    if typeof(activeEffects) ~= "table" then
+local function reverseStatusFlags(fsm: any): boolean
+    local context = getContext(fsm)
+    local charEntity = context._charEntity or fsm.CharacterEntity
+    local originals = context._flagOriginals
+    if not charEntity or typeof(originals) ~= "table" or context._statusFlagsRemoved then
         return false
     end
 
-    for _, entry in ipairs(activeEffects) do
-        if typeof(entry) == "table" and entry.InstanceId ~= instanceId and entry.EffectId == "Stun" then
-            return true
-        end
+    local changed = false
+    for flagName, originalValue in pairs(originals) do
+        charEntity[flagName] = originalValue
+        changed = true
     end
-    return false
+
+    context._statusFlagsRemoved = true
+    return changed
 end
 
-local function removeEffectEntry(charEntity: any, instanceId: string)
+local function cleanupRegistry(fsm: any): boolean
+    local context = getContext(fsm)
+    local charEntity = context._charEntity or fsm.CharacterEntity
+    if not charEntity or context._registryCleaned then
+        return false
+    end
+
     local activeEffects = cloneActiveEffects(charEntity)
-    local index = findEffectEntryIndex(activeEffects, instanceId)
+    local index = findEffectEntryIndex(activeEffects, fsm.Id)
     if index then
         table.remove(activeEffects, index)
     end
     charEntity.ActiveStatusEffects = activeEffects
+    context._registryCleaned = true
+    return index ~= nil
 end
 
-local function reverseEffect(fsm: any)
-    if not fsm._effectApplied then
-        return
+local function broadcastEntity(charEntity: any): boolean
+    if not charEntity then
+        return false
     end
 
-    local charEntity = fsm.CharacterEntity
-    local def = fsm.Definition
-    if not charEntity or not def then
-        fsm._effectApplied = false
-        return
-    end
-
-    removeEffectEntry(charEntity, fsm.Id)
-
-    if typeof(def.StatModifiers) == "table" then
-        for stat, modifier in pairs(def.StatModifiers) do
-            if typeof(modifier) == "number" and typeof(charEntity[stat]) == "number" then
-                charEntity[stat] = (tonumber(charEntity[stat]) or 0) - modifier
-            end
-        end
-    end
-
-    if typeof(def.ApplyFlags) == "table" then
-        for flagName, flagValue in pairs(def.ApplyFlags) do
-            if flagValue ~= nil and not hasOtherFlagProvider(charEntity, fsm.Id, flagName) then
-                if typeof(flagValue) == "boolean" and typeof(charEntity[flagName]) == "boolean" then
-                    charEntity[flagName] = false
-                else
-                    charEntity[flagName] = nil
-                end
-            end
-        end
-    end
-
-    if def.Id == "Stun" and not hasOtherStun(charEntity, fsm.Id) and fsm._stunSnapshot then
-        if typeof(charEntity.CanMove) == "boolean" then
-            charEntity.CanMove = fsm._stunSnapshot.CanMove
-        end
-        if typeof(charEntity.MoveSpeedCap) == "number" then
-            charEntity.MoveSpeedCap = fsm._stunSnapshot.MoveSpeedCap
-        end
-    end
-
-    if typeof(charEntity.Health) == "number" and typeof(charEntity.MaxHealth) == "number" then
-        charEntity.Health = math.clamp(charEntity.Health, 0, charEntity.MaxHealth)
-    end
-    if typeof(charEntity.Stamina) == "number" and typeof(charEntity.MaxStamina) == "number" then
-        charEntity.Stamina = math.clamp(charEntity.Stamina, 0, charEntity.MaxStamina)
-    end
-    if typeof(charEntity.Mana) == "number" and typeof(charEntity.MaxMana) == "number" then
-        charEntity.Mana = math.clamp(charEntity.Mana, 0, charEntity.MaxMana)
-    end
-
-    syncHumanoid(charEntity)
-    charEntity:UpdateEntity()
-    fsm._effectApplied = false
+    pcall(function()
+        charEntity:UpdateEntity()
+    end)
+    return true
 end
 
 local function applyTick(fsm: any)
-    local charEntity = fsm.CharacterEntity
-    local def = fsm.Definition
+    local context = getContext(fsm)
+    local charEntity = context._charEntity or fsm.CharacterEntity
+    local def = context._effectDef or fsm.Definition
     if not charEntity or not def then
         return
     end
@@ -217,76 +198,148 @@ local function applyTick(fsm: any)
     end
 
     if changed then
-        charEntity:UpdateEntity()
+        broadcastEntity(charEntity)
     end
 end
 
 function StatusEffectFSM:RegisterStates()
-    self:AddState("Active", {
+    self:AddState("ValidateInput", {
         OnEnter = function(_, fsm)
             if typeof(fsm.CharacterEntityId) ~= "string" or fsm.CharacterEntityId == "" then
                 fsm:Fail("Missing CharacterEntityId")
                 return
             end
-            if typeof(fsm.EffectId) ~= "string" or fsm.EffectId == "" then
-                fsm:Fail("Missing EffectId")
-                return
-            end
+            fsm.State = "LoadEntities"
+        end,
+    }, { "LoadEntities", "Failed" })
 
-            local orchestrator = getOrchestrator()
-            local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-            local def = getStatusEffectDefs().Get(fsm.EffectId)
+    self:AddState("LoadEntities", {
+        OnEnter = function(_, fsm)
+            local charEntity = getOrchestrator().GetEntity(fsm.CharacterEntityId)
             if not charEntity then
                 fsm:Fail("CharacterEntity not found")
                 return
             end
+
+            local context = getContext(fsm)
+            context._charEntity = charEntity
+            fsm.CharacterEntity = charEntity
+            fsm.State = "LoadEffectDef"
+        end,
+    }, { "LoadEffectDef", "Failed" })
+
+    self:AddState("LoadEffectDef", {
+        OnEnter = function(_, fsm)
+            local effectId = tostring(fsm.EffectId or "")
+            local def = getStatusEffectDefs().Get(effectId)
             if not def then
                 fsm:Fail("Status effect not found")
                 return
             end
 
-            fsm.CharacterEntity = charEntity
+            local context = getContext(fsm)
+            context._effectDef = def
             fsm.Definition = def
-            fsm._tickAccumulator = 0
-            fsm._effectApplied = true
+            fsm.State = "InitializeContext"
+        end,
+    }, { "InitializeContext", "Failed" })
+
+    self:AddState("InitializeContext", {
+        OnEnter = function(_, fsm)
+            local context = getContext(fsm)
+            local def = context._effectDef
+            context._tickAccumulator = 0
+            context._startedAt = os.clock()
+            context._duration = math.max(tonumber(def and def.Duration) or 0, 0)
+            context._stacks = 1
+            context._statModifierOriginals = {}
+            context._flagOriginals = {}
+            context._statModifiersRemoved = false
+            context._statusFlagsRemoved = false
+            context._registryCleaned = false
+            fsm.State = "UpdateEffectsRegistry"
+        end,
+    }, { "UpdateEffectsRegistry" })
+
+    self:AddState("UpdateEffectsRegistry", {
+        OnEnter = function(_, fsm)
+            local context = getContext(fsm)
+            local charEntity = context._charEntity
+            local def = context._effectDef
+            if not charEntity or not def then
+                fsm:Fail("Status effect context missing")
+                return
+            end
 
             local activeEffects = cloneActiveEffects(charEntity)
-            local index = findEffectEntryIndex(activeEffects, fsm.Id)
             local entry = {
                 InstanceId = fsm.Id,
                 EffectId = def.Id,
-                StartedAt = os.clock(),
-                Duration = tonumber(def.Duration) or 0,
-                Stacks = 1,
+                StartedAt = context._startedAt,
+                Duration = context._duration,
+                Stacks = context._stacks,
             }
+            local index = findEffectEntryIndex(activeEffects, fsm.Id)
             if index then
                 activeEffects[index] = entry
             else
                 table.insert(activeEffects, entry)
             end
             charEntity.ActiveStatusEffects = activeEffects
+            fsm.State = "ApplyStatModifiers"
+        end,
+    }, { "ApplyStatModifiers", "Failed" })
 
+    self:AddState("ApplyStatModifiers", {
+        OnEnter = function(_, fsm)
+            local context = getContext(fsm)
+            local charEntity = context._charEntity
+            local def = context._effectDef
+            if not charEntity or not def then
+                fsm:Fail("Status effect context missing")
+                return
+            end
+
+            local originals = context._statModifierOriginals
             if typeof(def.StatModifiers) == "table" then
                 for stat, modifier in pairs(def.StatModifiers) do
                     if typeof(modifier) == "number" and typeof(charEntity[stat]) == "number" then
+                        originals[stat] = charEntity[stat]
                         charEntity[stat] = (tonumber(charEntity[stat]) or 0) + modifier
                     end
                 end
             end
+            fsm.State = "ApplyStatusFlags"
+        end,
+    }, { "ApplyStatusFlags", "Failed" })
 
+    self:AddState("ApplyStatusFlags", {
+        OnEnter = function(_, fsm)
+            local context = getContext(fsm)
+            local charEntity = context._charEntity
+            local def = context._effectDef
+            if not charEntity or not def then
+                fsm:Fail("Status effect context missing")
+                return
+            end
+
+            local originals = context._flagOriginals
             if typeof(def.ApplyFlags) == "table" then
                 for flagName, flagValue in pairs(def.ApplyFlags) do
-                    if flagValue ~= nil then
-                        charEntity[flagName] = flagValue
+                    if originals[flagName] == nil then
+                        originals[flagName] = charEntity[flagName]
                     end
+                    charEntity[flagName] = flagValue
                 end
             end
 
             if def.Id == "Stun" then
-                fsm._stunSnapshot = {
-                    CanMove = charEntity.CanMove,
-                    MoveSpeedCap = charEntity.MoveSpeedCap,
-                }
+                if originals.CanMove == nil then
+                    originals.CanMove = charEntity.CanMove
+                end
+                if originals.MoveSpeedCap == nil then
+                    originals.MoveSpeedCap = charEntity.MoveSpeedCap
+                end
                 if typeof(charEntity.CanMove) == "boolean" then
                     charEntity.CanMove = false
                 end
@@ -295,22 +348,46 @@ function StatusEffectFSM:RegisterStates()
                 end
             end
 
-            if typeof(charEntity.Health) == "number" and typeof(charEntity.MaxHealth) == "number" then
-                charEntity.Health = math.clamp(charEntity.Health, 0, charEntity.MaxHealth)
-            end
-            if typeof(charEntity.Stamina) == "number" and typeof(charEntity.MaxStamina) == "number" then
-                charEntity.Stamina = math.clamp(charEntity.Stamina, 0, charEntity.MaxStamina)
-            end
-            if typeof(charEntity.Mana) == "number" and typeof(charEntity.MaxMana) == "number" then
-                charEntity.Mana = math.clamp(charEntity.Mana, 0, charEntity.MaxMana)
+            fsm.State = "SyncResources"
+        end,
+    }, { "SyncResources", "Failed" })
+
+    self:AddState("SyncResources", {
+        OnEnter = function(_, fsm)
+            local context = getContext(fsm)
+            local charEntity = context._charEntity
+            if not charEntity then
+                fsm:Fail("CharacterEntity not found")
+                return
             end
 
+            clampResources(charEntity)
             syncHumanoid(charEntity)
-            charEntity:UpdateEntity()
-            fsm:ScheduleTransition(math.max(tonumber(def.Duration) or 0, 0), "Expired")
+            fsm.State = "BroadcastUpdate"
+        end,
+    }, { "BroadcastUpdate", "Failed" })
+
+    self:AddState("BroadcastUpdate", {
+        OnEnter = function(_, fsm)
+            local charEntity = getContext(fsm)._charEntity
+            if not charEntity then
+                fsm:Fail("CharacterEntity not found")
+                return
+            end
+
+            broadcastEntity(charEntity)
+            fsm.State = "Ticking"
+        end,
+    }, { "Ticking", "Failed" })
+
+    self:AddState("Ticking", {
+        OnEnter = function(_, fsm)
+            local duration = tonumber(getContext(fsm)._duration) or 0
+            fsm:ScheduleTransition(duration, "RemoveStatModifiers")
         end,
         OnHeartbeat = function(_, fsm, dt)
-            local def = fsm.Definition
+            local context = getContext(fsm)
+            local def = context._effectDef
             if not def then
                 return
             end
@@ -320,25 +397,66 @@ function StatusEffectFSM:RegisterStates()
                 return
             end
 
-            fsm._tickAccumulator = (tonumber(fsm._tickAccumulator) or 0) + dt
-            while fsm._tickAccumulator >= interval do
-                fsm._tickAccumulator -= interval
+            context._tickAccumulator = (tonumber(context._tickAccumulator) or 0) + dt
+            while context._tickAccumulator >= interval do
+                context._tickAccumulator -= interval
                 applyTick(fsm)
             end
         end,
-    }, { "Expired", "Failed" })
+    }, { "RemoveStatModifiers", "Failed" })
 
-    self:AddState("Expired", {
+    self:AddState("RemoveStatModifiers", {
         OnEnter = function(_, fsm)
-            reverseEffect(fsm)
+            reverseStatModifiers(fsm)
+            fsm.State = "RemoveStatusFlags"
         end,
-    }, {})
+    }, { "RemoveStatusFlags" })
 
+    self:AddState("RemoveStatusFlags", {
+        OnEnter = function(_, fsm)
+            reverseStatusFlags(fsm)
+            fsm.State = "CleanupRegistry"
+        end,
+    }, { "CleanupRegistry" })
+
+    self:AddState("CleanupRegistry", {
+        OnEnter = function(_, fsm)
+            cleanupRegistry(fsm)
+            fsm.State = "BroadcastCleanup"
+        end,
+    }, { "BroadcastCleanup" })
+
+    self:AddState("BroadcastCleanup", {
+        OnEnter = function(_, fsm)
+            local context = getContext(fsm)
+            local charEntity = context._charEntity
+            if charEntity then
+                clampResources(charEntity)
+                syncHumanoid(charEntity)
+                broadcastEntity(charEntity)
+            end
+            fsm.State = "Expired"
+        end,
+    }, { "Expired" })
+
+    self:AddState("Expired", function() end, {})
     self:AddState("Failed", function() end, {})
 end
 
 function StatusEffectFSM:OnCleanup()
-    reverseEffect(self)
+    local context = getContext(self)
+    local charEntity = context._charEntity or self.CharacterEntity
+    local changed = false
+
+    changed = reverseStatModifiers(self) or changed
+    changed = reverseStatusFlags(self) or changed
+    changed = cleanupRegistry(self) or changed
+
+    if charEntity and changed then
+        clampResources(charEntity)
+        syncHumanoid(charEntity)
+        broadcastEntity(charEntity)
+    end
 end
 
 return StatusEffectFSM
