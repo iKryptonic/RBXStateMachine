@@ -131,7 +131,11 @@ end
 function MeleeAttackJob:RegisterStates()
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
+			if not orchestrator then
+				fsm:Fail("Orchestrator not found")
+				return
+			end
 			local charEntityId = fsm.CharacterEntityId
 			if typeof(charEntityId) ~= "string" or charEntityId == "" then
 				fsm:Fail("CharacterEntityId required")

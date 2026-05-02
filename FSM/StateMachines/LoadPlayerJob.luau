@@ -14,6 +14,7 @@ local LoadPlayerJob = {
 
 local DEFAULT_INVENTORY = { "1", "2", "3", "4", "5", "6", "7" }
 
+-- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
 local function getOrchestrator()
 	-- Try shared.fsm / shared.FSM (legacy pattern)
 	local lower = (shared :: any).fsm

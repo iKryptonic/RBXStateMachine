@@ -4,6 +4,7 @@
 -- @Description Factory and Registry for managing unique StateMachine instances by ID.
 
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Core = {
 	Factory = require(script.Core.Factory),
@@ -29,6 +30,30 @@ local Orchestrator = {
 
 local Initialized = false
 local _initializing = false
+local _moduleRegistry = {} :: { [string]: any }
+local _sharedModulesRegistered = false
+
+local function RegisterSharedModules()
+	if _sharedModulesRegistered then
+		return
+	end
+
+	local sharedFolder = ReplicatedStorage:FindFirstChild("shared")
+	if not sharedFolder then
+		return
+	end
+
+	for _, mod in ipairs(sharedFolder:GetChildren()) do
+		if mod:IsA("ModuleScript") then
+			pcall(function()
+				Orchestrator.RegisterModule(mod.Name, require(mod))
+			end)
+		end
+	end
+
+	_sharedModulesRegistered = true
+end
+
 local function ValidateRequest(context: string)
 	-- Allow calls during the bootstrap phase (Initialize() runs internal
 	-- helpers that call ValidateRequest before the global Initialized flag
@@ -58,6 +83,10 @@ end
 
 function Orchestrator:RegisterComponents()
 	local initialized = Initialize()
+
+	if initialized then
+		RegisterSharedModules()
+	end
 
 	if initialized and RunService:IsServer() and not self._serviceManager then
 		local serviceManagerModule = script:FindFirstChild("ServiceManager")
@@ -98,12 +127,38 @@ end
 
 function Orchestrator.CreateEntity(params: { EntityClass: any, EntityId: string, Context: {any}?, Persistent: boolean?, PersistenceKey: string? })
 	ValidateRequest()
+	if not params.Context then params.Context = {} end
+	params.Context._Orchestrator = Orchestrator
 	return Core.Factory.CreateEntity(params)
 end
 
 function Orchestrator.CreateStateMachine(params: { StateMachineClass: any, StateMachineId: string, Context: {any}? })
 	ValidateRequest()
+	if not params.Context then params.Context = {} end
+	params.Context._Orchestrator = Orchestrator
 	return Core.Factory.CreateStateMachine(params)
+end
+
+function Orchestrator.RegisterModule(name: string, module: any)
+	_moduleRegistry[name] = module
+end
+
+function Orchestrator.GetModule(name: string): any?
+	if _moduleRegistry[name] then
+		return _moduleRegistry[name]
+	end
+
+	local sharedFolder = ReplicatedStorage:FindFirstChild("shared")
+	if sharedFolder then
+		local mod = sharedFolder:FindFirstChild(name)
+		if mod and mod:IsA("ModuleScript") then
+			local result = require(mod)
+			_moduleRegistry[name] = result
+			return result
+		end
+	end
+
+	return nil
 end
 
 function Orchestrator.GetStateMachine(stateMachineId: string)
