@@ -52,10 +52,17 @@ end
 
 local function getRootPart(fsm: any): BasePart?
 	local charEntity = getCharacterEntity(fsm)
-	if not charEntity or not charEntity.Instance then
-		return nil
+	if charEntity and charEntity.Instance then
+		local root = charEntity.Instance:FindFirstChild("HumanoidRootPart")
+		if root then return root :: BasePart? end
 	end
-	return charEntity.Instance:FindFirstChild("HumanoidRootPart") :: BasePart?
+	-- Fallback: get from LocalPlayer.Character directly
+	local Players = game:GetService("Players")
+	local localPlayer = Players.LocalPlayer
+	if localPlayer and localPlayer.Character then
+		return localPlayer.Character:FindFirstChild("HumanoidRootPart") :: BasePart?
+	end
+	return nil
 end
 
 local function getImpulseDirection(rootPart: BasePart, direction: string): Vector3?
