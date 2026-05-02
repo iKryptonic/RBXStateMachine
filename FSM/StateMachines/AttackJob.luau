@@ -230,11 +230,19 @@ local function getSequentialCombo(
 	return comboDef[pointerState.Pointer], pointerState.Pointer
 end
 
-local function scanMeleeRange(
+local function logTimelineStep(fsm: any, message: string)
+	fsm:Log({
+		Level = "DEBUG",
+		Message = message,
+	})
+end
+
+local function scanVictims(
 	orchestrator: any,
 	attackerCharEntityId: string,
 	attackerRoot: BasePart,
-	radius: number
+	radius: number,
+	fsm: any?
 ): { any }
 	local victims = {}
 	local entities = if type(orchestrator.GetEntities) == "function" then orchestrator.GetEntities() else {}
@@ -264,6 +272,10 @@ local function scanMeleeRange(
 			table.insert(victims, entity)
 		end
 	end
+
+	if fsm then
+		logTimelineStep(fsm, string.format("Damage scan found %d victims in radius %.2f", #victims, radius))
+	end
 	return victims
 end
 
@@ -283,6 +295,57 @@ local function resolveTimelineLength(combo: any): number
 	return highest
 end
 
+local function applyDamageToVictim(orchestrator: any, fsm: any, victimEntity: any, frameNumber: number): boolean
+	local victimId = if typeof(victimEntity.EntityId) == "string" then victimEntity.EntityId else nil
+	if typeof(victimId) ~= "string" or victimId == "" then
+		logTimelineStep(fsm, "Skipping damage victim without entity id")
+		return false
+	end
+
+	local victimUserId = victimEntity.UserId
+	if typeof(victimUserId) ~= "number" then
+		logTimelineStep(fsm, "Skipping damage victim without numeric user id: " .. victimId)
+		return false
+	end
+
+	logTimelineStep(fsm, string.format("Creating DamageJob for victim %s at frame %d", victimId, frameNumber))
+	local damageJob = orchestrator.CreateStateMachine({
+		StateMachineClass = "DamageJob",
+		StateMachineId = string.format(
+			"%s/Damage/%d/%s/%s",
+			fsm.Id,
+			frameNumber,
+			victimId,
+			HttpService:GenerateGUID(false)
+		),
+		Context = {
+			AttackerCharEntityId = fsm.CharacterEntityId,
+			VictimUserId = victimUserId,
+			AttackName = fsm.Context._attackName,
+		},
+	})
+	if not damageJob then
+		error("Failed to create DamageJob")
+	end
+	damageJob:Start({ State = "Validate" })
+	return true
+end
+
+local function playHitSound(characterEntity: any, entry: { any }, fsm: any)
+	local hitSoundId = chooseValue(entry[3], nil)
+	if hitSoundId == nil then
+		logTimelineStep(fsm, "Skipping hit sound: no sound configured")
+		return
+	end
+
+	logTimelineStep(fsm, "Emitting hit sound " .. tostring(hitSoundId))
+	appendIntent(fsm:GetOrchestrator(), characterEntity, "Sound", {
+		SoundId = tostring(hitSoundId),
+		Volume = tonumber(chooseValue(entry[4], 0.5)) or 0.5,
+		Pitch = tonumber(chooseValue(entry[5], 1)) or 1,
+	}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
+end
+
 local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: number)
 	local orchestrator = fsm:GetOrchestrator()
 	local characterEntity = fsm.Context._characterEntity
@@ -291,10 +354,11 @@ local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: numb
 		error("Attack timeline missing damage context")
 	end
 
+	logTimelineStep(fsm, string.format("Processing damage keyframe at frame %d", frameNumber))
 	local debounceHit = entry[6] == true
 	local debounceDelay = tonumber(chooseValue(entry[7], 0.15)) or 0.15
 	local radius = tonumber(chooseValue(entry[8], DEFAULT_RADIUS)) or DEFAULT_RADIUS
-	local victims = scanMeleeRange(orchestrator, fsm.CharacterEntityId, attackerRoot, radius)
+	local victims = scanVictims(orchestrator, fsm.CharacterEntityId, attackerRoot, radius, fsm)
 	local hitOccurred = false
 
 	local hitDebounces = fsm.Context._hitDebounces
@@ -316,47 +380,20 @@ local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: numb
 			continue
 		end
 		if debounceHit and typeof(hitDebounces[victimId]) == "number" and now < hitDebounces[victimId] then
+			logTimelineStep(fsm, "Skipping debounced victim " .. victimId)
 			continue
 		end
 
-		local victimUserId = victimEntity.UserId
-		if typeof(victimUserId) ~= "number" then
-			continue
-		end
-
-		local damageJob = orchestrator.CreateStateMachine({
-			StateMachineClass = "DamageJob",
-			StateMachineId = string.format(
-				"%s/Damage/%d/%s/%s",
-				fsm.Id,
-				frameNumber,
-				victimId,
-				HttpService:GenerateGUID(false)
-			),
-			Context = {
-				AttackerCharEntityId = fsm.CharacterEntityId,
-				VictimUserId = victimUserId,
-				AttackName = fsm.Context._attackName,
-			},
-		})
-		if not damageJob then
-			error("Failed to create DamageJob")
-		end
-		damageJob:Start({ State = "Validate" })
-		hitOccurred = true
-
-		if debounceHit then
-			hitDebounces[victimId] = now + debounceDelay
+		if applyDamageToVictim(orchestrator, fsm, victimEntity, frameNumber) then
+			hitOccurred = true
+			if debounceHit then
+				hitDebounces[victimId] = now + debounceDelay
+			end
 		end
 	end
 
-	local hitSoundId = chooseValue(entry[3], nil)
-	if hitOccurred and hitSoundId ~= nil then
-		appendIntent(orchestrator, characterEntity, "Sound", {
-			SoundId = tostring(hitSoundId),
-			Volume = tonumber(chooseValue(entry[4], 0.5)) or 0.5,
-			Pitch = tonumber(chooseValue(entry[5], 1)) or 1,
-		}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
+	if hitOccurred then
+		playHitSound(characterEntity, entry, fsm)
 	end
 end
 
