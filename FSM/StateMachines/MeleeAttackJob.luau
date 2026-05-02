@@ -204,11 +204,21 @@ function MeleeAttackJob:RegisterStates()
 			task.delay(totalDuration * 0.5, function()
 				if not fsm.IsActive then return end
 				local orchestrator = getOrchestrator()
-				local victims = scanMeleeRange(orchestrator, fsm.CharacterEntityId, root, DEFAULT_MELEE_RADIUS)
+				local attackerRoot = fsm.Context._root
+				if not attackerRoot or not attackerRoot.Parent then return end
+				local knockbackDir = attackerRoot.CFrame.LookVector
+				local victims = scanMeleeRange(orchestrator, fsm.CharacterEntityId, attackerRoot, DEFAULT_MELEE_RADIUS)
 				for _, victim in ipairs(victims) do
-					local victimHumanoid = victim.Instance and victim.Instance:FindFirstChildOfClass("Humanoid")
+					local victimChar = victim.Instance
+					local victimHumanoid = victimChar and victimChar:FindFirstChildOfClass("Humanoid")
+					local victimRoot = victimChar and victimChar:FindFirstChild("HumanoidRootPart")
 					if victimHumanoid and victimHumanoid.Health > 0 then
 						victimHumanoid:TakeDamage(damage)
+						-- Knockback relative to attacker's facing direction
+						if victimRoot then
+							local knockForce = knockbackDir * 25 + Vector3.new(0, 10, 0)
+							victimRoot.AssemblyLinearVelocity = victimRoot.AssemblyLinearVelocity + knockForce
+						end
 					end
 				end
 			end)
