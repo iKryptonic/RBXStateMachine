@@ -232,59 +232,8 @@ function DashFSM.TryDash(fsm: any, direction: string): boolean
 	if fsm.State ~= "Ready" then
 		return false
 	end
-
-	-- Validate
-	local charEntity = getCharacterEntity(fsm)
-	local rootPart = getRootPart(fsm)
-	if not direction or not rootPart or not charEntity then
-		return false
-	end
-
-	-- Check stamina
-	local stamina = tonumber(charEntity.Stamina) or 0
-	if stamina < DASH_STAMINA_COST then
-		return false
-	end
-
-	-- Deduct stamina
-	if not ResourceHelpers.deductStamina(charEntity, DASH_STAMINA_COST) then
-		return false
-	end
-	pcall(function() charEntity:UpdateEntity() end)
-
-	-- Apply impulse immediately (BodyVelocity, matching legacy)
-	local impulseDir = getImpulseDirection(rootPart, direction)
-	if impulseDir then
-		local bodyVelocity = Instance.new("BodyVelocity")
-		bodyVelocity.MaxForce = Vector3.new(math.huge, 0, math.huge)
-		bodyVelocity.Velocity = impulseDir * IMPULSE
-		bodyVelocity.Parent = rootPart
-		Debris:AddItem(bodyVelocity, IMPULSE_DURATION)
-	end
-
-	-- Sound
-	local sound = Instance.new("Sound")
-	sound.SoundId = DASH_SOUND_ID
-	sound.Volume = 0.5
-	sound.Parent = rootPart
-	sound:Play()
-	Debris:AddItem(sound, 2)
-
-	-- Animation
-	local onAnimate = fsm.Context._onAnimate
-	local animationName = DIRECTION_MAP[direction] or "Dashing"
-	if onAnimate then
-		onAnimate(animationName)
-	end
-
-	-- Write overlay and transition to active/cooldown via FSM states
-	if charEntity then
-		charEntity.ActionOverlay = "Dash_" .. direction
-	end
-	fsm.Context._charEntity = charEntity
-	fsm.Context._rootPart = rootPart
 	fsm.Context._dashDirection = direction
-	fsm.State = "DashActive"
+	fsm.State = "ValidateDash"
 	return true
 end
 
