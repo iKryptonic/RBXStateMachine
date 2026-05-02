@@ -1,4 +1,5 @@
 --!strict
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 -- @Name LoadPlayerJob
 -- @Author iKrypto
 -- @Description Handles player initialization: creates PlayerEntity (persistent), waits for character, creates CharacterEntity, registers command handlers
@@ -56,6 +57,37 @@ local function createAndStartStateMachine(className: string, stateMachineId: str
 	return machine
 end
 
+local function getSharedModule(name: string)
+	local sharedFolder = ReplicatedStorage:FindFirstChild("shared")
+	if sharedFolder then
+		local moduleScript = sharedFolder:FindFirstChild(name)
+		if moduleScript and moduleScript:IsA("ModuleScript") then
+			return require(moduleScript)
+		end
+	end
+	return error("Shared module not found: " .. name)
+end
+
+local function syncCharacterHumanoid(charEntity: any)
+	local character = charEntity and charEntity.Instance
+	if not character or not character:IsA("Model") then
+		return
+	end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then
+		return
+	end
+
+	if typeof(charEntity.MaxHealth) == "number" and charEntity.MaxHealth > 0 then
+		humanoid.MaxHealth = charEntity.MaxHealth
+	end
+	if typeof(charEntity.Health) == "number" then
+		charEntity.Health = math.clamp(charEntity.Health, 0, humanoid.MaxHealth)
+		humanoid.Health = charEntity.Health
+	end
+end
+
 local function applyPlayerDefaults(playerEntity: any, player: Player, userId: number)
 	playerEntity:SetContext("Instance", player)
 	playerEntity:SetContext("OwnerId", tostring(userId))
@@ -104,6 +136,13 @@ local function applyPlayerDefaults(playerEntity: any, player: Player, userId: nu
 
 	if typeof(playerEntity.LearnedAbilities) ~= "table" then
 		playerEntity.LearnedAbilities = {}
+		dirty = true
+	end
+
+	local talentTreeDefs = getSharedModule("TalentTreeDefs")
+	local remainingSkillPoints = talentTreeDefs.GetRemainingSkillPoints(playerEntity)
+	if type(playerEntity.SkillPoints) ~= "number" or playerEntity.SkillPoints ~= remainingSkillPoints then
+		playerEntity.SkillPoints = remainingSkillPoints
 		dirty = true
 	end
 
@@ -231,6 +270,11 @@ local function applyCharacterDefaults(charEntity: any, character: Model, userId:
 		dirty = true
 	end
 
+	if typeof(charEntity.ActiveStatusEffects) ~= "table" then
+		charEntity.ActiveStatusEffects = {}
+		dirty = true
+	end
+
 	if type(charEntity.ActiveCastId) ~= "string" then
 		charEntity.ActiveCastId = ""
 		dirty = true
@@ -246,6 +290,7 @@ local function applyCharacterDefaults(charEntity: any, character: Model, userId:
 		dirty = true
 	end
 
+	syncCharacterHumanoid(charEntity)
 	if dirty then
 		charEntity:UpdateEntity()
 	end
@@ -385,6 +430,21 @@ function LoadPlayerJob:RegisterStates()
 			end
 
 			applyCharacterDefaults(charEntity, character, userId, playerEntityId)
+			local playerEntity = orchestrator.GetEntity(playerEntityId)
+			if playerEntity then
+				local passiveEffects = getSharedModule("TalentTreeDefs").GetMergedPassiveEffects(playerEntity)
+				local appliedPassiveBonuses = false
+				for stat, bonus in pairs(passiveEffects) do
+					if typeof(bonus) == "number" and typeof(charEntity[stat]) == "number" then
+						charEntity[stat] = (tonumber(charEntity[stat]) or 0) + bonus
+						appliedPassiveBonuses = true
+					end
+				end
+				if appliedPassiveBonuses then
+					syncCharacterHumanoid(charEntity)
+					charEntity:UpdateEntity()
+				end
+			end
 			fsm.Context.CharacterEntityId = entityId
 			fsm.State = "RegisterCommands"
 		end,
@@ -510,6 +570,58 @@ function LoadPlayerJob:RegisterStates()
 					CharacterEntityId = charEntityId,
 					PlayerEntityId = playerEntityId,
 				}, "Validate")
+			end)
+
+			registerEntityCommand(orchestrator, charEntityId, "RequestUnlockTalent", function(player, nodeId)
+				if not isAuthorized(player) then return end
+
+				local talentTreeDefs = getSharedModule("TalentTreeDefs")
+				local playerEntity = orchestrator.GetEntity(playerEntityId)
+				if not playerEntity then
+					return
+				end
+
+				local requestedNodeId = tostring(nodeId or "")
+				local canUnlock, reason = talentTreeDefs.CanUnlock(requestedNodeId, playerEntity)
+				if not canUnlock then
+					warn("[TalentTree] Cannot unlock " .. requestedNodeId .. ": " .. tostring(reason))
+					return
+				end
+
+				local node = talentTreeDefs.GetNode(requestedNodeId)
+				if not node then
+					return
+				end
+
+				local learned = if typeof(playerEntity.LearnedAbilities) == "table" then table.clone(playerEntity.LearnedAbilities) else {}
+				table.insert(learned, requestedNodeId)
+				playerEntity.LearnedAbilities = learned
+				playerEntity.SkillPoints = talentTreeDefs.GetRemainingSkillPoints(playerEntity)
+				playerEntity:UpdateEntity()
+
+				if node.Type == "Passive" and typeof(node.Effect) == "table" then
+					local charEntity = orchestrator.GetEntity(charEntityId)
+					if charEntity then
+						for stat, bonus in pairs(node.Effect) do
+							if typeof(bonus) == "number" and typeof(charEntity[stat]) == "number" then
+								charEntity[stat] = (tonumber(charEntity[stat]) or 0) + bonus
+							end
+						end
+						syncCharacterHumanoid(charEntity)
+						charEntity:UpdateEntity()
+					end
+				end
+			end)
+
+			registerEntityCommand(orchestrator, charEntityId, "ApplyStatusEffect", function(player, effectId, targetCharEntityId)
+				if player ~= nil and not isAuthorized(player) then
+					return
+				end
+
+				local statusEffectHelper = getSharedModule("StatusEffectHelper")
+				local requestedEffectId = tostring(effectId or "")
+				local targetId = if typeof(targetCharEntityId) == "string" and targetCharEntityId ~= "" then targetCharEntityId else charEntityId
+				statusEffectHelper.Apply(orchestrator, targetId, requestedEffectId)
 			end)
 
 			fsm.State = "PublishLoaded"
