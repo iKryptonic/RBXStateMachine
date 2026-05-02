@@ -5,6 +5,16 @@
 --   Validates combat state, acquires lock, emits animation intents,
 --   and processes damage — parallel to AttackJob for weapons.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
+assert(Helpers, "Helpers folder not found")
+local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
+local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
+local CombatHelpers = require(Helpers:WaitForChild("CombatHelpers"))
+local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
+local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
+local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
+
 local MeleeAttackJob = {
 	Name = "MeleeAttackJob",
 	className = "MeleeAttackJob",
@@ -75,72 +85,8 @@ local MELEE_SEQUENCES = {
 	},
 }
 
-local function getSharedModule(orchestrator: any, name: string)
-	local getModule = orchestrator and orchestrator.GetModule
-	if type(getModule) == "function" then
-		local module = getModule(name)
-		if module ~= nil then
-			return module
-		end
-	end
-
-	local RS = game:GetService("ReplicatedStorage")
-	local mod = RS:FindFirstChild(name, true)
-	if mod and mod:IsA("ModuleScript") then
-		return require(mod)
-	end
-	return nil
-end
-
-local function queueRelease(fsm: any, nextState: string, reason: string?)
-	fsm.Context._releaseTargetState = nextState
-	fsm.Context._releaseReason = reason
-	fsm.State = "ReleaseLock"
-end
-
-local function scanMeleeRange(
-	orchestrator: any,
-	attackerCharEntityId: string,
-	attackerRoot: BasePart,
-	radius: number
-): { any }
-	local victims = {}
-	local entities = if type(orchestrator.GetEntities) == "function" then orchestrator.GetEntities() else {}
-	for entityId, entity in pairs(entities) do
-		if entityId == attackerCharEntityId then
-			continue
-		end
-		local character = entity and entity.Instance
-		if not character or not character:IsA("Model") then
-			continue
-		end
-		local humanoid = character:FindFirstChildOfClass("Humanoid")
-		local root = character:FindFirstChild("HumanoidRootPart")
-		if not humanoid or humanoid.Health <= 0 or not root then
-			continue
-		end
-		local offset = root.Position - attackerRoot.Position
-		if offset.Magnitude <= 0 or offset.Magnitude >= radius then
-			continue
-		end
-		if attackerRoot.CFrame.LookVector:Dot(offset.Unit) > 0 then
-			table.insert(victims, entity)
-		end
-	end
-	return victims
-end
-
 local function appendAnimationIntent(orchestrator: any, charEntity: any, fsm: any, phase: any)
-	local IntentSchema = getSharedModule(orchestrator, "IntentSchema")
-	if not IntentSchema then
-		return
-	end
-
-	IntentSchema.AppendIntent(charEntity, {
-		Kind = "Animation",
-		Payload = { Name = phase.Name, Speed = phase.Speed, FadeTime = 0.1 },
-		SourceCharId = fsm.CharacterEntityId,
-	}, fsm.Id)
+	IntentHelpers.appendIntent(orchestrator, charEntity, "Animation", { Name = phase.Name, Speed = phase.Speed, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 end
 
 local function emitDueAnimationPhases(fsm: any, elapsed: number)
@@ -194,14 +140,13 @@ function MeleeAttackJob:RegisterStates()
 				return
 			end
 
-			local humanoid = character:FindFirstChildOfClass("Humanoid")
-			local root = character:FindFirstChild("HumanoidRootPart")
+			local humanoid, root = EntityHelpers.getHumanoidAndRoot(character)
 			if not humanoid or humanoid.Health <= 0 or not root then
 				fsm:Fail("Character cannot attack")
 				return
 			end
 
-			if charEntity.IsStunned == true or charEntity.IsKnocked == true then
+			if EntityHelpers.isCrowdControlled(charEntity) then
 				fsm:Fail("Character is crowd-controlled")
 				return
 			end
@@ -245,7 +190,7 @@ function MeleeAttackJob:RegisterStates()
 			local charEntity = fsm.Context._charEntity
 			local staminaCost = fsm.Context._staminaCost or 0
 			if (charEntity.Stamina or 0) < staminaCost then
-				queueRelease(fsm, "Failed", "Not enough stamina")
+				StateTransitionHelpers.queueRelease(fsm, "Failed", "Not enough stamina")
 				return
 			end
 			fsm.State = "DeductStamina"
@@ -256,7 +201,10 @@ function MeleeAttackJob:RegisterStates()
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
 			local staminaCost = fsm.Context._staminaCost or 0
-			charEntity.Stamina = (charEntity.Stamina or 100) - staminaCost
+			if not ResourceHelpers.deductStamina(charEntity, staminaCost) then
+				StateTransitionHelpers.queueRelease(fsm, "Failed", "Not enough stamina")
+				return
+			end
 			charEntity:UpdateEntity(fsm.Id)
 			fsm.State = "ResolveSequence"
 		end,
@@ -269,7 +217,7 @@ function MeleeAttackJob:RegisterStates()
 			local damage = DEFAULT_MELEE_DAMAGE[comboSlot] or 5
 			local seqDef = MELEE_SEQUENCES[comboSlot]
 			if not seqDef then
-				queueRelease(fsm, "Failed", "Melee sequence not found")
+				StateTransitionHelpers.queueRelease(fsm, "Failed", "Melee sequence not found")
 				return
 			end
 
@@ -286,7 +234,7 @@ function MeleeAttackJob:RegisterStates()
 
 			local phases = seqDef.Moves[pointer]
 			if typeof(phases) ~= "table" or #phases == 0 then
-				queueRelease(fsm, "Failed", "Melee phases not found")
+				StateTransitionHelpers.queueRelease(fsm, "Failed", "Melee phases not found")
 				return
 			end
 
@@ -313,7 +261,7 @@ function MeleeAttackJob:RegisterStates()
 			local charEntity = fsm.Context._charEntity
 			local firstPhase = typeof(phases) == "table" and phases[1] or nil
 			if not charEntity or typeof(firstPhase) ~= "table" then
-				queueRelease(fsm, "Failed", "Initial melee phase missing")
+				StateTransitionHelpers.queueRelease(fsm, "Failed", "Initial melee phase missing")
 				return
 			end
 			appendAnimationIntent(fsm:GetOrchestrator(), charEntity, fsm, firstPhase)
@@ -346,7 +294,7 @@ function MeleeAttackJob:RegisterStates()
 			local attackerRoot = fsm.Context._root
 			local victims = {}
 			if attackerRoot and attackerRoot.Parent then
-				victims = scanMeleeRange(orchestrator, fsm.CharacterEntityId, attackerRoot, DEFAULT_MELEE_RADIUS)
+				victims = CombatHelpers.scanForwardVictims(orchestrator, fsm.CharacterEntityId, attackerRoot, DEFAULT_MELEE_RADIUS)
 				fsm.Context._knockbackDirection = attackerRoot.CFrame.LookVector
 			end
 			fsm.Context._victims = victims

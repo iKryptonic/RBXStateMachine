@@ -5,6 +5,15 @@
 --   Spawns a projectile, tracks collision, and creates DamageJob on hit.
 
 local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
+assert(Helpers, "Helpers folder not found")
+local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
+local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
+local CombatHelpers = require(Helpers:WaitForChild("CombatHelpers"))
+local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
+local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
+local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
 
 local ProjectileAttackJob = {
 	Name = "ProjectileAttackJob",
@@ -39,22 +48,6 @@ local DEFAULT_PROJECTILE_DAMAGE = 20
 local DEFAULT_CHARGE_TIME = 0.3
 local DEFAULT_GRAVITY = Vector3.new(0, -30, 0)
 
-local function getSharedModule(orchestrator: any, name: string)
-	local getModule = orchestrator and orchestrator.GetModule
-	if type(getModule) == "function" then
-		local module = getModule(name)
-		if module ~= nil then
-			return module
-		end
-	end
-	local RS = game:GetService("ReplicatedStorage")
-	local mod = RS:FindFirstChild(name, true)
-	if mod and mod:IsA("ModuleScript") then
-		return require(mod)
-	end
-	return nil
-end
-
 local function getItemData(weaponId: string): any?
 	local RS = game:GetService("ReplicatedStorage")
 	local assets = RS:FindFirstChild("Assets")
@@ -87,12 +80,6 @@ local function getProjectileTemplate(weaponId: string): BasePart?
 		end
 	end
 	return nil
-end
-
-local function queueRelease(fsm: any, nextState: string, reason: string?)
-	fsm.Context._releaseTargetState = nextState
-	fsm.Context._releaseReason = reason
-	fsm.State = "ReleaseLock"
 end
 
 local function cleanupProjectile(fsm: any)
@@ -152,7 +139,7 @@ function ProjectileAttackJob:RegisterStates()
 				return
 			end
 
-			if charEntity.IsStunned == true or charEntity.IsKnocked == true then
+			if EntityHelpers.isCrowdControlled(charEntity) then
 				fsm:Fail("Character is crowd-controlled")
 				return
 			end
@@ -210,7 +197,7 @@ function ProjectileAttackJob:RegisterStates()
 			local charEntity = fsm.Context._charEntity
 			local manaCost = fsm.Context._manaCost or 0
 			if (charEntity.Mana or 0) < manaCost then
-				queueRelease(fsm, "Failed", "Not enough mana")
+				StateTransitionHelpers.queueRelease(fsm, "Failed", "Not enough mana")
 				return
 			end
 			fsm.State = "DeductMana"
@@ -221,7 +208,10 @@ function ProjectileAttackJob:RegisterStates()
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
 			local manaCost = fsm.Context._manaCost or 0
-			charEntity.Mana = (charEntity.Mana or 50) - manaCost
+			if not ResourceHelpers.deductMana(charEntity, manaCost) then
+				StateTransitionHelpers.queueRelease(fsm, "Failed", "Not enough mana")
+				return
+			end
 			charEntity:UpdateEntity(fsm.Id)
 			fsm.State = "EmitChargeAnimation"
 		end,
@@ -229,14 +219,7 @@ function ProjectileAttackJob:RegisterStates()
 
 	self:AddState("EmitChargeAnimation", {
 		OnEnter = function(_, fsm)
-			local IntentSchema = getSharedModule(fsm:GetOrchestrator(), "IntentSchema")
-			if IntentSchema then
-				IntentSchema.AppendIntent(fsm.Context._charEntity, {
-					Kind = "Animation",
-					Payload = { Name = "Charge1", Speed = 0.25, FadeTime = 0.1 },
-					SourceCharId = fsm.CharacterEntityId,
-				}, fsm.Id)
-			end
+			IntentHelpers.appendIntent(fsm:GetOrchestrator(), fsm.Context._charEntity, "Animation", { Name = "Charge1", Speed = 0.25, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 			fsm.State = "WaitCharge"
 		end,
 	}, { "WaitCharge" })
@@ -256,7 +239,7 @@ function ProjectileAttackJob:RegisterStates()
 		OnEnter = function(_, fsm)
 			local rootPart = fsm.Context._rootPart
 			if not rootPart or not rootPart.Parent then
-				queueRelease(fsm, "Failed", "Character root lost before firing")
+				StateTransitionHelpers.queueRelease(fsm, "Failed", "Character root lost before firing")
 				return
 			end
 			fsm.State = "EmitFireAnimation"
@@ -265,14 +248,7 @@ function ProjectileAttackJob:RegisterStates()
 
 	self:AddState("EmitFireAnimation", {
 		OnEnter = function(_, fsm)
-			local IntentSchema = getSharedModule(fsm:GetOrchestrator(), "IntentSchema")
-			if IntentSchema then
-				IntentSchema.AppendIntent(fsm.Context._charEntity, {
-					Kind = "Animation",
-					Payload = { Name = "Charge2", Speed = 0.5, FadeTime = 0.1 },
-					SourceCharId = fsm.CharacterEntityId,
-				}, fsm.Id)
-			end
+			IntentHelpers.appendIntent(fsm:GetOrchestrator(), fsm.Context._charEntity, "Animation", { Name = "Charge2", Speed = 0.5, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 			fsm.State = "SpawnProjectile"
 		end,
 	}, { "SpawnProjectile" })
@@ -301,7 +277,7 @@ function ProjectileAttackJob:RegisterStates()
 			local projectile = fsm.Context._projectile
 			local rootPart = fsm.Context._rootPart
 			if not projectile or not rootPart or not rootPart.Parent then
-				queueRelease(fsm, "Failed", "Projectile configuration context missing")
+				StateTransitionHelpers.queueRelease(fsm, "Failed", "Projectile configuration context missing")
 				return
 			end
 			projectile.CFrame = rootPart.CFrame * CFrame.new(0, 0, -3)
@@ -321,7 +297,7 @@ function ProjectileAttackJob:RegisterStates()
 		OnEnter = function(_, fsm)
 			local projectile = fsm.Context._projectile
 			if not projectile then
-				queueRelease(fsm, "Failed", "Projectile missing")
+				StateTransitionHelpers.queueRelease(fsm, "Failed", "Projectile missing")
 				return
 			end
 
@@ -370,19 +346,13 @@ function ProjectileAttackJob:RegisterStates()
 			local hitData = fsm.Context._hitData
 			local victimEntity = hitData and hitData.VictimEntity
 			if victimEntity and typeof(victimEntity.UserId) == "number" then
-				local damageJob = orchestrator.CreateStateMachine({
-					StateMachineClass = "DamageJob",
-					StateMachineId = string.format("ProjDmg_%s_%s", fsm.Id, tostring(victimEntity.UserId)),
-					Context = {
-						AttackerCharEntityId = fsm.CharacterEntityId,
-						VictimUserId = victimEntity.UserId,
-						AttackName = "Ranged_" .. tostring(fsm.Context._weaponId),
-						BaseDamage = fsm.Context._damage,
-					},
-				})
-				if damageJob then
-					damageJob:Start({ State = "Validate" })
-				end
+				CombatHelpers.createDamageJob(
+					orchestrator,
+					fsm.CharacterEntityId,
+					victimEntity,
+					"Ranged_" .. tostring(fsm.Context._weaponId),
+					fsm.Context._damage
+				)
 			end
 			fsm.State = "ApplyProjectileKnockback"
 		end,

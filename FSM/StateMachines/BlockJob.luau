@@ -2,6 +2,11 @@
 -- @Name BlockJob
 -- @Description FSM state machine module.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
+assert(Helpers, "Helpers folder not found")
+local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
+
 local BlockJob = {
 	Name = "BlockJob",
 	className = "BlockJob",
@@ -21,29 +26,6 @@ local BlockJob = {
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
-
-local function getSharedModule(orchestrator: any, name)
-	local getModule = orchestrator and orchestrator.GetModule
-	if type(getModule) == "function" then
-		local module = getModule(name)
-		if module ~= nil then
-			return module
-		end
-	end
-
-	local sharedFolder = game:GetService("ReplicatedStorage"):FindFirstChild("shared")
-	if sharedFolder then
-		local mod = sharedFolder:FindFirstChild(name)
-		if mod then
-			return require(mod)
-		end
-	end
-	error("Shared module not found: " .. name)
-end
-
-local function getIntentSchema(orchestrator: any)
-	return getSharedModule(orchestrator, "IntentSchema")
-end
 
 function BlockJob:RegisterStates()
 	self:AddState("Validate", {
@@ -107,12 +89,8 @@ function BlockJob:RegisterStates()
 	self:AddState("EmitBlockIntent", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
-			local IntentSchema = getIntentSchema(fsm:GetOrchestrator())
 			local ok, err = pcall(function()
-				IntentSchema.AppendIntent(charEntity, {
-					Kind = "Animation",
-					Payload = { Name = "Blocking" },
-				})
+				IntentHelpers.appendIntent(fsm:GetOrchestrator(), charEntity, "Animation", { Name = "Blocking" }, fsm.CharacterEntityId, fsm.CharacterEntityId)
 			end)
 			if not ok then
 				fsm:Fail("Failed to emit blocking intent: " .. tostring(err))

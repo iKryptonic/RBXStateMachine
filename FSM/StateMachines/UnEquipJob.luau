@@ -3,6 +3,12 @@
 -- @Author iKrypto
 -- @Description Handles unequipping an item from a hand: validates, resolves current item, stows or drops it, updates entity state, emits intent
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
+assert(Helpers, "Helpers folder not found")
+local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
+local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
+
 local UnEquipJob = {
 	Name = "UnEquipJob",
 	className = "UnEquipJob",
@@ -25,51 +31,18 @@ local UnEquipJob = {
 local cachedEquipHelpers = nil :: any
 local cachedIntentSchema = nil :: any
 
-local function requireSharedModule(orchestrator: any, moduleName: string)
-	local getModule = orchestrator and orchestrator.GetModule
-	if type(getModule) == "function" then
-		local module = getModule(moduleName)
-		if module ~= nil then
-			return module
-		end
-	end
-
-	local replicatedStorage = game:GetService("ReplicatedStorage")
-
-	local sharedFolder = replicatedStorage:FindFirstChild("shared")
-	if sharedFolder then
-		local mod = sharedFolder:FindFirstChild(moduleName)
-		if mod and mod:IsA("ModuleScript") then
-			return require(mod)
-		end
-	end
-
-	local fallback = replicatedStorage:FindFirstChild(moduleName, true)
-	if fallback and fallback:IsA("ModuleScript") then
-		return require(fallback)
-	end
-
-	error("Shared module not found: " .. moduleName)
-end
-
 local function getEquipHelpers(orchestrator: any)
 	if not cachedEquipHelpers then
-		cachedEquipHelpers = requireSharedModule(orchestrator, "EquipHelpers")
+		cachedEquipHelpers = ModuleLoader.requireSharedModule(orchestrator, "EquipHelpers")
 	end
 	return cachedEquipHelpers
 end
 
 local function getIntentSchema(orchestrator: any)
 	if not cachedIntentSchema then
-		cachedIntentSchema = requireSharedModule(orchestrator, "IntentSchema")
+		cachedIntentSchema = ModuleLoader.requireSharedModule(orchestrator, "IntentSchema")
 	end
 	return cachedIntentSchema
-end
-
-local function queueRollback(fsm, reason: string)
-	fsm.Context._failureReason = reason
-	fsm:Log({ Level = "ERROR", Message = reason })
-	fsm.State = "Rollback"
 end
 
 local function getHandProperty(hand: string): string
@@ -126,20 +99,20 @@ function UnEquipJob:RegisterStates()
 			local equipHelpers = getEquipHelpers(orchestrator)
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
-				queueRollback(fsm, "CharacterEntity no longer exists")
+				StateTransitionHelpers.queueRollback(fsm, "CharacterEntity no longer exists")
 				return
 			end
 
 			local character = charEntity.Instance
 			if not character or not character:IsA("Model") then
-				queueRollback(fsm, "Character model is unavailable")
+				StateTransitionHelpers.queueRollback(fsm, "Character model is unavailable")
 				return
 			end
 
 			local hand = fsm.Hand :: string
 			local handPart = equipHelpers.GetHandPart(character, hand)
 			if not handPart then
-				queueRollback(fsm, "Hand part not found for hand: " .. hand)
+				StateTransitionHelpers.queueRollback(fsm, "Hand part not found for hand: " .. hand)
 				return
 			end
 
@@ -166,13 +139,13 @@ function UnEquipJob:RegisterStates()
 			local equipHelpers = getEquipHelpers(orchestrator)
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
-				queueRollback(fsm, "CharacterEntity no longer exists")
+				StateTransitionHelpers.queueRollback(fsm, "CharacterEntity no longer exists")
 				return
 			end
 
 			local character = charEntity.Instance
 			if not character or not character:IsA("Model") then
-				queueRollback(fsm, "Character model is unavailable")
+				StateTransitionHelpers.queueRollback(fsm, "Character model is unavailable")
 				return
 			end
 
@@ -196,7 +169,7 @@ function UnEquipJob:RegisterStates()
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
-				queueRollback(fsm, "CharacterEntity no longer exists")
+				StateTransitionHelpers.queueRollback(fsm, "CharacterEntity no longer exists")
 				return
 			end
 
@@ -227,7 +200,7 @@ function UnEquipJob:RegisterStates()
 			local intentSchema = getIntentSchema(orchestrator)
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
-				queueRollback(fsm, "CharacterEntity no longer exists")
+				StateTransitionHelpers.queueRollback(fsm, "CharacterEntity no longer exists")
 				return
 			end
 

@@ -331,20 +331,6 @@ function StatusEffectFSM:RegisterStates()
 				end
 			end
 
-			if def.Id == "Stun" then
-				if originals.CanMove == nil then
-					originals.CanMove = charEntity.CanMove
-				end
-				if originals.MoveSpeedCap == nil then
-					originals.MoveSpeedCap = charEntity.MoveSpeedCap
-				end
-				if typeof(charEntity.CanMove) == "boolean" then
-					charEntity.CanMove = false
-				end
-				if typeof(charEntity.MoveSpeedCap) == "number" then
-					charEntity.MoveSpeedCap = 0
-				end
-			end
 
 			fsm.State = "SyncResources"
 		end,

@@ -2,6 +2,11 @@
 -- @Name MovementConstraintJob
 -- @Description FSM state machine module.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
+assert(Helpers, "Helpers folder not found")
+local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
+
 local MovementConstraintJob = {
 	Name = "MovementConstraintJob",
 	className = "MovementConstraintJob",
@@ -9,19 +14,6 @@ local MovementConstraintJob = {
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
-
-local function scheduleTransitionCompat(fsm: any, seconds: number, targetState: string, expectedState: string)
-	if type(fsm.ScheduleTransition) == "function" then
-		fsm:ScheduleTransition(seconds, targetState)
-		return
-	end
-
-	task.delay(seconds, function()
-		if fsm.IsActive and fsm.State == expectedState then
-			fsm.State = targetState
-		end
-	end)
-end
 
 function MovementConstraintJob:RegisterStates()
 	self:AddState("Validate", {
@@ -87,7 +79,7 @@ function MovementConstraintJob:RegisterStates()
 
 	self:AddState("WaitDuration", {
 		OnEnter = function(_, fsm)
-			scheduleTransitionCompat(fsm, fsm.Duration, "RevertPatch", "WaitDuration")
+			StateTransitionHelpers.scheduleTransitionCompat(fsm, fsm.Duration, "RevertPatch", "WaitDuration")
 		end,
 	}, { "RevertPatch", "Failed" })
 
