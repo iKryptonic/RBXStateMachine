@@ -18,6 +18,10 @@ local LoadPlayerJob = {
 		"AwaitCharacter",
 		"CreateCharacterEntity",
 		"RegisterCommands",
+		"RegisterCombatCommands",
+		"RegisterEquipCommands",
+		"RegisterAbilityCommands",
+		"RegisterUtilityCommands",
 		"PublishLoaded",
 		"Completed",
 		"Failed",
@@ -99,6 +103,7 @@ local function syncCharacterHumanoid(charEntity: any)
 	end
 end
 
+-- Initialization helper only: seeds persistent player defaults before behavioral states run.
 local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player: Player, userId: number)
 	playerEntity:SetContext("Instance", player)
 	playerEntity:SetContext("OwnerId", tostring(userId))
@@ -200,6 +205,7 @@ local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player:
 	end
 end
 
+-- Initialization helper only: seeds character defaults before command registration begins.
 local function applyCharacterDefaults(charEntity: any, character: Model, userId: number, playerEntityId: string)
 	charEntity:SetContext("Instance", character)
 	charEntity:SetContext("OwnerId", tostring(userId))
@@ -305,6 +311,19 @@ local function applyCharacterDefaults(charEntity: any, character: Model, userId:
 	if dirty then
 		charEntity:UpdateEntity()
 	end
+end
+
+local function getCommandRegistrationContext(fsm: any)
+	local orchestrator = fsm:GetOrchestrator()
+	local charEntityId = fsm.CharacterEntityId :: string
+	local playerEntityId = fsm.PlayerEntityId :: string
+	local ownerUserId = fsm.UserId :: number
+
+	local function isAuthorized(player: Player?): boolean
+		return player ~= nil and player.UserId == ownerUserId
+	end
+
+	return orchestrator, charEntityId, playerEntityId, ownerUserId, isAuthorized
 end
 
 function LoadPlayerJob:RegisterStates()
@@ -464,103 +483,13 @@ function LoadPlayerJob:RegisterStates()
 
 	self:AddState("RegisterCommands", {
 		OnEnter = function(_, fsm)
-			local orchestrator = fsm:GetOrchestrator()
-			local charEntityId = fsm.CharacterEntityId :: string
-			local playerEntityId = fsm.PlayerEntityId :: string
-			local ownerUserId = fsm.UserId :: number
+			fsm.State = "RegisterCombatCommands"
+		end,
+	}, { "RegisterCombatCommands", "Failed" })
 
-			local function isAuthorized(player: Player): boolean
-				return player ~= nil and player.UserId == ownerUserId
-			end
-
-			registerEntityCommand(orchestrator, charEntityId, "RequestEquip", function(player, itemId, hand)
-				if not isAuthorized(player) then
-					return
-				end
-				createAndStartStateMachine(
-					orchestrator,
-					"EquipJob",
-					"Equip_" .. charEntityId .. "_" .. tostring(os.clock()),
-					{
-						CharacterEntityId = charEntityId,
-						PlayerEntityId = playerEntityId,
-						ItemId = tostring(itemId or ""),
-						Hand = hand or "Right",
-					},
-					"ValidateRequest"
-				)
-			end)
-
-			registerEntityCommand(orchestrator, charEntityId, "RequestUnEquip", function(player, hand)
-				if not isAuthorized(player) then
-					return
-				end
-				createAndStartStateMachine(
-					orchestrator,
-					"UnEquipJob",
-					"UnEquip_" .. charEntityId .. "_" .. tostring(os.clock()),
-					{
-						CharacterEntityId = charEntityId,
-						Hand = hand or "Right",
-					},
-					"ValidateRequest"
-				)
-			end)
-
-			registerEntityCommand(
-				orchestrator,
-				charEntityId,
-				"RequestDamage",
-				function(player, victimUserId, attackName)
-					if not isAuthorized(player) then
-						return
-					end
-					createAndStartStateMachine(
-						orchestrator,
-						"DamageJob",
-						"Damage_" .. charEntityId .. "_" .. tostring(os.clock()),
-						{
-							AttackerCharEntityId = charEntityId,
-							VictimUserId = victimUserId,
-							AttackName = attackName,
-						},
-						"Validate"
-					)
-				end
-			)
-
-			registerEntityCommand(orchestrator, charEntityId, "RequestAction", function(player, kind, payload)
-				if not isAuthorized(player) then
-					return
-				end
-				createAndStartStateMachine(
-					orchestrator,
-					"ReplicateIntentJob",
-					"Intent_" .. charEntityId .. "_" .. tostring(os.clock()),
-					{
-						CharacterEntityId = charEntityId,
-						Kind = kind,
-						Payload = payload,
-					},
-					"Validate"
-				)
-			end)
-
-			registerEntityCommand(orchestrator, charEntityId, "SetBlocking", function(player, isBlocking)
-				if not isAuthorized(player) then
-					return
-				end
-				local charEntity = orchestrator.GetEntity(charEntityId)
-				if not charEntity then
-					return
-				end
-
-				local nextValue = isBlocking == true
-				if charEntity.IsBlocking ~= nextValue then
-					charEntity.IsBlocking = nextValue
-					charEntity:UpdateEntity()
-				end
-			end)
+	self:AddState("RegisterCombatCommands", {
+		OnEnter = function(_, fsm)
+			local orchestrator, charEntityId, playerEntityId, _, isAuthorized = getCommandRegistrationContext(fsm)
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestAttack", function(player, comboSlot)
 				if not isAuthorized(player) then
@@ -596,14 +525,94 @@ function LoadPlayerJob:RegisterStates()
 				)
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestRangedAttack", function(player)
+			registerEntityCommand(
+				orchestrator,
+				charEntityId,
+				"RequestDamage",
+				function(player, victimUserId, attackName)
+					if not isAuthorized(player) then
+						return
+					end
+					createAndStartStateMachine(
+						orchestrator,
+						"DamageJob",
+						"Damage_" .. charEntityId .. "_" .. tostring(os.clock()),
+						{
+							AttackerCharEntityId = charEntityId,
+							VictimUserId = victimUserId,
+							AttackName = attackName,
+						},
+						"Validate"
+					)
+				end
+			)
+
+			registerEntityCommand(orchestrator, charEntityId, "SetBlocking", function(player, isBlocking)
+				if not isAuthorized(player) then
+					return
+				end
+				local charEntity = orchestrator.GetEntity(charEntityId)
+				if not charEntity then
+					return
+				end
+
+				local nextValue = isBlocking == true
+				if charEntity.IsBlocking ~= nextValue then
+					charEntity.IsBlocking = nextValue
+					charEntity:UpdateEntity()
+				end
+			end)
+
+			fsm.State = "RegisterEquipCommands"
+		end,
+	}, { "RegisterEquipCommands", "Failed" })
+
+	self:AddState("RegisterEquipCommands", {
+		OnEnter = function(_, fsm)
+			local orchestrator, charEntityId, playerEntityId, _, isAuthorized = getCommandRegistrationContext(fsm)
+
+			registerEntityCommand(orchestrator, charEntityId, "RequestEquip", function(player, itemId, hand)
 				if not isAuthorized(player) then
 					return
 				end
 				createAndStartStateMachine(
 					orchestrator,
-					"ProjectileAttackJob",
-					"Ranged_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"EquipJob",
+					"Equip_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						PlayerEntityId = playerEntityId,
+						ItemId = tostring(itemId or ""),
+						Hand = hand or "Right",
+					},
+					"ValidateRequest"
+				)
+			end)
+
+			registerEntityCommand(orchestrator, charEntityId, "RequestUnEquip", function(player, hand)
+				if not isAuthorized(player) then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"UnEquipJob",
+					"UnEquip_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						Hand = hand or "Right",
+					},
+					"ValidateRequest"
+				)
+			end)
+
+			registerEntityCommand(orchestrator, charEntityId, "ToggleWeapon", function(player)
+				if not isAuthorized(player) then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"ToggleWeaponJob",
+					"Toggle_" .. charEntityId .. "_" .. tostring(os.clock()),
 					{
 						CharacterEntityId = charEntityId,
 						PlayerEntityId = playerEntityId,
@@ -611,6 +620,14 @@ function LoadPlayerJob:RegisterStates()
 					"Validate"
 				)
 			end)
+
+			fsm.State = "RegisterAbilityCommands"
+		end,
+	}, { "RegisterAbilityCommands", "Failed" })
+
+	self:AddState("RegisterAbilityCommands", {
+		OnEnter = function(_, fsm)
+			local orchestrator, charEntityId, playerEntityId, _, isAuthorized = getCommandRegistrationContext(fsm)
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestAbility", function(player, abilityId)
 				if not isAuthorized(player) then
@@ -624,6 +641,22 @@ function LoadPlayerJob:RegisterStates()
 						CharacterEntityId = charEntityId,
 						PlayerEntityId = playerEntityId,
 						AbilityId = abilityId,
+					},
+					"Validate"
+				)
+			end)
+
+			registerEntityCommand(orchestrator, charEntityId, "RequestRangedAttack", function(player)
+				if not isAuthorized(player) then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"ProjectileAttackJob",
+					"Ranged_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						PlayerEntityId = playerEntityId,
 					},
 					"Validate"
 				)
@@ -658,22 +691,6 @@ function LoadPlayerJob:RegisterStates()
 						PlayerEntityId = playerEntityId,
 						ConsumableId = itemId,
 						SlotIndex = numericSlotIndex,
-					},
-					"Validate"
-				)
-			end)
-
-			registerEntityCommand(orchestrator, charEntityId, "ToggleWeapon", function(player)
-				if not isAuthorized(player) then
-					return
-				end
-				createAndStartStateMachine(
-					orchestrator,
-					"ToggleWeaponJob",
-					"Toggle_" .. charEntityId .. "_" .. tostring(os.clock()),
-					{
-						CharacterEntityId = charEntityId,
-						PlayerEntityId = playerEntityId,
 					},
 					"Validate"
 				)
@@ -724,6 +741,31 @@ function LoadPlayerJob:RegisterStates()
 				end
 			end)
 
+			fsm.State = "RegisterUtilityCommands"
+		end,
+	}, { "RegisterUtilityCommands", "Failed" })
+
+	self:AddState("RegisterUtilityCommands", {
+		OnEnter = function(_, fsm)
+			local orchestrator, charEntityId, _, _, isAuthorized = getCommandRegistrationContext(fsm)
+
+			registerEntityCommand(orchestrator, charEntityId, "RequestAction", function(player, kind, payload)
+				if not isAuthorized(player) then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"ReplicateIntentJob",
+					"Intent_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						Kind = kind,
+						Payload = payload,
+					},
+					"Validate"
+				)
+			end)
+
 			registerEntityCommand(
 				orchestrator,
 				charEntityId,
@@ -741,6 +783,22 @@ function LoadPlayerJob:RegisterStates()
 					statusEffectHelper.Apply(orchestrator, targetId, requestedEffectId)
 				end
 			)
+
+			registerEntityCommand(orchestrator, charEntityId, "SetSprinting", function(player, isSprinting)
+				if not isAuthorized(player) then
+					return
+				end
+				local charEntity = orchestrator.GetEntity(charEntityId)
+				if not charEntity then
+					return
+				end
+
+				local nextValue = isSprinting == true
+				if charEntity.SprintIntent ~= nextValue then
+					charEntity.SprintIntent = nextValue
+					charEntity:UpdateEntity()
+				end
+			end)
 
 			fsm.State = "PublishLoaded"
 		end,
