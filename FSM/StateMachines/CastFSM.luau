@@ -45,6 +45,14 @@ local function getAbilityDefs()
 	return getSharedModule("AbilityDefs")
 end
 
+local function getTalentTreeDefs()
+	return getSharedModule("TalentTreeDefs")
+end
+
+local function getStatusEffectDefs()
+	return getSharedModule("StatusEffectDefs")
+end
+
 local function getHumanoidAndRoot(character: Model): (Humanoid?, BasePart?)
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	local root = character:FindFirstChild("HumanoidRootPart")
@@ -118,9 +126,41 @@ local function isAbilityUnlocked(playerEntity: any, castDef: any): boolean
 		end
 	end
 
+	local talentUnlocked = getTalentTreeDefs().IsAbilityUnlocked(castDef.Id, playerEntity)
+	if talentUnlocked ~= nil then
+		return talentUnlocked
+	end
+
 	local playerLevel = if playerEntity then tonumber(playerEntity.Level) or 1 else 1
 	local unlockLevel = tonumber(castDef.UnlockLevel) or 1
 	return playerLevel >= unlockLevel
+end
+
+local function areAbilitiesBlocked(charEntity: any): (boolean, string?)
+	local activeStatusEffects = charEntity and charEntity.ActiveStatusEffects
+	if typeof(activeStatusEffects) ~= "table" then
+		return false, nil
+	end
+
+	local defs = getStatusEffectDefs()
+	for _, entry in ipairs(activeStatusEffects) do
+		if typeof(entry) ~= "table" then
+			continue
+		end
+
+		local def = defs.Get(entry.EffectId)
+		if def then
+			if def.BlockAbilities then
+				return true, tostring(def.Name or entry.EffectId) .. " prevents ability usage"
+			end
+			local flags = def.ApplyFlags
+			if typeof(flags) == "table" and flags.IsStunned == true then
+				return true, tostring(def.Name or entry.EffectId) .. " prevents ability usage"
+			end
+		end
+	end
+
+	return false, nil
 end
 
 local function resolveCastDef(fsm: any): any?
@@ -582,6 +622,12 @@ function CastFSM:RegisterStates()
 
 			if not isAbilityUnlocked(playerEntity, castDef) then
 				fsm:Fail("Ability is not unlocked")
+				return
+			end
+
+			local blocked, reason = areAbilitiesBlocked(charEntity)
+			if blocked and castDef.SourceType ~= "Consumable" then
+				fsm:Fail(reason or "Abilities are blocked")
 				return
 			end
 

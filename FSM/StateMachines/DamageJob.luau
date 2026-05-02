@@ -8,7 +8,7 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DamageJob = {
 	Name = "DamageJob",
 	className = "DamageJob",
-	validStates = { "Validate", "CheckHitNonce", "ResolveVictim", "ComputeDamage", "ApplyDamage", "EmitHitReact", "EmitDamageText", "FireEventBus", "Completed", "Failed" },
+	validStates = { "Validate", "CheckHitNonce", "ResolveVictim", "ComputeDamage", "ApplyDamage", "EmitHitReact", "EmitDamageText", "FireEventBus", "ApplyOnHitEffects", "Completed", "Failed" },
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
@@ -86,22 +86,66 @@ local function boundNonceMap(attackerUserId: number)
 	return nonceMap
 end
 
-local function resolveVictimEntity(orchestrator: any, victimUserId: number): any?
+local function resolveVictimEntity(orchestrator: any, victimUserId: number): (any?, string?)
 	if type(orchestrator.GetEntities) ~= "function" then
-		return nil
+		return nil, nil
 	end
 
-	for _, entity in pairs(orchestrator.GetEntities()) do
+	for entityId, entity in pairs(orchestrator.GetEntities()) do
 		local instance = entity and entity.Instance
 		if entity and entity.UserId == victimUserId and instance and instance:IsA("Model") then
 			local humanoid = instance:FindFirstChildOfClass("Humanoid")
 			if humanoid then
-				return entity
+				return entity, entityId
 			end
 		end
 	end
 
-	return nil
+	return nil, nil
+end
+
+local function getActiveStatusEffects(entity: any): { any }
+	local activeStatusEffects = entity and entity.ActiveStatusEffects
+	if typeof(activeStatusEffects) == "table" then
+		return activeStatusEffects
+	end
+	return {}
+end
+
+local function getDamageMultiplier(entity: any): number
+	local defs = getSharedModule("StatusEffectDefs")
+	local multiplier = 1
+	for _, entry in ipairs(getActiveStatusEffects(entity)) do
+		if typeof(entry) ~= "table" then
+			continue
+		end
+		local def = defs.Get(entry.EffectId)
+		local effectMultiplier = tonumber(def and def.DamageMultiplier)
+		local stacks = math.max(tonumber(entry.Stacks) or 1, 1)
+		if effectMultiplier and effectMultiplier > 0 then
+			for _ = 1, stacks do
+				multiplier *= effectMultiplier
+			end
+		end
+	end
+	return multiplier
+end
+
+local function getDamageReduction(entity: any): number
+	local defs = getSharedModule("StatusEffectDefs")
+	local reduction = 0
+	for _, entry in ipairs(getActiveStatusEffects(entity)) do
+		if typeof(entry) ~= "table" then
+			continue
+		end
+		local def = defs.Get(entry.EffectId)
+		local effectReduction = tonumber(def and def.DamageReduction)
+		local stacks = math.max(tonumber(entry.Stacks) or 1, 1)
+		if effectReduction and effectReduction > 0 then
+			reduction += effectReduction * stacks
+		end
+	end
+	return math.clamp(reduction, 0, 0.9)
 end
 
 local function resolveWeaponBaseDamage(orchestrator: any, attackerEntity: any): number
@@ -266,7 +310,7 @@ function DamageJob:RegisterStates()
 				return
 			end
 
-			local victimEntity = resolveVictimEntity(orchestrator, fsm.VictimUserId)
+			local victimEntity, victimEntityId = resolveVictimEntity(orchestrator, fsm.VictimUserId)
 			if not victimEntity then
 				fsm:Fail("Victim character entity not found")
 				return
@@ -285,6 +329,7 @@ function DamageJob:RegisterStates()
 			end
 
 			fsm.Context._victimEntity = victimEntity
+			fsm.Context._victimEntityId = victimEntityId
 			fsm.Context._victimCharacter = character
 			fsm.Context._victimHumanoid = humanoid
 			fsm.Context._victimRoot = root
@@ -306,7 +351,9 @@ function DamageJob:RegisterStates()
 			local explicitBaseDamage = tonumber(fsm.BaseDamage)
 			local baseDamage = explicitBaseDamage or resolveWeaponBaseDamage(orchestrator, attackerEntity)
 			local computedDamage = DamageCalculator.Compute(baseDamage, fsm.Context._isVictimBlocking == true)
-			fsm.Context._computedDamage = computedDamage
+			computedDamage *= getDamageMultiplier(attackerEntity)
+			computedDamage *= (1 - getDamageReduction(fsm.Context._victimEntity))
+			fsm.Context._computedDamage = math.max(0, math.floor(computedDamage + 0.5))
 			fsm.State = "ApplyDamage"
 		end,
 	}, { "ApplyDamage", "Failed" })
@@ -314,6 +361,7 @@ function DamageJob:RegisterStates()
 	self:AddState("ApplyDamage", {
 		OnEnter = function(_, fsm)
 			local victimHumanoid = fsm.Context._victimHumanoid
+			local victimEntity = fsm.Context._victimEntity
 			local computedDamage = fsm.Context._computedDamage
 			if not victimHumanoid or typeof(computedDamage) ~= "number" then
 				fsm:Fail("Damage application context missing")
@@ -322,6 +370,10 @@ function DamageJob:RegisterStates()
 
 			if victimHumanoid.Health > 0 then
 				victimHumanoid:TakeDamage(computedDamage)
+			end
+			if victimEntity then
+				victimEntity.Health = victimHumanoid.Health
+				victimEntity:UpdateEntity()
 			end
 			fsm.State = "EmitHitReact"
 		end,
@@ -389,6 +441,27 @@ function DamageJob:RegisterStates()
 				AttackName = fsm.Context.AttackName,
 				Nonce = fsm.Context._nonce,
 			})
+			fsm.State = "ApplyOnHitEffects"
+		end,
+	}, { "ApplyOnHitEffects", "Failed" })
+
+	self:AddState("ApplyOnHitEffects", {
+		OnEnter = function(_, fsm)
+			local orchestrator = shared.fsm
+			local attackerEntity = fsm.Context._attackerEntity
+			local victimEntityId = fsm.Context._victimEntityId
+			if orchestrator and attackerEntity and typeof(victimEntityId) == "string" then
+				local playerEntityId = attackerEntity.PlayerEntityId
+				local playerEntity = if typeof(playerEntityId) == "string" then orchestrator.GetEntity(playerEntityId) else nil
+				if playerEntity then
+					local talentTreeDefs = getSharedModule("TalentTreeDefs")
+					local statusEffectHelper = getSharedModule("StatusEffectHelper")
+					local passiveEffects = talentTreeDefs.GetMergedPassiveEffects(playerEntity)
+					if typeof(passiveEffects.BuffOnHit) == "string" and passiveEffects.BuffOnHit ~= "" then
+						statusEffectHelper.Apply(orchestrator, victimEntityId, passiveEffects.BuffOnHit)
+					end
+				end
+			end
 			fsm.State = "Completed"
 		end,
 	}, { "Completed", "Failed" })
