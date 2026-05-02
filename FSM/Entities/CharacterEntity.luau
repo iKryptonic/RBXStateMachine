@@ -26,9 +26,9 @@ local CharacterEntity = {
 		CCLock         = { Type = "boolean", Replicate = false, Persist = false },
 		ActionSeq      = { Type = "number",  Replicate = true,  Persist = false },
 		RecentActions  = { Type = "any",     Replicate = true,  Persist = false },
-		-- Client-side observability fields (written by render loop, visible in ServiceManager)
-		LocomotionState = { Type = "string",  Replicate = false, Persist = false },
-		ActionOverlay   = { Type = "string",  Replicate = false, Persist = false },
+		-- Client-derived state, replicated so other clients can drive remote animations
+		LocomotionState = { Type = "string",  Replicate = true, Persist = false },
+		ActionOverlay   = { Type = "string",  Replicate = true, Persist = false },
 		SprintIntent    = { Type = "boolean", Replicate = false, Persist = false },
 		InputMode       = { Type = "string",  Replicate = false, Persist = false },
 	},
