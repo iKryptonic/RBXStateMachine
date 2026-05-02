@@ -72,18 +72,18 @@ function Orchestrator:RegisterComponents()
 end
 
 function Orchestrator:StartServiceManager()
-	if self._serviceManager then return self._serviceManager end
+	if Orchestrator._serviceManager then return Orchestrator._serviceManager end
 
 	local serviceManager = require(script.ServiceManager)
-	serviceManager.Initialize(self)
+	serviceManager.Initialize(Orchestrator)
 	-- Don't show by default — use ServiceManager.Toggle() or keybind to open
-	self._serviceManager = serviceManager
+	Orchestrator._serviceManager = serviceManager
 
 	return serviceManager
 end
 
 function Orchestrator:GetServiceManager()
-	return self._serviceManager
+	return Orchestrator._serviceManager
 end
 
 function Orchestrator.CreateEntity(params: { EntityClass: any, EntityId: string, Context: {any}?, Persistent: boolean?, PersistenceKey: string? })
