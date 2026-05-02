@@ -73,7 +73,7 @@ function CharacterEntity:GetContext(params: { [any]: any })
 		LocomotionState = "Idle",
 		ActionOverlay = "None",
 		SprintIntent = false,
-		InputMode = "Normal",
+		InputMode = "Combat",
 	}
 end
 

@@ -1,0 +1,58 @@
+--!strict
+local InputModeFSM = {
+	Name = "InputModeFSM",
+	className = "InputModeFSM",
+	validStates = { "CombatInput", "UIInput", "Completed", "Failed" },
+	terminalStates = { "Completed", "Failed" },
+	initialState = "CombatInput",
+}
+
+local function writeInputMode(fsm: any, mouseLocked: boolean, inputMode: string)
+	local orchestrator = (shared :: any).fsm
+	if not orchestrator then
+		return
+	end
+
+	local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
+	if charEntity then
+		charEntity.MouseLocked = mouseLocked
+		charEntity.InputMode = inputMode
+	end
+end
+
+function InputModeFSM:RegisterStates()
+	self:AddState("CombatInput", {
+		OnEnter = function(_, fsm)
+			writeInputMode(fsm, true, "Combat")
+		end,
+	}, { "UIInput" })
+
+	self:AddState("UIInput", {
+		OnEnter = function(_, fsm)
+			writeInputMode(fsm, false, "UI")
+		end,
+	}, { "CombatInput" })
+end
+
+function InputModeFSM.SetCombatInput(fsm: any)
+	if fsm and fsm.State ~= "CombatInput" then
+		fsm.State = "CombatInput"
+	end
+end
+
+function InputModeFSM.SetUIInput(fsm: any)
+	if fsm and fsm.State ~= "UIInput" then
+		fsm.State = "UIInput"
+	end
+end
+
+function InputModeFSM.Toggle(fsm: any): string
+	if fsm.State == "UIInput" then
+		fsm.State = "CombatInput"
+	else
+		fsm.State = "UIInput"
+	end
+	return fsm.State
+end
+
+return InputModeFSM
