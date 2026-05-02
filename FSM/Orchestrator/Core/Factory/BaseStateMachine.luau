@@ -241,6 +241,28 @@ function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {
 	return self
 end
 
+function BaseStateMachine:GetOrchestrator()
+	if self.Context and self.Context._Orchestrator then
+		return self.Context._Orchestrator
+	end
+
+	local sharedFsm = (shared :: any).fsm
+	if sharedFsm then
+		return sharedFsm.Orchestrator or sharedFsm
+	end
+
+	return nil
+end
+
+function BaseStateMachine:GetEntity(entityId: string)
+	local orchestrator = self:GetOrchestrator()
+	if orchestrator and orchestrator.GetEntity then
+		return orchestrator.GetEntity(entityId)
+	end
+
+	return nil
+end
+
 local function isTerminalState(self: any, stateName: string): boolean
 	local setTable = rawget(self, "TerminalStates")
 	if type(setTable) == "table" and setTable[stateName] == true then

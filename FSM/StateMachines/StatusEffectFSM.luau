@@ -10,27 +10,6 @@ local StatusEffectFSM = {
     initialState = "ValidateInput",
 }
 
-local function getOrchestrator()
-    local lower = (shared :: any).fsm
-    if lower ~= nil then
-        return lower.Orchestrator or lower
-    end
-    local upper = (shared :: any).FSM
-    if upper ~= nil and upper.Orchestrator then
-        return upper.Orchestrator
-    end
-
-    local orchestratorModule = ReplicatedStorage:FindFirstChild("Orchestrator")
-    if orchestratorModule and orchestratorModule:IsA("ModuleScript") then
-        local ok, result = pcall(require, orchestratorModule)
-        if ok then
-            return result
-        end
-    end
-
-    error("Orchestrator is not registered")
-end
-
 local function getStatusEffectDefs()
     return require(ReplicatedStorage:WaitForChild("shared"):WaitForChild("StatusEffectDefs"))
 end
@@ -215,7 +194,7 @@ function StatusEffectFSM:RegisterStates()
 
     self:AddState("LoadEntities", {
         OnEnter = function(_, fsm)
-            local charEntity = getOrchestrator().GetEntity(fsm.CharacterEntityId)
+            local charEntity = fsm:GetEntity(fsm.CharacterEntityId)
             if not charEntity then
                 fsm:Fail("CharacterEntity not found")
                 return

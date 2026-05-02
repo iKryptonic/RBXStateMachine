@@ -20,6 +20,7 @@ local DEFAULT_PROJECTILE_DAMAGE = 20
 local DEFAULT_CHARGE_TIME = 0.3
 local DEFAULT_GRAVITY = Vector3.new(0, -30, 0)
 
+-- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
 local function getOrchestrator()
 	local lower = (shared :: any).fsm
 	if lower ~= nil then return lower.Orchestrator or lower end

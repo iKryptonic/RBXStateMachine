@@ -16,6 +16,7 @@ local DEFAULT_PROJECTILE_SPEED = 120
 local DEFAULT_PROJECTILE_LIFETIME = 3
 local DEFAULT_DASH_DURATION = 0.2
 
+-- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
 local function getOrchestrator()
 	local lower = (shared :: any).fsm
 	if lower ~= nil then
