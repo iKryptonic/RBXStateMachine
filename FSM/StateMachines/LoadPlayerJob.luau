@@ -1,4 +1,7 @@
 --!strict
+-- @Name LoadPlayerJob
+-- @Description FSM state machine module.
+
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 -- @Name LoadPlayerJob
 -- @Author iKrypto
@@ -7,20 +10,43 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local LoadPlayerJob = {
 	Name = "LoadPlayerJob",
 	className = "LoadPlayerJob",
-	validStates = { "Start", "ValidatePlayer", "CreatePlayerEntity", "LoadData", "AwaitCharacter", "CreateCharacterEntity", "RegisterCommands", "PublishLoaded", "Completed", "Failed" },
+	validStates = {
+		"Start",
+		"ValidatePlayer",
+		"CreatePlayerEntity",
+		"LoadData",
+		"AwaitCharacter",
+		"CreateCharacterEntity",
+		"RegisterCommands",
+		"PublishLoaded",
+		"Completed",
+		"Failed",
+	},
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Start",
 }
 
 local DEFAULT_INVENTORY = { "1", "2", "3", "4", "5", "6", "7" }
 
-local function registerEntityCommand(orchestrator: any, entityId: string, command: string, handler: (Player, ...any) -> ())
-	local registerCallback = (orchestrator :: any).RegisterEntityCommandCallback or (orchestrator :: any).RegisterCommandHandler
+local function registerEntityCommand(
+	orchestrator: any,
+	entityId: string,
+	command: string,
+	handler: (Player, ...any) -> ()
+)
+	local registerCallback = (orchestrator :: any).RegisterEntityCommandCallback
+		or (orchestrator :: any).RegisterCommandHandler
 	assert(type(registerCallback) == "function", "Orchestrator command registration API is unavailable")
 	registerCallback(entityId, command, handler)
 end
 
-local function createAndStartStateMachine(orchestrator: any, className: string, stateMachineId: string, context: { [string]: any }, initialState: string)
+local function createAndStartStateMachine(
+	orchestrator: any,
+	className: string,
+	stateMachineId: string,
+	context: { [string]: any },
+	initialState: string
+)
 	local machine = orchestrator.CreateStateMachine({
 		StateMachineClass = className,
 		StateMachineId = stateMachineId,
@@ -417,7 +443,8 @@ function LoadPlayerJob:RegisterStates()
 			applyCharacterDefaults(charEntity, character, userId, playerEntityId)
 			local playerEntity = orchestrator.GetEntity(playerEntityId)
 			if playerEntity then
-				local passiveEffects = getSharedModule(orchestrator, "TalentTreeDefs").GetMergedPassiveEffects(playerEntity)
+				local passiveEffects =
+					getSharedModule(orchestrator, "TalentTreeDefs").GetMergedPassiveEffects(playerEntity)
 				local appliedPassiveBonuses = false
 				for stat, bonus in pairs(passiveEffects) do
 					if typeof(bonus) == "number" and typeof(charEntity[stat]) == "number" then
@@ -447,43 +474,82 @@ function LoadPlayerJob:RegisterStates()
 			end
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestEquip", function(player, itemId, hand)
-				if not isAuthorized(player) then return end
-				createAndStartStateMachine(orchestrator, "EquipJob", "Equip_" .. charEntityId .. "_" .. tostring(os.clock()), {
-					CharacterEntityId = charEntityId,
-					PlayerEntityId = playerEntityId,
-					ItemId = tostring(itemId or ""),
-					Hand = hand or "Right",
-				}, "ValidateRequest")
+				if not isAuthorized(player) then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"EquipJob",
+					"Equip_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						PlayerEntityId = playerEntityId,
+						ItemId = tostring(itemId or ""),
+						Hand = hand or "Right",
+					},
+					"ValidateRequest"
+				)
 			end)
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestUnEquip", function(player, hand)
-				if not isAuthorized(player) then return end
-				createAndStartStateMachine(orchestrator, "UnEquipJob", "UnEquip_" .. charEntityId .. "_" .. tostring(os.clock()), {
-					CharacterEntityId = charEntityId,
-					Hand = hand or "Right",
-				}, "ValidateRequest")
+				if not isAuthorized(player) then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"UnEquipJob",
+					"UnEquip_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						Hand = hand or "Right",
+					},
+					"ValidateRequest"
+				)
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestDamage", function(player, victimUserId, attackName)
-				if not isAuthorized(player) then return end
-				createAndStartStateMachine(orchestrator, "DamageJob", "Damage_" .. charEntityId .. "_" .. tostring(os.clock()), {
-					AttackerCharEntityId = charEntityId,
-					VictimUserId = victimUserId,
-					AttackName = attackName,
-				}, "Validate")
-			end)
+			registerEntityCommand(
+				orchestrator,
+				charEntityId,
+				"RequestDamage",
+				function(player, victimUserId, attackName)
+					if not isAuthorized(player) then
+						return
+					end
+					createAndStartStateMachine(
+						orchestrator,
+						"DamageJob",
+						"Damage_" .. charEntityId .. "_" .. tostring(os.clock()),
+						{
+							AttackerCharEntityId = charEntityId,
+							VictimUserId = victimUserId,
+							AttackName = attackName,
+						},
+						"Validate"
+					)
+				end
+			)
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestAction", function(player, kind, payload)
-				if not isAuthorized(player) then return end
-				createAndStartStateMachine(orchestrator, "ReplicateIntentJob", "Intent_" .. charEntityId .. "_" .. tostring(os.clock()), {
-					CharacterEntityId = charEntityId,
-					Kind = kind,
-					Payload = payload,
-				}, "Validate")
+				if not isAuthorized(player) then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"ReplicateIntentJob",
+					"Intent_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						Kind = kind,
+						Payload = payload,
+					},
+					"Validate"
+				)
 			end)
 
 			registerEntityCommand(orchestrator, charEntityId, "SetBlocking", function(player, isBlocking)
-				if not isAuthorized(player) then return end
+				if not isAuthorized(player) then
+					return
+				end
 				local charEntity = orchestrator.GetEntity(charEntityId)
 				if not charEntity then
 					return
@@ -497,68 +563,126 @@ function LoadPlayerJob:RegisterStates()
 			end)
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestAttack", function(player, comboSlot)
-				if not isAuthorized(player) then return end
-				createAndStartStateMachine(orchestrator, "AttackJob", "Attack_" .. charEntityId .. "_" .. tostring(os.clock()), {
-					CharacterEntityId = charEntityId,
-					PlayerEntityId = playerEntityId,
-					ComboSlot = comboSlot,
-				}, "Validate")
+				if not isAuthorized(player) then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"AttackJob",
+					"Attack_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						PlayerEntityId = playerEntityId,
+						ComboSlot = comboSlot,
+					},
+					"Validate"
+				)
 			end)
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestMeleeAttack", function(player, comboSlot)
-				if not isAuthorized(player) then return end
-				createAndStartStateMachine(orchestrator, "MeleeAttackJob", "Melee_" .. charEntityId .. "_" .. tostring(os.clock()), {
-					CharacterEntityId = charEntityId,
-					PlayerEntityId = playerEntityId,
-					ComboSlot = comboSlot,
-				}, "Validate")
+				if not isAuthorized(player) then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"MeleeAttackJob",
+					"Melee_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						PlayerEntityId = playerEntityId,
+						ComboSlot = comboSlot,
+					},
+					"Validate"
+				)
 			end)
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestRangedAttack", function(player)
-				if not isAuthorized(player) then return end
-				createAndStartStateMachine(orchestrator, "ProjectileAttackJob", "Ranged_" .. charEntityId .. "_" .. tostring(os.clock()), {
-					CharacterEntityId = charEntityId,
-					PlayerEntityId = playerEntityId,
-				}, "Validate")
+				if not isAuthorized(player) then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"ProjectileAttackJob",
+					"Ranged_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						PlayerEntityId = playerEntityId,
+					},
+					"Validate"
+				)
 			end)
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestAbility", function(player, abilityId)
-				if not isAuthorized(player) then return end
-				createAndStartStateMachine(orchestrator, "CastFSM", "Cast_" .. charEntityId .. "_" .. tostring(os.clock()), {
-					CharacterEntityId = charEntityId,
-					PlayerEntityId = playerEntityId,
-					AbilityId = abilityId,
-				}, "Validate")
+				if not isAuthorized(player) then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"CastFSM",
+					"Cast_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						PlayerEntityId = playerEntityId,
+						AbilityId = abilityId,
+					},
+					"Validate"
+				)
 			end)
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestUseItem", function(player, slotIndex)
-				if not isAuthorized(player) then return end
+				if not isAuthorized(player) then
+					return
+				end
 				local playerEntity = orchestrator.GetEntity(playerEntityId)
-				if not playerEntity then return end
+				if not playerEntity then
+					return
+				end
 				local slots = playerEntity.QuickItemSlots
-				if typeof(slots) ~= "table" then return end
+				if typeof(slots) ~= "table" then
+					return
+				end
 				local numericSlotIndex = tonumber(slotIndex)
-				if typeof(numericSlotIndex) ~= "number" then return end
+				if typeof(numericSlotIndex) ~= "number" then
+					return
+				end
 				local itemId = slots[numericSlotIndex]
-				if typeof(itemId) ~= "string" or itemId == "" then return end
-				createAndStartStateMachine(orchestrator, "CastFSM", "Item_" .. charEntityId .. "_" .. tostring(os.clock()), {
-					CharacterEntityId = charEntityId,
-					PlayerEntityId = playerEntityId,
-					ConsumableId = itemId,
-					SlotIndex = numericSlotIndex,
-				}, "Validate")
+				if typeof(itemId) ~= "string" or itemId == "" then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"CastFSM",
+					"Item_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						PlayerEntityId = playerEntityId,
+						ConsumableId = itemId,
+						SlotIndex = numericSlotIndex,
+					},
+					"Validate"
+				)
 			end)
 
 			registerEntityCommand(orchestrator, charEntityId, "ToggleWeapon", function(player)
-				if not isAuthorized(player) then return end
-				createAndStartStateMachine(orchestrator, "ToggleWeaponJob", "Toggle_" .. charEntityId .. "_" .. tostring(os.clock()), {
-					CharacterEntityId = charEntityId,
-					PlayerEntityId = playerEntityId,
-				}, "Validate")
+				if not isAuthorized(player) then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"ToggleWeaponJob",
+					"Toggle_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						CharacterEntityId = charEntityId,
+						PlayerEntityId = playerEntityId,
+					},
+					"Validate"
+				)
 			end)
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestUnlockTalent", function(player, nodeId)
-				if not isAuthorized(player) then return end
+				if not isAuthorized(player) then
+					return
+				end
 
 				local talentTreeDefs = getSharedModule(orchestrator, "TalentTreeDefs")
 				local playerEntity = orchestrator.GetEntity(playerEntityId)
@@ -578,7 +702,9 @@ function LoadPlayerJob:RegisterStates()
 					return
 				end
 
-				local learned = if typeof(playerEntity.LearnedAbilities) == "table" then table.clone(playerEntity.LearnedAbilities) else {}
+				local learned = if typeof(playerEntity.LearnedAbilities) == "table"
+					then table.clone(playerEntity.LearnedAbilities)
+					else {}
 				table.insert(learned, requestedNodeId)
 				playerEntity.LearnedAbilities = learned
 				playerEntity.SkillPoints = talentTreeDefs.GetRemainingSkillPoints(playerEntity)
@@ -598,16 +724,23 @@ function LoadPlayerJob:RegisterStates()
 				end
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "ApplyStatusEffect", function(player, effectId, targetCharEntityId)
-				if player ~= nil and not isAuthorized(player) then
-					return
-				end
+			registerEntityCommand(
+				orchestrator,
+				charEntityId,
+				"ApplyStatusEffect",
+				function(player, effectId, targetCharEntityId)
+					if player ~= nil and not isAuthorized(player) then
+						return
+					end
 
-				local statusEffectHelper = getSharedModule(orchestrator, "StatusEffectHelper")
-				local requestedEffectId = tostring(effectId or "")
-				local targetId = if typeof(targetCharEntityId) == "string" and targetCharEntityId ~= "" then targetCharEntityId else charEntityId
-				statusEffectHelper.Apply(orchestrator, targetId, requestedEffectId)
-			end)
+					local statusEffectHelper = getSharedModule(orchestrator, "StatusEffectHelper")
+					local requestedEffectId = tostring(effectId or "")
+					local targetId = if typeof(targetCharEntityId) == "string" and targetCharEntityId ~= ""
+						then targetCharEntityId
+						else charEntityId
+					statusEffectHelper.Apply(orchestrator, targetId, requestedEffectId)
+				end
+			)
 
 			fsm.State = "PublishLoaded"
 		end,

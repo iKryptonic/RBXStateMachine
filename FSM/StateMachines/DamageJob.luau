@@ -8,7 +8,19 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local DamageJob = {
 	Name = "DamageJob",
 	className = "DamageJob",
-	validStates = { "Validate", "CheckHitNonce", "ResolveVictim", "ComputeDamage", "ApplyDamage", "EmitHitReact", "EmitDamageText", "FireEventBus", "ApplyOnHitEffects", "Completed", "Failed" },
+	validStates = {
+		"Validate",
+		"CheckHitNonce",
+		"ResolveVictim",
+		"ComputeDamage",
+		"ApplyDamage",
+		"EmitHitReact",
+		"EmitDamageText",
+		"FireEventBus",
+		"ApplyOnHitEffects",
+		"Completed",
+		"Failed",
+	},
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
@@ -280,7 +292,9 @@ function DamageJob:RegisterStates()
 				return
 			end
 
-			local attackName = if typeof(fsm.AttackName) == "string" and fsm.AttackName ~= "" then fsm.AttackName else "BasicAttack"
+			local attackName = if typeof(fsm.AttackName) == "string" and fsm.AttackName ~= ""
+				then fsm.AttackName
+				else "BasicAttack"
 			fsm.Context.AttackName = attackName
 			fsm.Context._attackerEntity = attackerEntity
 			fsm.Context._attackerUserId = attackerUserId
@@ -397,7 +411,9 @@ function DamageJob:RegisterStates()
 				return
 			end
 
-			local victimCharId = if typeof(victimEntity.EntityId) == "string" then victimEntity.EntityId else tostring(fsm.VictimUserId)
+			local victimCharId = if typeof(victimEntity.EntityId) == "string"
+				then victimEntity.EntityId
+				else tostring(fsm.VictimUserId)
 			IntentSchema.AppendIntent(victimEntity, {
 				Kind = "HitReact",
 				Payload = {
@@ -440,7 +456,9 @@ function DamageJob:RegisterStates()
 			pcall(function()
 				orchestrator.RegisterEventBus("Damage/Applied")
 			end)
-			local victimCharId = if typeof(victimEntity.EntityId) == "string" then victimEntity.EntityId else tostring(fsm.VictimUserId)
+			local victimCharId = if typeof(victimEntity.EntityId) == "string"
+				then victimEntity.EntityId
+				else tostring(fsm.VictimUserId)
 			orchestrator.FireEventBus("Damage/Applied", {
 				AttackerCharId = fsm.AttackerCharEntityId,
 				VictimCharId = victimCharId,
@@ -478,7 +496,6 @@ function DamageJob:RegisterStates()
 	self:AddState("Failed", function() end, {})
 end
 
-function DamageJob:OnCleanup()
-end
+function DamageJob:OnCleanup() end
 
 return DamageJob

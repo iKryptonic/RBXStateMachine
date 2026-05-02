@@ -6,7 +6,21 @@
 local EquipJob = {
 	Name = "EquipJob",
 	className = "EquipJob",
-	validStates = { "ValidateRequest", "AcquireEquipLock", "ResolveItemMeta", "PreUnEquip", "CloneAsset", "CreateWeld", "MountItem", "CommitState", "EmitIntent", "ReleaseEquipLock", "Rollback", "Completed", "Failed" },
+	validStates = {
+		"ValidateRequest",
+		"AcquireEquipLock",
+		"ResolveItemMeta",
+		"PreUnEquip",
+		"CloneAsset",
+		"CreateWeld",
+		"MountItem",
+		"CommitState",
+		"EmitIntent",
+		"ReleaseEquipLock",
+		"Rollback",
+		"Completed",
+		"Failed",
+	},
 	terminalStates = { "Completed", "Failed" },
 	initialState = "ValidateRequest",
 }
@@ -240,7 +254,8 @@ function EquipJob:RegisterStates()
 				return
 			end
 
-			local weld = equipHelpers.CreateWeld(handPart, fsm.Context._handle, fsm.Context._itemData.GripC1 or CFrame.new())
+			local weld =
+				equipHelpers.CreateWeld(handPart, fsm.Context._handle, fsm.Context._itemData.GripC1 or CFrame.new())
 			fsm.Context._weld = weld
 			fsm.Context._handPart = handPart
 			fsm.State = "MountItem"
@@ -311,7 +326,9 @@ function EquipJob:RegisterStates()
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			if charEntity then
-				local equipLock = if typeof(charEntity.EquipLock) == "table" then table.clone(charEntity.EquipLock) else {}
+				local equipLock = if typeof(charEntity.EquipLock) == "table"
+					then table.clone(charEntity.EquipLock)
+					else {}
 				equipLock[fsm.Hand] = nil
 				charEntity.EquipLock = equipLock
 				charEntity:UpdateEntity()

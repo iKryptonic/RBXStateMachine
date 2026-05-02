@@ -1,9 +1,21 @@
 --!strict
+-- @Name StunJob
+-- @Description FSM state machine module.
 
 local StunJob = {
 	Name = "StunJob",
 	className = "StunJob",
-	validStates = { "Validate", "AcquireCCLock", "ApplyFlags", "EmitStunIntent", "WaitDuration", "ClearFlags", "ReleaseCCLock", "Completed", "Failed" },
+	validStates = {
+		"Validate",
+		"AcquireCCLock",
+		"ApplyFlags",
+		"EmitStunIntent",
+		"WaitDuration",
+		"ClearFlags",
+		"ReleaseCCLock",
+		"Completed",
+		"Failed",
+	},
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
@@ -19,8 +31,10 @@ local function getSharedModule(orchestrator: any, name)
 
 	local sharedFolder = game:GetService("ReplicatedStorage"):FindFirstChild("shared")
 	if sharedFolder then
-			local mod = sharedFolder:FindFirstChild(name)
-			if mod then return require(mod) end
+		local mod = sharedFolder:FindFirstChild(name)
+		if mod then
+			return require(mod)
+		end
 	end
 	error("Shared module not found: " .. name)
 end

@@ -1,6 +1,6 @@
 --!strict
 -- @Name LocomotionFSM
--- @Author Copilot
+-- @Author iKrypto
 -- @Description Client-side FSM that derives locomotion state from physics.
 --   Writes LocomotionState to CharacterEntity for ServiceManager observability.
 
@@ -17,11 +17,17 @@ local RUN_THRESHOLD = 22
 
 local function getCharacterParts(fsm: any): (any?, any?, any?)
 	local orchestrator = (shared :: any).fsm
-	if not orchestrator then return nil, nil, nil end
+	if not orchestrator then
+		return nil, nil, nil
+	end
 	local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-	if not charEntity then return nil, nil, nil end
+	if not charEntity then
+		return nil, nil, nil
+	end
 	local character = charEntity.Instance
-	if not character then return nil, nil, nil end
+	if not character then
+		return nil, nil, nil
+	end
 	return charEntity, character:FindFirstChildOfClass("Humanoid"), character:FindFirstChild("HumanoidRootPart")
 end
 
@@ -38,83 +44,139 @@ end
 
 local function writeState(fsm: any, state: string)
 	local orchestrator = (shared :: any).fsm
-	if not orchestrator then return end
+	if not orchestrator then
+		return
+	end
 	local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-	if charEntity then charEntity.LocomotionState = state end
+	if charEntity then
+		charEntity.LocomotionState = state
+	end
 end
 
 function LocomotionFSM:RegisterStates()
 	self:AddState("Idle", {
-		OnEnter = function(_, fsm) writeState(fsm, "Idle") end,
+		OnEnter = function(_, fsm)
+			writeState(fsm, "Idle")
+		end,
 		Transitions = {
-			{ Condition = function(fsm)
-				local _, hum, root = getCharacterParts(fsm)
-				return hum and root and isAirborne(hum)
-			end, TargetState = "Airborne" },
-			{ Condition = function(fsm)
-				local _, hum, root = getCharacterParts(fsm)
-				return hum and root and not isAirborne(hum) and getHorizontalSpeed(root) > RUN_THRESHOLD
-			end, TargetState = "Running" },
-			{ Condition = function(fsm)
-				local _, hum, root = getCharacterParts(fsm)
-				return hum and root and not isAirborne(hum) and getHorizontalSpeed(root) > WALK_THRESHOLD
-			end, TargetState = "Walking" },
+			{
+				Condition = function(fsm)
+					local _, hum, root = getCharacterParts(fsm)
+					return hum and root and isAirborne(hum)
+				end,
+				TargetState = "Airborne",
+			},
+			{
+				Condition = function(fsm)
+					local _, hum, root = getCharacterParts(fsm)
+					return hum and root and not isAirborne(hum) and getHorizontalSpeed(root) > RUN_THRESHOLD
+				end,
+				TargetState = "Running",
+			},
+			{
+				Condition = function(fsm)
+					local _, hum, root = getCharacterParts(fsm)
+					return hum and root and not isAirborne(hum) and getHorizontalSpeed(root) > WALK_THRESHOLD
+				end,
+				TargetState = "Walking",
+			},
 		},
 	}, { "Walking", "Running", "Airborne" })
 
 	self:AddState("Walking", {
-		OnEnter = function(_, fsm) writeState(fsm, "Walking") end,
+		OnEnter = function(_, fsm)
+			writeState(fsm, "Walking")
+		end,
 		Transitions = {
-			{ Condition = function(fsm)
-				local _, hum = getCharacterParts(fsm)
-				return hum and isAirborne(hum)
-			end, TargetState = "Airborne" },
-			{ Condition = function(fsm)
-				local _, hum, root = getCharacterParts(fsm)
-				return hum and root and not isAirborne(hum) and getHorizontalSpeed(root) > RUN_THRESHOLD
-			end, TargetState = "Running" },
-			{ Condition = function(fsm)
-				local _, hum, root = getCharacterParts(fsm)
-				return hum and root and not isAirborne(hum) and getHorizontalSpeed(root) <= WALK_THRESHOLD
-			end, TargetState = "Idle" },
+			{
+				Condition = function(fsm)
+					local _, hum = getCharacterParts(fsm)
+					return hum and isAirborne(hum)
+				end,
+				TargetState = "Airborne",
+			},
+			{
+				Condition = function(fsm)
+					local _, hum, root = getCharacterParts(fsm)
+					return hum and root and not isAirborne(hum) and getHorizontalSpeed(root) > RUN_THRESHOLD
+				end,
+				TargetState = "Running",
+			},
+			{
+				Condition = function(fsm)
+					local _, hum, root = getCharacterParts(fsm)
+					return hum and root and not isAirborne(hum) and getHorizontalSpeed(root) <= WALK_THRESHOLD
+				end,
+				TargetState = "Idle",
+			},
 		},
 	}, { "Idle", "Running", "Airborne" })
 
 	self:AddState("Running", {
-		OnEnter = function(_, fsm) writeState(fsm, "Running") end,
+		OnEnter = function(_, fsm)
+			writeState(fsm, "Running")
+		end,
 		Transitions = {
-			{ Condition = function(fsm)
-				local _, hum = getCharacterParts(fsm)
-				return hum and isAirborne(hum)
-			end, TargetState = "Airborne" },
-			{ Condition = function(fsm)
-				local _, hum, root = getCharacterParts(fsm)
-				return hum and root and not isAirborne(hum) and getHorizontalSpeed(root) <= WALK_THRESHOLD
-			end, TargetState = "Idle" },
-			{ Condition = function(fsm)
-				local _, hum, root = getCharacterParts(fsm)
-				return hum and root and not isAirborne(hum) and getHorizontalSpeed(root) <= RUN_THRESHOLD and getHorizontalSpeed(root) > WALK_THRESHOLD
-			end, TargetState = "Walking" },
+			{
+				Condition = function(fsm)
+					local _, hum = getCharacterParts(fsm)
+					return hum and isAirborne(hum)
+				end,
+				TargetState = "Airborne",
+			},
+			{
+				Condition = function(fsm)
+					local _, hum, root = getCharacterParts(fsm)
+					return hum and root and not isAirborne(hum) and getHorizontalSpeed(root) <= WALK_THRESHOLD
+				end,
+				TargetState = "Idle",
+			},
+			{
+				Condition = function(fsm)
+					local _, hum, root = getCharacterParts(fsm)
+					return hum
+						and root
+						and not isAirborne(hum)
+						and getHorizontalSpeed(root) <= RUN_THRESHOLD
+						and getHorizontalSpeed(root) > WALK_THRESHOLD
+				end,
+				TargetState = "Walking",
+			},
 		},
 	}, { "Idle", "Walking", "Airborne" })
 
 	self:AddState("Airborne", {
-		OnEnter = function(_, fsm) writeState(fsm, "Airborne") end,
+		OnEnter = function(_, fsm)
+			writeState(fsm, "Airborne")
+		end,
 		Transitions = {
-			{ Condition = function(fsm)
-				local _, hum, root = getCharacterParts(fsm)
-				if not hum or isAirborne(hum) then return false end
-				return root and getHorizontalSpeed(root) > RUN_THRESHOLD
-			end, TargetState = "Running" },
-			{ Condition = function(fsm)
-				local _, hum, root = getCharacterParts(fsm)
-				if not hum or isAirborne(hum) then return false end
-				return root and getHorizontalSpeed(root) > WALK_THRESHOLD
-			end, TargetState = "Walking" },
-			{ Condition = function(fsm)
-				local _, hum = getCharacterParts(fsm)
-				return hum and not isAirborne(hum)
-			end, TargetState = "Idle" },
+			{
+				Condition = function(fsm)
+					local _, hum, root = getCharacterParts(fsm)
+					if not hum or isAirborne(hum) then
+						return false
+					end
+					return root and getHorizontalSpeed(root) > RUN_THRESHOLD
+				end,
+				TargetState = "Running",
+			},
+			{
+				Condition = function(fsm)
+					local _, hum, root = getCharacterParts(fsm)
+					if not hum or isAirborne(hum) then
+						return false
+					end
+					return root and getHorizontalSpeed(root) > WALK_THRESHOLD
+				end,
+				TargetState = "Walking",
+			},
+			{
+				Condition = function(fsm)
+					local _, hum = getCharacterParts(fsm)
+					return hum and not isAirborne(hum)
+				end,
+				TargetState = "Idle",
+			},
 		},
 	}, { "Idle", "Walking", "Running" })
 

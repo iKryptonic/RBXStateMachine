@@ -6,7 +6,18 @@
 local UnEquipJob = {
 	Name = "UnEquipJob",
 	className = "UnEquipJob",
-	validStates = { "ValidateRequest", "AcquireEquipLock", "ResolveExistingItem", "DoUnEquip", "CommitState", "EmitIntent", "ReleaseEquipLock", "Rollback", "Completed", "Failed" },
+	validStates = {
+		"ValidateRequest",
+		"AcquireEquipLock",
+		"ResolveExistingItem",
+		"DoUnEquip",
+		"CommitState",
+		"EmitIntent",
+		"ReleaseEquipLock",
+		"Rollback",
+		"Completed",
+		"Failed",
+	},
 	terminalStates = { "Completed", "Failed" },
 	initialState = "ValidateRequest",
 }
@@ -197,7 +208,9 @@ function UnEquipJob:RegisterStates()
 			if type(playerEntityId) == "string" and playerEntityId ~= "" then
 				local playerEntity = orchestrator.GetEntity(playerEntityId)
 				if playerEntity then
-					local equipped = if typeof(playerEntity.Equipped) == "table" then table.clone(playerEntity.Equipped) else {}
+					local equipped = if typeof(playerEntity.Equipped) == "table"
+						then table.clone(playerEntity.Equipped)
+						else {}
 					equipped[hand] = nil
 					playerEntity.Equipped = equipped
 					playerEntity:UpdateEntity()
@@ -235,7 +248,9 @@ function UnEquipJob:RegisterStates()
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			if charEntity then
-				local equipLock = if typeof(charEntity.EquipLock) == "table" then table.clone(charEntity.EquipLock) else {}
+				local equipLock = if typeof(charEntity.EquipLock) == "table"
+					then table.clone(charEntity.EquipLock)
+					else {}
 				equipLock[fsm.Hand] = nil
 				charEntity.EquipLock = equipLock
 				charEntity:UpdateEntity()
