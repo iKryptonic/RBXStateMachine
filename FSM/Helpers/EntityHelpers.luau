@@ -1,9 +1,24 @@
 --!strict
 
+local Players = game:GetService("Players")
+
 local EntityHelpers = {}
 
+-- Resolve character model from entity, with LocalPlayer fallback for client FSMs
+local function resolveCharacter(charEntity: any): Instance?
+	if charEntity and charEntity.Instance then
+		return charEntity.Instance
+	end
+	-- Fallback for client-side: entity.Instance may not be set
+	local localPlayer = Players.LocalPlayer
+	if localPlayer and localPlayer.Character then
+		return localPlayer.Character
+	end
+	return nil
+end
+
 function EntityHelpers.getHumanoidAndRoot(subject: any): (Humanoid?, BasePart?)
-	local character = if typeof(subject) == "Instance" then subject else subject and subject.Instance
+	local character = if typeof(subject) == "Instance" then subject else resolveCharacter(subject)
 	if not character or not character:IsA("Model") then
 		return nil, nil
 	end
@@ -20,7 +35,7 @@ function EntityHelpers.getCharacterParts(charEntity: any): (Instance?, Humanoid?
 	if not charEntity then
 		return nil, nil, nil
 	end
-	local character = charEntity.Instance
+	local character = resolveCharacter(charEntity)
 	if not character or not character:IsA("Model") then
 		return nil, nil, nil
 	end
