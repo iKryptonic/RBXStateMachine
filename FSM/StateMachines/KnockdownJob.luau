@@ -8,24 +8,15 @@ local KnockdownJob = {
 	initialState = "Validate",
 }
 
-local sharedAny = shared :: any
-
--- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
-local function getOrchestrator()
-	local lower = sharedAny.fsm
-	if lower ~= nil then
-		return lower.Orchestrator or lower
+local function getSharedModule(orchestrator: any, name)
+	local getModule = orchestrator and orchestrator.GetModule
+	if type(getModule) == "function" then
+		local module = getModule(name)
+		if module ~= nil then
+			return module
+		end
 	end
 
-	local upper = sharedAny.FSM
-	if upper ~= nil and upper.Orchestrator then
-		return upper.Orchestrator
-	end
-
-	error("Orchestrator not found. Check RegisterComponents.")
-end
-
-local function getSharedModule(name)
 	local sharedFolder = game:GetService("ReplicatedStorage"):FindFirstChild("shared")
 	if sharedFolder then
 			local mod = sharedFolder:FindFirstChild(name)
@@ -34,7 +25,9 @@ local function getSharedModule(name)
 	error("Shared module not found: " .. name)
 end
 
-local IntentSchema = getSharedModule("IntentSchema")
+local function getIntentSchema(orchestrator: any)
+	return getSharedModule(orchestrator, "IntentSchema")
+end
 
 local function scheduleTransitionCompat(fsm: any, seconds: number, targetState: string, expectedState: string)
 	if type(fsm.ScheduleTransition) == "function" then
@@ -70,7 +63,7 @@ function KnockdownJob:RegisterStates()
 				return
 			end
 
-			local charEntity = getOrchestrator().GetEntity(fsm.CharacterEntityId)
+			local charEntity = fsm:GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
 				fsm:Fail("CharacterEntity not found")
 				return
@@ -119,6 +112,7 @@ function KnockdownJob:RegisterStates()
 
 	self:AddState("EmitKnockdownIntent", {
 		OnEnter = function(_, fsm)
+			local IntentSchema = getIntentSchema(fsm:GetOrchestrator())
 			local ok, err = pcall(function()
 				IntentSchema.AppendIntent(fsm.CharacterEntity, {
 					Kind = "Animation",

@@ -17,7 +17,15 @@ local ProcessedNonces: { [number]: { [string]: number } } = {}
 local NONCE_EXPIRY = 3
 local MAX_NONCES_PER_ATTACKER = 64
 
-local function getSharedModule(name: string)
+local function getSharedModule(orchestrator: any, name: string)
+	local getModule = orchestrator and orchestrator.GetModule
+	if type(getModule) == "function" then
+		local module = getModule(name)
+		if module ~= nil then
+			return module
+		end
+	end
+
 	local sharedFolder = game:GetService("ReplicatedStorage"):FindFirstChild("shared")
 	if sharedFolder then
 		local mod = sharedFolder:FindFirstChild(name)
@@ -112,8 +120,8 @@ local function getActiveStatusEffects(entity: any): { any }
 	return {}
 end
 
-local function getDamageMultiplier(entity: any): number
-	local defs = getSharedModule("StatusEffectDefs")
+local function getDamageMultiplier(orchestrator: any, entity: any): number
+	local defs = getSharedModule(orchestrator, "StatusEffectDefs")
 	local multiplier = 1
 	for _, entry in ipairs(getActiveStatusEffects(entity)) do
 		if typeof(entry) ~= "table" then
@@ -131,8 +139,8 @@ local function getDamageMultiplier(entity: any): number
 	return multiplier
 end
 
-local function getDamageReduction(entity: any): number
-	local defs = getSharedModule("StatusEffectDefs")
+local function getDamageReduction(orchestrator: any, entity: any): number
+	local defs = getSharedModule(orchestrator, "StatusEffectDefs")
 	local reduction = 0
 	for _, entry in ipairs(getActiveStatusEffects(entity)) do
 		if typeof(entry) ~= "table" then
@@ -149,7 +157,7 @@ local function getDamageReduction(entity: any): number
 end
 
 local function resolveWeaponBaseDamage(orchestrator: any, attackerEntity: any): number
-	local DamageCalculator = getSharedModule("DamageCalculator")
+	local DamageCalculator = getSharedModule(orchestrator, "DamageCalculator")
 	local baseDamage = 10
 	local playerEntityId = attackerEntity and attackerEntity.PlayerEntityId
 	if typeof(playerEntityId) ~= "string" or playerEntityId == "" then
@@ -243,7 +251,7 @@ end
 function DamageJob:RegisterStates()
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
-			local orchestrator = shared.fsm
+			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
 				fsm:Fail("Orchestrator unavailable")
 				return
@@ -255,7 +263,7 @@ function DamageJob:RegisterStates()
 				return
 			end
 
-			local attackerEntity = orchestrator.GetEntity(attackerEntityId)
+			local attackerEntity = fsm:GetEntity(attackerEntityId)
 			if not attackerEntity then
 				fsm:Fail("Attacker entity not found")
 				return
@@ -304,7 +312,7 @@ function DamageJob:RegisterStates()
 
 	self:AddState("ResolveVictim", {
 		OnEnter = function(_, fsm)
-			local orchestrator = shared.fsm
+			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
 				fsm:Fail("Orchestrator unavailable")
 				return
@@ -340,8 +348,8 @@ function DamageJob:RegisterStates()
 
 	self:AddState("ComputeDamage", {
 		OnEnter = function(_, fsm)
-			local DamageCalculator = getSharedModule("DamageCalculator")
-			local orchestrator = shared.fsm
+			local orchestrator = fsm:GetOrchestrator()
+			local DamageCalculator = getSharedModule(orchestrator, "DamageCalculator")
 			local attackerEntity = fsm.Context._attackerEntity
 			if not orchestrator or not attackerEntity then
 				fsm:Fail("Attacker context missing")
@@ -351,8 +359,8 @@ function DamageJob:RegisterStates()
 			local explicitBaseDamage = tonumber(fsm.BaseDamage)
 			local baseDamage = explicitBaseDamage or resolveWeaponBaseDamage(orchestrator, attackerEntity)
 			local computedDamage = DamageCalculator.Compute(baseDamage, fsm.Context._isVictimBlocking == true)
-			computedDamage *= getDamageMultiplier(attackerEntity)
-			computedDamage *= (1 - getDamageReduction(fsm.Context._victimEntity))
+			computedDamage *= getDamageMultiplier(orchestrator, attackerEntity)
+			computedDamage *= (1 - getDamageReduction(orchestrator, fsm.Context._victimEntity))
 			fsm.Context._computedDamage = math.max(0, math.floor(computedDamage + 0.5))
 			fsm.State = "ApplyDamage"
 		end,
@@ -381,7 +389,7 @@ function DamageJob:RegisterStates()
 
 	self:AddState("EmitHitReact", {
 		OnEnter = function(_, fsm)
-			local IntentSchema = getSharedModule("IntentSchema")
+			local IntentSchema = getSharedModule(fsm:GetOrchestrator(), "IntentSchema")
 			local victimEntity = fsm.Context._victimEntity
 			local computedDamage = fsm.Context._computedDamage
 			if not victimEntity or typeof(computedDamage) ~= "number" then
@@ -416,7 +424,7 @@ function DamageJob:RegisterStates()
 
 	self:AddState("FireEventBus", {
 		OnEnter = function(_, fsm)
-			local orchestrator = shared.fsm
+			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
 				fsm:Fail("Orchestrator unavailable")
 				return
@@ -447,15 +455,15 @@ function DamageJob:RegisterStates()
 
 	self:AddState("ApplyOnHitEffects", {
 		OnEnter = function(_, fsm)
-			local orchestrator = shared.fsm
+			local orchestrator = fsm:GetOrchestrator()
 			local attackerEntity = fsm.Context._attackerEntity
 			local victimEntityId = fsm.Context._victimEntityId
 			if orchestrator and attackerEntity and typeof(victimEntityId) == "string" then
 				local playerEntityId = attackerEntity.PlayerEntityId
-				local playerEntity = if typeof(playerEntityId) == "string" then orchestrator.GetEntity(playerEntityId) else nil
+				local playerEntity = if typeof(playerEntityId) == "string" then fsm:GetEntity(playerEntityId) else nil
 				if playerEntity then
-					local talentTreeDefs = getSharedModule("TalentTreeDefs")
-					local statusEffectHelper = getSharedModule("StatusEffectHelper")
+					local talentTreeDefs = getSharedModule(orchestrator, "TalentTreeDefs")
+					local statusEffectHelper = getSharedModule(orchestrator, "StatusEffectHelper")
 					local passiveEffects = talentTreeDefs.GetMergedPassiveEffects(playerEntity)
 					if typeof(passiveEffects.BuffOnHit) == "string" and passiveEffects.BuffOnHit ~= "" then
 						statusEffectHelper.Apply(orchestrator, victimEntityId, passiveEffects.BuffOnHit)

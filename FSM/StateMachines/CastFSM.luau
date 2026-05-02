@@ -16,16 +16,15 @@ local DEFAULT_PROJECTILE_SPEED = 120
 local DEFAULT_PROJECTILE_LIFETIME = 3
 local DEFAULT_DASH_DURATION = 0.2
 
--- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
-local function getOrchestrator()
-	local lower = (shared :: any).fsm
-	if lower ~= nil then
-		return lower.Orchestrator or lower
+local function getSharedModule(orchestrator: any, name: string)
+	local getModule = orchestrator and orchestrator.GetModule
+	if type(getModule) == "function" then
+		local module = getModule(name)
+		if module ~= nil then
+			return module
+		end
 	end
-	error("Orchestrator not found")
-end
 
-local function getSharedModule(name: string)
 	local sharedFolder = ReplicatedStorage:FindFirstChild("shared")
 	if sharedFolder then
 		local mod = sharedFolder:FindFirstChild(name)
@@ -42,16 +41,16 @@ local function getSharedModule(name: string)
 	error("Shared module not found: " .. name)
 end
 
-local function getAbilityDefs()
-	return getSharedModule("AbilityDefs")
+local function getAbilityDefs(orchestrator: any)
+	return getSharedModule(orchestrator, "AbilityDefs")
 end
 
-local function getTalentTreeDefs()
-	return getSharedModule("TalentTreeDefs")
+local function getTalentTreeDefs(orchestrator: any)
+	return getSharedModule(orchestrator, "TalentTreeDefs")
 end
 
-local function getStatusEffectDefs()
-	return getSharedModule("StatusEffectDefs")
+local function getStatusEffectDefs(orchestrator: any)
+	return getSharedModule(orchestrator, "StatusEffectDefs")
 end
 
 local function getHumanoidAndRoot(character: Model): (Humanoid?, BasePart?)
@@ -110,7 +109,7 @@ local function resolveWeaponType(charEntity: any): string?
 	return nil
 end
 
-local function isAbilityUnlocked(playerEntity: any, castDef: any): boolean
+local function isAbilityUnlocked(orchestrator: any, playerEntity: any, castDef: any): boolean
 	if castDef.SourceType ~= "Ability" then
 		return true
 	end
@@ -127,7 +126,7 @@ local function isAbilityUnlocked(playerEntity: any, castDef: any): boolean
 		end
 	end
 
-	local talentUnlocked = getTalentTreeDefs().IsAbilityUnlocked(castDef.Id, playerEntity)
+	local talentUnlocked = getTalentTreeDefs(orchestrator).IsAbilityUnlocked(castDef.Id, playerEntity)
 	if talentUnlocked ~= nil then
 		return talentUnlocked
 	end
@@ -137,13 +136,13 @@ local function isAbilityUnlocked(playerEntity: any, castDef: any): boolean
 	return playerLevel >= unlockLevel
 end
 
-local function areAbilitiesBlocked(charEntity: any): (boolean, string?)
+local function areAbilitiesBlocked(orchestrator: any, charEntity: any): (boolean, string?)
 	local activeStatusEffects = charEntity and charEntity.ActiveStatusEffects
 	if typeof(activeStatusEffects) ~= "table" then
 		return false, nil
 	end
 
-	local defs = getStatusEffectDefs()
+	local defs = getStatusEffectDefs(orchestrator)
 	for _, entry in ipairs(activeStatusEffects) do
 		if typeof(entry) ~= "table" then
 			continue
@@ -164,13 +163,13 @@ local function areAbilitiesBlocked(charEntity: any): (boolean, string?)
 	return false, nil
 end
 
-local function resolveCastDef(fsm: any): any?
+local function resolveCastDef(fsm: any, orchestrator: any): any?
 	local cached = fsm.Context._castDef
 	if cached then
 		return cached
 	end
 
-	local abilityDefs = getAbilityDefs()
+	local abilityDefs = getAbilityDefs(orchestrator)
 	local rawDef = fsm.Context._abilityDef
 	local sourceType = if rawDef and typeof(rawDef.SourceType) == "string" then rawDef.SourceType else "Ability"
 	if not rawDef and typeof(fsm.AbilityId) == "string" and fsm.AbilityId ~= "" then
@@ -194,8 +193,8 @@ local function resolveCastDef(fsm: any): any?
 	return castDef
 end
 
-local function appendIntent(characterEntity: any, kind: string, payload: { [string]: any }, sourceCharId: string, targetCharId: string?, lockId: string?)
-	local intentSchema = getSharedModule("IntentSchema")
+local function appendIntent(orchestrator: any, characterEntity: any, kind: string, payload: { [string]: any }, sourceCharId: string, targetCharId: string?, lockId: string?)
+	local intentSchema = getSharedModule(orchestrator, "IntentSchema")
 	intentSchema.AppendIntent(characterEntity, {
 		Kind = kind,
 		Payload = payload,
@@ -446,8 +445,7 @@ local function consumePlayerItem(playerEntity: any, itemId: string, slotIndex: n
 	return true
 end
 
-local function spawnProjectile(fsm: any, castDef: any, charEntity: any, rootPart: BasePart)
-	local orchestrator = getOrchestrator()
+local function spawnProjectile(orchestrator: any, fsm: any, castDef: any, charEntity: any, rootPart: BasePart)
 	local targetPosition = resolveTargetPosition(orchestrator, charEntity, rootPart)
 	local direction = targetPosition - rootPart.Position
 	if direction.Magnitude <= 0.01 then
@@ -499,8 +497,7 @@ local function spawnProjectile(fsm: any, castDef: any, charEntity: any, rootPart
 	end)
 end
 
-local function executeCastEffect(fsm: any, castDef: any, charEntity: any, playerEntity: any, humanoid: Humanoid, rootPart: BasePart)
-	local orchestrator = getOrchestrator()
+local function executeCastEffect(orchestrator: any, fsm: any, castDef: any, charEntity: any, playerEntity: any, humanoid: Humanoid, rootPart: BasePart)
 	local effectType = castDef.EffectType
 	local attackName = castDef.Id or castDef.Name or "Cast"
 
@@ -517,7 +514,7 @@ local function executeCastEffect(fsm: any, castDef: any, charEntity: any, player
 			createDamageJob(orchestrator, fsm.CharacterEntityId, victim, attackName, tonumber(castDef.Damage) or 0)
 		end
 	elseif effectType == "Projectile" then
-		spawnProjectile(fsm, castDef, charEntity, rootPart)
+		spawnProjectile(orchestrator, fsm, castDef, charEntity, rootPart)
 	elseif effectType == "SelfHeal" then
 		applyHealthChange(charEntity, humanoid, tonumber(castDef.HealAmount) or 0, fsm.Id)
 	elseif effectType == "InstantHeal" then
@@ -566,14 +563,14 @@ function CastFSM:RegisterStates()
 
 	self:AddState("ValidateAbility", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local charEntityId = fsm.CharacterEntityId
 			if typeof(charEntityId) ~= "string" or charEntityId == "" then
 				fsm:Fail("CharacterEntityId is required")
 				return
 			end
 
-			local charEntity = orchestrator.GetEntity(charEntityId)
+			local charEntity = fsm:GetEntity(charEntityId)
 			if not charEntity then
 				fsm:Fail("Character entity not found")
 				return
@@ -581,12 +578,12 @@ function CastFSM:RegisterStates()
 
 			local playerEntity = nil
 			if typeof(fsm.PlayerEntityId) == "string" and fsm.PlayerEntityId ~= "" then
-				playerEntity = orchestrator.GetEntity(fsm.PlayerEntityId)
+				playerEntity = fsm:GetEntity(fsm.PlayerEntityId)
 			elseif typeof(charEntity.PlayerEntityId) == "string" and charEntity.PlayerEntityId ~= "" then
-				playerEntity = orchestrator.GetEntity(charEntity.PlayerEntityId)
+				playerEntity = fsm:GetEntity(charEntity.PlayerEntityId)
 			end
 
-			local castDef = resolveCastDef(fsm)
+			local castDef = resolveCastDef(fsm, orchestrator)
 			if not castDef then
 				fsm:Fail("Cast definition not found")
 				return
@@ -613,12 +610,12 @@ function CastFSM:RegisterStates()
 				return
 			end
 
-			if not isAbilityUnlocked(playerEntity, castDef) then
+			if not isAbilityUnlocked(orchestrator, playerEntity, castDef) then
 				fsm:Fail("Ability is not unlocked")
 				return
 			end
 
-			local blocked, reason = areAbilitiesBlocked(charEntity)
+			local blocked, reason = areAbilitiesBlocked(orchestrator, charEntity)
 			if blocked and castDef.SourceType ~= "Consumable" then
 				fsm:Fail(reason or "Abilities are blocked")
 				return
@@ -722,7 +719,7 @@ function CastFSM:RegisterStates()
 			charEntity:UpdateEntity(fsm.Id)
 
 			if typeof(castDef.Animation) == "string" and castDef.Animation ~= "" then
-				appendIntent(charEntity, "Animation", {
+				appendIntent(fsm:GetOrchestrator(), charEntity, "Animation", {
 					Name = castDef.Animation,
 					Speed = 1,
 					FadeTime = 0.1,
@@ -780,7 +777,7 @@ function CastFSM:RegisterStates()
 				fsm.State = "ReleaseLock"
 				return
 			end
-			executeCastEffect(fsm, castDef, charEntity, playerEntity, humanoid, rootPart)
+			executeCastEffect(fsm:GetOrchestrator(), fsm, castDef, charEntity, playerEntity, humanoid, rootPart)
 			fsm.State = "EmitFinishAnimation"
 		end,
 	}, { "EmitFinishAnimation", "ReleaseLock" })
@@ -795,7 +792,7 @@ function CastFSM:RegisterStates()
 				return
 			end
 			if typeof(castDef.FinishAnimation) == "string" and castDef.FinishAnimation ~= "" then
-				appendIntent(charEntity, "Animation", {
+				appendIntent(fsm:GetOrchestrator(), charEntity, "Animation", {
 					Name = castDef.FinishAnimation,
 					Speed = 1,
 					FadeTime = 0.1,

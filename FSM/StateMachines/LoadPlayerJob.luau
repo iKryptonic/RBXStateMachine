@@ -14,37 +14,13 @@ local LoadPlayerJob = {
 
 local DEFAULT_INVENTORY = { "1", "2", "3", "4", "5", "6", "7" }
 
--- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
-local function getOrchestrator()
-	-- Try shared.fsm / shared.FSM (legacy pattern)
-	local lower = (shared :: any).fsm
-	if lower ~= nil then
-		return lower.Orchestrator or lower
-	end
-	local upper = (shared :: any).FSM
-	if upper ~= nil and upper.Orchestrator then
-		return upper.Orchestrator
-	end
-
-	-- Fallback: require from ReplicatedStorage (new canonical pattern)
-	local rs = game:GetService("ReplicatedStorage")
-	local orchModule = rs:FindFirstChild("Orchestrator")
-	if orchModule and orchModule:IsA("ModuleScript") then
-		local ok, result = pcall(require, orchModule)
-		if ok and result then return result end
-	end
-
-	error("Orchestrator is not registered")
-end
-
 local function registerEntityCommand(orchestrator: any, entityId: string, command: string, handler: (Player, ...any) -> ())
 	local registerCallback = (orchestrator :: any).RegisterEntityCommandCallback or (orchestrator :: any).RegisterCommandHandler
 	assert(type(registerCallback) == "function", "Orchestrator command registration API is unavailable")
 	registerCallback(entityId, command, handler)
 end
 
-local function createAndStartStateMachine(className: string, stateMachineId: string, context: { [string]: any }, initialState: string)
-	local orchestrator = getOrchestrator()
+local function createAndStartStateMachine(orchestrator: any, className: string, stateMachineId: string, context: { [string]: any }, initialState: string)
 	local machine = orchestrator.CreateStateMachine({
 		StateMachineClass = className,
 		StateMachineId = stateMachineId,
@@ -58,7 +34,15 @@ local function createAndStartStateMachine(className: string, stateMachineId: str
 	return machine
 end
 
-local function getSharedModule(name: string)
+local function getSharedModule(orchestrator: any, name: string)
+	local getModule = orchestrator and orchestrator.GetModule
+	if type(getModule) == "function" then
+		local module = getModule(name)
+		if module ~= nil then
+			return module
+		end
+	end
+
 	local sharedFolder = ReplicatedStorage:FindFirstChild("shared")
 	if sharedFolder then
 		local moduleScript = sharedFolder:FindFirstChild(name)
@@ -89,7 +73,7 @@ local function syncCharacterHumanoid(charEntity: any)
 	end
 end
 
-local function applyPlayerDefaults(playerEntity: any, player: Player, userId: number)
+local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player: Player, userId: number)
 	playerEntity:SetContext("Instance", player)
 	playerEntity:SetContext("OwnerId", tostring(userId))
 
@@ -140,7 +124,7 @@ local function applyPlayerDefaults(playerEntity: any, player: Player, userId: nu
 		dirty = true
 	end
 
-	local talentTreeDefs = getSharedModule("TalentTreeDefs")
+	local talentTreeDefs = getSharedModule(orchestrator, "TalentTreeDefs")
 	local remainingSkillPoints = talentTreeDefs.GetRemainingSkillPoints(playerEntity)
 	if type(playerEntity.SkillPoints) ~= "number" or playerEntity.SkillPoints ~= remainingSkillPoints then
 		playerEntity.SkillPoints = remainingSkillPoints
@@ -330,7 +314,7 @@ function LoadPlayerJob:RegisterStates()
 
 	self:AddState("CreatePlayerEntity", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local player = fsm.Player :: Player
 			local userId = fsm.UserId :: number
 			local entityId = "Player_" .. tostring(userId)
@@ -355,7 +339,7 @@ function LoadPlayerJob:RegisterStates()
 				return
 			end
 
-			applyPlayerDefaults(playerEntity, player, userId)
+			applyPlayerDefaults(orchestrator, playerEntity, player, userId)
 			fsm.Context.PlayerEntityId = entityId
 			fsm.State = "LoadData"
 		end,
@@ -400,7 +384,7 @@ function LoadPlayerJob:RegisterStates()
 
 	self:AddState("CreateCharacterEntity", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local userId = fsm.UserId :: number
 			local character = fsm.Character
 			local playerEntityId = fsm.PlayerEntityId
@@ -433,7 +417,7 @@ function LoadPlayerJob:RegisterStates()
 			applyCharacterDefaults(charEntity, character, userId, playerEntityId)
 			local playerEntity = orchestrator.GetEntity(playerEntityId)
 			if playerEntity then
-				local passiveEffects = getSharedModule("TalentTreeDefs").GetMergedPassiveEffects(playerEntity)
+				local passiveEffects = getSharedModule(orchestrator, "TalentTreeDefs").GetMergedPassiveEffects(playerEntity)
 				local appliedPassiveBonuses = false
 				for stat, bonus in pairs(passiveEffects) do
 					if typeof(bonus) == "number" and typeof(charEntity[stat]) == "number" then
@@ -453,7 +437,7 @@ function LoadPlayerJob:RegisterStates()
 
 	self:AddState("RegisterCommands", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local charEntityId = fsm.CharacterEntityId :: string
 			local playerEntityId = fsm.PlayerEntityId :: string
 			local ownerUserId = fsm.UserId :: number
@@ -464,7 +448,7 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestEquip", function(player, itemId, hand)
 				if not isAuthorized(player) then return end
-				createAndStartStateMachine("EquipJob", "Equip_" .. charEntityId .. "_" .. tostring(os.clock()), {
+				createAndStartStateMachine(orchestrator, "EquipJob", "Equip_" .. charEntityId .. "_" .. tostring(os.clock()), {
 					CharacterEntityId = charEntityId,
 					PlayerEntityId = playerEntityId,
 					ItemId = tostring(itemId or ""),
@@ -474,7 +458,7 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestUnEquip", function(player, hand)
 				if not isAuthorized(player) then return end
-				createAndStartStateMachine("UnEquipJob", "UnEquip_" .. charEntityId .. "_" .. tostring(os.clock()), {
+				createAndStartStateMachine(orchestrator, "UnEquipJob", "UnEquip_" .. charEntityId .. "_" .. tostring(os.clock()), {
 					CharacterEntityId = charEntityId,
 					Hand = hand or "Right",
 				}, "ValidateRequest")
@@ -482,7 +466,7 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestDamage", function(player, victimUserId, attackName)
 				if not isAuthorized(player) then return end
-				createAndStartStateMachine("DamageJob", "Damage_" .. charEntityId .. "_" .. tostring(os.clock()), {
+				createAndStartStateMachine(orchestrator, "DamageJob", "Damage_" .. charEntityId .. "_" .. tostring(os.clock()), {
 					AttackerCharEntityId = charEntityId,
 					VictimUserId = victimUserId,
 					AttackName = attackName,
@@ -491,7 +475,7 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestAction", function(player, kind, payload)
 				if not isAuthorized(player) then return end
-				createAndStartStateMachine("ReplicateIntentJob", "Intent_" .. charEntityId .. "_" .. tostring(os.clock()), {
+				createAndStartStateMachine(orchestrator, "ReplicateIntentJob", "Intent_" .. charEntityId .. "_" .. tostring(os.clock()), {
 					CharacterEntityId = charEntityId,
 					Kind = kind,
 					Payload = payload,
@@ -514,7 +498,7 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestAttack", function(player, comboSlot)
 				if not isAuthorized(player) then return end
-				createAndStartStateMachine("AttackJob", "Attack_" .. charEntityId .. "_" .. tostring(os.clock()), {
+				createAndStartStateMachine(orchestrator, "AttackJob", "Attack_" .. charEntityId .. "_" .. tostring(os.clock()), {
 					CharacterEntityId = charEntityId,
 					PlayerEntityId = playerEntityId,
 					ComboSlot = comboSlot,
@@ -523,7 +507,7 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestMeleeAttack", function(player, comboSlot)
 				if not isAuthorized(player) then return end
-				createAndStartStateMachine("MeleeAttackJob", "Melee_" .. charEntityId .. "_" .. tostring(os.clock()), {
+				createAndStartStateMachine(orchestrator, "MeleeAttackJob", "Melee_" .. charEntityId .. "_" .. tostring(os.clock()), {
 					CharacterEntityId = charEntityId,
 					PlayerEntityId = playerEntityId,
 					ComboSlot = comboSlot,
@@ -532,7 +516,7 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestRangedAttack", function(player)
 				if not isAuthorized(player) then return end
-				createAndStartStateMachine("ProjectileAttackJob", "Ranged_" .. charEntityId .. "_" .. tostring(os.clock()), {
+				createAndStartStateMachine(orchestrator, "ProjectileAttackJob", "Ranged_" .. charEntityId .. "_" .. tostring(os.clock()), {
 					CharacterEntityId = charEntityId,
 					PlayerEntityId = playerEntityId,
 				}, "Validate")
@@ -540,7 +524,7 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestAbility", function(player, abilityId)
 				if not isAuthorized(player) then return end
-				createAndStartStateMachine("CastFSM", "Cast_" .. charEntityId .. "_" .. tostring(os.clock()), {
+				createAndStartStateMachine(orchestrator, "CastFSM", "Cast_" .. charEntityId .. "_" .. tostring(os.clock()), {
 					CharacterEntityId = charEntityId,
 					PlayerEntityId = playerEntityId,
 					AbilityId = abilityId,
@@ -557,7 +541,7 @@ function LoadPlayerJob:RegisterStates()
 				if typeof(numericSlotIndex) ~= "number" then return end
 				local itemId = slots[numericSlotIndex]
 				if typeof(itemId) ~= "string" or itemId == "" then return end
-				createAndStartStateMachine("CastFSM", "Item_" .. charEntityId .. "_" .. tostring(os.clock()), {
+				createAndStartStateMachine(orchestrator, "CastFSM", "Item_" .. charEntityId .. "_" .. tostring(os.clock()), {
 					CharacterEntityId = charEntityId,
 					PlayerEntityId = playerEntityId,
 					ConsumableId = itemId,
@@ -567,7 +551,7 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "ToggleWeapon", function(player)
 				if not isAuthorized(player) then return end
-				createAndStartStateMachine("ToggleWeaponJob", "Toggle_" .. charEntityId .. "_" .. tostring(os.clock()), {
+				createAndStartStateMachine(orchestrator, "ToggleWeaponJob", "Toggle_" .. charEntityId .. "_" .. tostring(os.clock()), {
 					CharacterEntityId = charEntityId,
 					PlayerEntityId = playerEntityId,
 				}, "Validate")
@@ -576,7 +560,7 @@ function LoadPlayerJob:RegisterStates()
 			registerEntityCommand(orchestrator, charEntityId, "RequestUnlockTalent", function(player, nodeId)
 				if not isAuthorized(player) then return end
 
-				local talentTreeDefs = getSharedModule("TalentTreeDefs")
+				local talentTreeDefs = getSharedModule(orchestrator, "TalentTreeDefs")
 				local playerEntity = orchestrator.GetEntity(playerEntityId)
 				if not playerEntity then
 					return
@@ -619,7 +603,7 @@ function LoadPlayerJob:RegisterStates()
 					return
 				end
 
-				local statusEffectHelper = getSharedModule("StatusEffectHelper")
+				local statusEffectHelper = getSharedModule(orchestrator, "StatusEffectHelper")
 				local requestedEffectId = tostring(effectId or "")
 				local targetId = if typeof(targetCharEntityId) == "string" and targetCharEntityId ~= "" then targetCharEntityId else charEntityId
 				statusEffectHelper.Apply(orchestrator, targetId, requestedEffectId)
@@ -631,7 +615,7 @@ function LoadPlayerJob:RegisterStates()
 
 	self:AddState("PublishLoaded", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			orchestrator.RegisterEventBus("Player/Loaded")
 			orchestrator.FireEventBus("Player/Loaded", fsm.UserId, fsm.PlayerEntityId, fsm.CharacterEntityId)
 			fsm:Log({ Level = "INFO", Message = "LoadPlayerJob completed for userId " .. tostring(fsm.UserId) })

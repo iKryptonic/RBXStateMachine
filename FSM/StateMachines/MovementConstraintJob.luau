@@ -8,23 +8,6 @@ local MovementConstraintJob = {
 	initialState = "Validate",
 }
 
-local sharedAny = shared :: any
-
--- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
-local function getOrchestrator()
-	local lower = sharedAny.fsm
-	if lower ~= nil then
-		return lower.Orchestrator or lower
-	end
-
-	local upper = sharedAny.FSM
-	if upper ~= nil and upper.Orchestrator then
-		return upper.Orchestrator
-	end
-
-	error("Orchestrator not found. Check RegisterComponents.")
-end
-
 local function scheduleTransitionCompat(fsm: any, seconds: number, targetState: string, expectedState: string)
 	if type(fsm.ScheduleTransition) == "function" then
 		fsm:ScheduleTransition(seconds, targetState)
@@ -50,7 +33,7 @@ function MovementConstraintJob:RegisterStates()
 				return
 			end
 
-			local charEntity = getOrchestrator().GetEntity(fsm.CharacterEntityId)
+			local charEntity = fsm:GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
 				fsm:Fail("CharacterEntity not found")
 				return
