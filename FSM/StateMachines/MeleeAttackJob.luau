@@ -130,17 +130,8 @@ function MeleeAttackJob:RegisterStates()
 				return
 			end
 
-			-- Check stamina
-			local staminaCost = DEFAULT_MELEE_DAMAGE[comboSlot] or 5 -- cost = damage value
-			if (charEntity.Stamina or 0) < staminaCost then
-				fsm:Fail("Not enough stamina")
-				return
-			end
-			-- Deduct stamina
-			charEntity.Stamina = (charEntity.Stamina or 100) - staminaCost
-			charEntity:UpdateEntity()
-
 			fsm.Context._charEntity = charEntity
+			fsm.Context._staminaCost = DEFAULT_MELEE_DAMAGE[comboSlot] or 5
 			fsm.Context._character = character
 			fsm.Context._humanoid = humanoid
 			fsm.Context._root = root
@@ -167,6 +158,13 @@ function MeleeAttackJob:RegisterStates()
 			local comboSlot = fsm.Context._comboSlot
 			local root = fsm.Context._root
 			local damage = DEFAULT_MELEE_DAMAGE[comboSlot] or 5
+			local staminaCost = fsm.Context._staminaCost or damage
+			if (charEntity.Stamina or 0) < staminaCost then
+				fsm.State = "ReleaseLock"
+				return
+			end
+			charEntity.Stamina = (charEntity.Stamina or 100) - staminaCost
+			charEntity:UpdateEntity()
 
 			local seqDef = MELEE_SEQUENCES[comboSlot]
 			if not seqDef then
