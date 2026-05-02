@@ -30,6 +30,7 @@ local CharacterEntity = {
 		LocomotionState = { Type = "string",  Replicate = false, Persist = false },
 		ActionOverlay   = { Type = "string",  Replicate = false, Persist = false },
 		SprintIntent    = { Type = "boolean", Replicate = false, Persist = false },
+		InputMode       = { Type = "string",  Replicate = false, Persist = false },
 	},
 }
 
@@ -58,6 +59,7 @@ function CharacterEntity:GetContext(params: { [any]: any })
 		LocomotionState = "Idle",
 		ActionOverlay = "None",
 		SprintIntent = false,
+		InputMode = "Normal",
 	}
 end
 
