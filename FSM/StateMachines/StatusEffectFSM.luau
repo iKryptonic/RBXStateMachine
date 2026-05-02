@@ -59,6 +59,11 @@ end
 
 local function getHumanoid(charEntity: any): Humanoid?
 	local character = charEntity and charEntity.Instance
+	if not character then
+		local Players = game:GetService("Players")
+		local localPlayer = Players.LocalPlayer
+		character = localPlayer and localPlayer.Character
+	end
 	if character and character:IsA("Model") then
 		return character:FindFirstChildOfClass("Humanoid")
 	end
