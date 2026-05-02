@@ -295,63 +295,11 @@ function JumpFSM.TryDoubleJump(fsm: any): boolean
 	if fsm.State ~= "InAir" then
 		return false
 	end
-
-	-- Validate
-	local rootPart, humanoid = getCharacterParts(fsm)
-	if not rootPart or not humanoid or humanoid.Health <= 0 then
-		return false
-	end
-
-	-- Check & deduct stamina
 	local charEntity = getCharacterEntity(fsm)
-	if not charEntity or (tonumber(charEntity.Stamina) or 0) < DOUBLE_JUMP_STAMINA_COST then
+	if charEntity and (tonumber(charEntity.Stamina) or 0) < DOUBLE_JUMP_STAMINA_COST then
 		return false
 	end
-	if not ResourceHelpers.deductStamina(charEntity, DOUBLE_JUMP_STAMINA_COST) then
-		return false
-	end
-	pcall(function() charEntity:UpdateEntity() end)
-
-	-- Sound
-	local sound = Instance.new("Sound")
-	sound.SoundId = JUMP_SOUND_ID
-	sound.Volume = 0.5
-	sound.Parent = rootPart
-	sound:Play()
-	Debris:AddItem(sound, 2)
-
-	-- Animation
-	local onAnimate = fsm.Context._onAnimate
-	if onAnimate then
-		task.spawn(function()
-			onAnimate("FrontFlip", 0.1, 0.15)
-		end)
-	end
-
-	-- Upward force + RootJoint.C0 rotation (matches legacy DoubleJumpController)
-	task.spawn(function()
-		local rootJoint = rootPart:FindFirstChild("RootJoint")
-		if not rootJoint then return end
-
-		local bv = Instance.new("BodyVelocity")
-		bv.MaxForce = Vector3.new(0, math.huge, 0)
-		bv.Velocity = Vector3.new(0, UPWARD_VELOCITY, 0)
-		bv.Parent = rootPart
-
-		local origC0 = rootJoint.C0
-		for i = 1, FLIP_FRAMES do
-			rootJoint.C0 = origC0 * CFrame.Angles(math.rad(-FLIP_ANGLE_STEP * i), 0, 0)
-			task.wait()
-		end
-		rootJoint.C0 = origC0
-		bv:Destroy()
-	end)
-
-	-- Transition FSM to Flipping for observability + land detection
-	fsm.Context._flipRequested = false
-	fsm.Context._rootPart = rootPart
-	fsm.Context._humanoid = humanoid
-	fsm.State = "Flipping"
+	fsm.Context._flipRequested = true
 	return true
 end
 
