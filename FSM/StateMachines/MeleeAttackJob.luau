@@ -142,16 +142,25 @@ function MeleeAttackJob:RegisterStates()
 			local damage = DEFAULT_MELEE_DAMAGE[comboSlot] or 5
 			local animNames = MELEE_ANIMATION_NAMES[comboSlot]
 
-			-- Emit animation intent
+			-- Emit ONE animation intent (cycle through combo pointer)
 			local IntentSchema = getSharedModule("IntentSchema")
-			if IntentSchema and animNames then
-				for _, animName in ipairs(animNames) do
-					IntentSchema.AppendIntent(charEntity, {
-						Kind = "Animation",
-						Payload = { Name = animName, Speed = 0.25, FadeTime = 0.1 },
-						SourceCharId = fsm.CharacterEntityId,
-					}, fsm.Id)
+			if IntentSchema and animNames and #animNames > 0 then
+				-- Track combo pointer per slot on the entity
+				local pointers = charEntity._MeleePointers
+				if typeof(pointers) ~= "table" then
+					pointers = {}
 				end
+				local pointer = (pointers[comboSlot] or 0) + 1
+				if pointer > #animNames then pointer = 1 end
+				pointers[comboSlot] = pointer
+				charEntity:SetContext("_MeleePointers", pointers)
+
+				local animName = animNames[pointer]
+				IntentSchema.AppendIntent(charEntity, {
+					Kind = "Animation",
+					Payload = { Name = animName, Speed = 0.25, FadeTime = 0.1 },
+					SourceCharId = fsm.CharacterEntityId,
+				}, fsm.Id)
 			end
 
 			-- Scan for victims and deal damage at mid-point
