@@ -3,7 +3,7 @@
 local BlockJob = {
 	Name = "BlockJob",
 	className = "BlockJob",
-	validStates = { "Validate", "StartBlocking", "WaitForRelease", "StopBlocking", "Completed", "Failed" },
+	validStates = { "Validate", "AcquireBlockState", "ApplyMovementRestriction", "BroadcastBlockUpdate", "EmitBlockIntent", "WaitForRelease", "ReleaseBlockState", "RestoreMovement", "BroadcastUnblockUpdate", "Completed", "Failed" },
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
@@ -27,8 +27,8 @@ end
 local function getSharedModule(name)
 	local sharedFolder = game:GetService("ReplicatedStorage"):FindFirstChild("shared")
 	if sharedFolder then
-			local mod = sharedFolder:FindFirstChild(name)
-			if mod then return require(mod) end
+		local mod = sharedFolder:FindFirstChild(name)
+		if mod then return require(mod) end
 	end
 	error("Shared module not found: " .. name)
 end
@@ -50,21 +50,53 @@ function BlockJob:RegisterStates()
 			end
 
 			fsm.CharacterEntity = charEntity
-			fsm.State = "StartBlocking"
+			fsm.State = "AcquireBlockState"
 		end,
-	}, { "StartBlocking", "Failed" })
+	}, { "AcquireBlockState", "Failed" })
 
-	self:AddState("StartBlocking", {
+	self:AddState("AcquireBlockState", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
+			if not charEntity then
+				fsm:Fail("CharacterEntity missing")
+				return
+			end
 			charEntity.IsBlocking = true
+			fsm.State = "ApplyMovementRestriction"
+		end,
+	}, { "ApplyMovementRestriction", "Failed" })
+
+	self:AddState("ApplyMovementRestriction", {
+		OnEnter = function(_, fsm)
+			local charEntity = fsm.CharacterEntity
+			if not charEntity then
+				fsm:Fail("CharacterEntity missing")
+				return
+			end
 			charEntity.MoveSpeedCap = 0
+			fsm.State = "BroadcastBlockUpdate"
+		end,
+	}, { "BroadcastBlockUpdate", "Failed" })
+
+	self:AddState("BroadcastBlockUpdate", {
+		OnEnter = function(_, fsm)
+			local charEntity = fsm.CharacterEntity
+			if not charEntity then
+				fsm:Fail("CharacterEntity missing")
+				return
+			end
 			if charEntity:UpdateEntity() == false then
 				fsm:Fail("Failed to start blocking")
 				return
 			end
-
 			fsm._startedBlocking = true
+			fsm.State = "EmitBlockIntent"
+		end,
+	}, { "EmitBlockIntent", "Failed" })
+
+	self:AddState("EmitBlockIntent", {
+		OnEnter = function(_, fsm)
+			local charEntity = fsm.CharacterEntity
 			local ok, err = pcall(function()
 				IntentSchema.AppendIntent(charEntity, {
 					Kind = "Animation",
@@ -75,7 +107,6 @@ function BlockJob:RegisterStates()
 				fsm:Fail("Failed to emit blocking intent: " .. tostring(err))
 				return
 			end
-
 			fsm.State = "WaitForRelease"
 		end,
 	}, { "WaitForRelease", "Failed" })
@@ -87,27 +118,54 @@ function BlockJob:RegisterStates()
 				fsm:Fail("CharacterEntity missing while blocking")
 				return
 			end
-
 			if charEntity.IsBlocking == false then
-				fsm.State = "StopBlocking"
+				fsm.State = "ReleaseBlockState"
 			end
 		end,
-	}, { "StopBlocking", "Failed" })
+	}, { "ReleaseBlockState", "Failed" })
 
-	self:AddState("StopBlocking", {
+	self:AddState("ReleaseBlockState", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
+			if not charEntity then
+				fsm:Fail("CharacterEntity missing")
+				return
+			end
 			charEntity.IsBlocking = false
+			fsm.State = "RestoreMovement"
+		end,
+	}, { "RestoreMovement", "Failed" })
+
+	self:AddState("RestoreMovement", {
+		OnEnter = function(_, fsm)
+			local charEntity = fsm.CharacterEntity
+			if not charEntity then
+				fsm:Fail("CharacterEntity missing")
+				return
+			end
 			charEntity.MoveSpeedCap = 16
+			fsm.State = "BroadcastUnblockUpdate"
+		end,
+	}, { "BroadcastUnblockUpdate", "Failed" })
+
+	self:AddState("BroadcastUnblockUpdate", {
+		OnEnter = function(_, fsm)
+			local charEntity = fsm.CharacterEntity
+			if not charEntity then
+				fsm:Fail("CharacterEntity missing")
+				return
+			end
 			if charEntity:UpdateEntity() == false then
 				fsm:Fail("Failed to stop blocking")
 				return
 			end
-
 			fsm._startedBlocking = false
 			fsm.State = "Completed"
 		end,
 	}, { "Completed", "Failed" })
+
+	self:AddState("Completed", function() end, {})
+	self:AddState("Failed", function() end, {})
 end
 
 function BlockJob:OnCleanup()

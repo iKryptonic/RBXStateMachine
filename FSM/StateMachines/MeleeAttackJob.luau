@@ -1,49 +1,47 @@
 --!strict
 -- @Name MeleeAttackJob
--- @Author Copilot
+-- @Author iKrypto
 -- @Description Server-authoritative unarmed melee attack FSM.
 --   Validates combat state, acquires lock, emits animation intents,
 --   and processes damage — parallel to AttackJob for weapons.
 
-local HttpService = game:GetService("HttpService")
-
 local MeleeAttackJob = {
 	Name = "MeleeAttackJob",
 	className = "MeleeAttackJob",
-	validStates = { "Validate", "AcquireLock", "Execute", "DamageScan", "ReleaseLock", "Completed", "Failed" },
+	validStates = { "Validate", "AcquireLock", "ValidateStamina", "DeductStamina", "ResolveSequence", "EmitPhaseAnimation", "ScheduleDamageWindow", "WaitForDamageWindow", "ScanVictims", "ProcessVictim", "ApplyKnockback", "WaitForRecovery", "ReleaseLock", "Completed", "Failed" },
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
 
 local DEFAULT_MELEE_RADIUS = 5
 local DEFAULT_MELEE_DAMAGE = {
-	[1] = 5,   -- Punch
-	[2] = 12,  -- Knee
-	[3] = 15,  -- Uppercut
-	[4] = 9,   -- Kick
+	[1] = 5,
+	[2] = 12,
+	[3] = 15,
+	[4] = 9,
 }
--- Each slot defines the full sequence of animations with their durations
+
 local MELEE_SEQUENCES = {
-	[1] = { -- Punch: alternating single moves
+	[1] = {
 		Type = "Alternate",
 		Moves = {
 			{{ Name = "RightPunch", Speed = 0.5, Duration = 0.43 }},
 			{{ Name = "LeftPunch", Speed = 0.5, Duration = 0.43 }},
 		},
 	},
-	[2] = { -- Knee: 2-phase sequence
+	[2] = {
 		Type = "Sequence",
 		Moves = {
 			{{ Name = "LeftKnee1", Speed = 0.25, Duration = 0.22 }, { Name = "LeftKnee2", Speed = 0.5, Duration = 0.5 }},
 		},
 	},
-	[3] = { -- Uppercut: 2-phase sequence
+	[3] = {
 		Type = "Sequence",
 		Moves = {
 			{{ Name = "Uppercut1", Speed = 0.25, Duration = 0.22 }, { Name = "Uppercut2", Speed = 0.5, Duration = 0.5 }},
 		},
 	},
-	[4] = { -- Kick: alternating combos
+	[4] = {
 		Type = "Alternate",
 		Moves = {
 			{{ Name = "RightKick1", Speed = 0.25, Duration = 0.25 }, { Name = "RightKick2", Speed = 0.5, Duration = 0.5 }},
@@ -65,6 +63,12 @@ local function getOrchestrator()
 	local lower = (shared :: any).fsm
 	if lower ~= nil then return lower.Orchestrator or lower end
 	error("Orchestrator not found")
+end
+
+local function queueRelease(fsm: any, nextState: string, reason: string?)
+	fsm.Context._releaseTargetState = nextState
+	fsm.Context._releaseReason = reason
+	fsm.State = "ReleaseLock"
 end
 
 local function scanMeleeRange(orchestrator: any, attackerCharEntityId: string, attackerRoot: BasePart, radius: number): { any }
@@ -159,8 +163,6 @@ function MeleeAttackJob:RegisterStates()
 			end
 
 			local comboSlot = math.clamp(tonumber(fsm.ComboSlot) or 1, 1, 4)
-
-			-- Weapon must NOT be drawn for melee
 			local equippedRight = charEntity.EquippedRight
 			local equippedLeft = charEntity.EquippedLeft
 			if (typeof(equippedRight) == "string" and equippedRight ~= "") or (typeof(equippedLeft) == "string" and equippedLeft ~= "") then
@@ -186,40 +188,57 @@ function MeleeAttackJob:RegisterStates()
 				return
 			end
 			fsm.Context._lockHeld = true
-			fsm.State = "Execute"
+			fsm.State = "ValidateStamina"
 		end,
-	}, { "Execute", "Failed" })
+	}, { "ValidateStamina", "Failed" })
 
-	self:AddState("Execute", {
+	self:AddState("ValidateStamina", {
+		OnEnter = function(_, fsm)
+			local charEntity = fsm.Context._charEntity
+			local staminaCost = fsm.Context._staminaCost or 0
+			if (charEntity.Stamina or 0) < staminaCost then
+				queueRelease(fsm, "Failed", "Not enough stamina")
+				return
+			end
+			fsm.State = "DeductStamina"
+		end,
+	}, { "DeductStamina", "ReleaseLock" })
+
+	self:AddState("DeductStamina", {
+		OnEnter = function(_, fsm)
+			local charEntity = fsm.Context._charEntity
+			local staminaCost = fsm.Context._staminaCost or 0
+			charEntity.Stamina = (charEntity.Stamina or 100) - staminaCost
+			charEntity:UpdateEntity(fsm.Id)
+			fsm.State = "ResolveSequence"
+		end,
+	}, { "ResolveSequence" })
+
+	self:AddState("ResolveSequence", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
 			local comboSlot = fsm.Context._comboSlot
 			local damage = DEFAULT_MELEE_DAMAGE[comboSlot] or 5
-			local staminaCost = fsm.Context._staminaCost or damage
-			if (charEntity.Stamina or 0) < staminaCost then
-				fsm.State = "ReleaseLock"
-				return
-			end
-			charEntity.Stamina = (charEntity.Stamina or 100) - staminaCost
-			charEntity:UpdateEntity()
-
 			local seqDef = MELEE_SEQUENCES[comboSlot]
 			if not seqDef then
-				fsm.State = "ReleaseLock"
+				queueRelease(fsm, "Failed", "Melee sequence not found")
 				return
 			end
 
-			-- Resolve which move to play (alternate or fixed sequence)
 			local pointers = charEntity._MeleePointers
-			if typeof(pointers) ~= "table" then pointers = {} end
+			if typeof(pointers) ~= "table" then
+				pointers = {}
+			end
 			local pointer = (pointers[comboSlot] or 0) + 1
-			if pointer > #seqDef.Moves then pointer = 1 end
+			if pointer > #seqDef.Moves then
+				pointer = 1
+			end
 			pointers[comboSlot] = pointer
 			charEntity:SetContext("_MeleePointers", pointers)
 
 			local phases = seqDef.Moves[pointer]
 			if typeof(phases) ~= "table" or #phases == 0 then
-				fsm.State = "ReleaseLock"
+				queueRelease(fsm, "Failed", "Melee phases not found")
 				return
 			end
 
@@ -236,59 +255,125 @@ function MeleeAttackJob:RegisterStates()
 			fsm.Context._nextPhaseIndex = 1
 			fsm.Context._attackDuration = totalDuration
 			fsm.Context._damageScanOffset = totalDuration * 0.5
+			fsm.State = "EmitPhaseAnimation"
+		end,
+	}, { "EmitPhaseAnimation", "ReleaseLock" })
 
-			emitDueAnimationPhases(fsm, 0)
-			if totalDuration <= 0 then
-				fsm.State = "DamageScan"
+	self:AddState("EmitPhaseAnimation", {
+		OnEnter = function(_, fsm)
+			local phases = fsm.Context._phases
+			local charEntity = fsm.Context._charEntity
+			local firstPhase = typeof(phases) == "table" and phases[1] or nil
+			if not charEntity or typeof(firstPhase) ~= "table" then
+				queueRelease(fsm, "Failed", "Initial melee phase missing")
 				return
 			end
-
-			fsm:ScheduleTransition(fsm.Context._damageScanOffset, "DamageScan")
+			appendAnimationIntent(charEntity, fsm, firstPhase)
+			fsm.Context._nextPhaseIndex = 2
+			fsm.State = "ScheduleDamageWindow"
 		end,
+	}, { "ScheduleDamageWindow", "ReleaseLock" })
+
+	self:AddState("ScheduleDamageWindow", {
+		OnEnter = function(_, fsm)
+			local damageScanOffset = fsm.Context._damageScanOffset or 0
+			if damageScanOffset > 0 then
+				fsm:ScheduleTransition(damageScanOffset, "ScanVictims")
+				fsm.State = "WaitForDamageWindow"
+			else
+				fsm.State = "ScanVictims"
+			end
+		end,
+	}, { "WaitForDamageWindow", "ScanVictims" })
+
+	self:AddState("WaitForDamageWindow", {
 		OnHeartbeat = function(_, fsm)
 			emitDueAnimationPhases(fsm, fsm.StateDuration)
 		end,
-	}, { "DamageScan", "ReleaseLock", "Failed" })
+	}, { "ScanVictims", "Failed" })
 
-	self:AddState("DamageScan", {
+	self:AddState("ScanVictims", {
 		OnEnter = function(_, fsm)
-			local comboSlot = fsm.Context._comboSlot
-			local damage = fsm.Context._damage or (DEFAULT_MELEE_DAMAGE[comboSlot] or 5)
-			local damageScanOffset = fsm.Context._damageScanOffset or 0
-			local totalDuration = fsm.Context._attackDuration or 0
-			emitDueAnimationPhases(fsm, damageScanOffset)
-
 			local orchestrator = getOrchestrator()
 			local attackerRoot = fsm.Context._root
+			local victims = {}
 			if attackerRoot and attackerRoot.Parent then
-				local knockbackDir = attackerRoot.CFrame.LookVector
-				local victims = scanMeleeRange(orchestrator, fsm.CharacterEntityId, attackerRoot, DEFAULT_MELEE_RADIUS)
-				for _, victim in ipairs(victims) do
-					local victimHumanoid = victim.Instance and victim.Instance:FindFirstChildOfClass("Humanoid")
-					local victimRoot = victim.Instance and victim.Instance:FindFirstChild("HumanoidRootPart")
-					local victimUserId = victim.UserId
-					if victimHumanoid and victimHumanoid.Health > 0 and typeof(victimUserId) == "number" then
-						local damageJob = orchestrator.CreateStateMachine({
-							StateMachineClass = "DamageJob",
-							StateMachineId = string.format("MeleeDmg_%s_%s", fsm.Id, tostring(victimUserId)),
-							Context = {
-								AttackerCharEntityId = fsm.CharacterEntityId,
-								VictimUserId = victimUserId,
-								AttackName = "Melee_" .. tostring(comboSlot),
-								BaseDamage = damage,
-							},
-						})
-						if damageJob then
-							damageJob:Start({ State = "Validate" })
-						end
-						if victimRoot then
-							local knockForce = knockbackDir * 25 + Vector3.new(0, 10, 0)
-							victimRoot.AssemblyLinearVelocity = victimRoot.AssemblyLinearVelocity + knockForce
-						end
-					end
+				victims = scanMeleeRange(orchestrator, fsm.CharacterEntityId, attackerRoot, DEFAULT_MELEE_RADIUS)
+				fsm.Context._knockbackDirection = attackerRoot.CFrame.LookVector
+			end
+			fsm.Context._victims = victims
+			fsm.Context._victimIndex = 1
+			fsm.Context._currentVictim = nil
+			if #victims > 0 then
+				fsm.State = "ProcessVictim"
+			else
+				fsm.State = "WaitForRecovery"
+			end
+		end,
+	}, { "ProcessVictim", "WaitForRecovery" })
+
+	self:AddState("ProcessVictim", {
+		OnEnter = function(_, fsm)
+			local orchestrator = getOrchestrator()
+			local victims = fsm.Context._victims
+			local victimIndex = fsm.Context._victimIndex or 1
+			local victim = typeof(victims) == "table" and victims[victimIndex] or nil
+			if not victim then
+				fsm.State = "WaitForRecovery"
+				return
+			end
+
+			fsm.Context._currentVictim = victim
+			fsm.Context._victimIndex = victimIndex + 1
+
+			local victimHumanoid = victim.Instance and victim.Instance:FindFirstChildOfClass("Humanoid")
+			local victimUserId = victim.UserId
+			if victimHumanoid and victimHumanoid.Health > 0 and typeof(victimUserId) == "number" then
+				local comboSlot = fsm.Context._comboSlot
+				local damage = fsm.Context._damage or (DEFAULT_MELEE_DAMAGE[comboSlot] or 5)
+				local damageJob = orchestrator.CreateStateMachine({
+					StateMachineClass = "DamageJob",
+					StateMachineId = string.format("MeleeDmg_%s_%s", fsm.Id, tostring(victimUserId)),
+					Context = {
+						AttackerCharEntityId = fsm.CharacterEntityId,
+						VictimUserId = victimUserId,
+						AttackName = "Melee_" .. tostring(comboSlot),
+						BaseDamage = damage,
+					},
+				})
+				if damageJob then
+					damageJob:Start({ State = "Validate" })
 				end
 			end
 
+			fsm.State = "ApplyKnockback"
+		end,
+	}, { "ApplyKnockback", "WaitForRecovery" })
+
+	self:AddState("ApplyKnockback", {
+		OnEnter = function(_, fsm)
+			local victim = fsm.Context._currentVictim
+			local knockbackDirection = fsm.Context._knockbackDirection
+			local victimRoot = victim and victim.Instance and victim.Instance:FindFirstChild("HumanoidRootPart")
+			if victimRoot and typeof(knockbackDirection) == "Vector3" then
+				local knockForce = knockbackDirection * 25 + Vector3.new(0, 10, 0)
+				victimRoot.AssemblyLinearVelocity = victimRoot.AssemblyLinearVelocity + knockForce
+			end
+
+			local victims = fsm.Context._victims
+			local nextIndex = fsm.Context._victimIndex or 1
+			if typeof(victims) == "table" and nextIndex <= #victims then
+				fsm.State = "ProcessVictim"
+			else
+				fsm.State = "WaitForRecovery"
+			end
+		end,
+	}, { "ProcessVictim", "WaitForRecovery" })
+
+	self:AddState("WaitForRecovery", {
+		OnEnter = function(_, fsm)
+			local totalDuration = fsm.Context._attackDuration or 0
+			local damageScanOffset = fsm.Context._damageScanOffset or 0
 			local remainingDuration = math.max(totalDuration - damageScanOffset, 0)
 			if remainingDuration > 0 then
 				fsm:ScheduleTransition(remainingDuration, "ReleaseLock")
@@ -309,9 +394,17 @@ function MeleeAttackJob:RegisterStates()
 				charEntity:ReleaseLock(fsm.Id)
 				fsm.Context._lockHeld = false
 			end
+
+			if fsm.Context._releaseTargetState == "Failed" then
+				fsm:Fail(fsm.Context._releaseReason or "Melee attack failed")
+				return
+			end
 			fsm.State = "Completed"
 		end,
-	}, { "Completed" })
+	}, { "Completed", "Failed" })
+
+	self:AddState("Completed", function() end, {})
+	self:AddState("Failed", function() end, {})
 end
 
 return MeleeAttackJob
