@@ -426,6 +426,14 @@ function LoadPlayerJob:RegisterStates()
 				}, "Validate")
 			end)
 
+			registerEntityCommand(orchestrator, charEntityId, "RequestRangedAttack", function(player)
+				if not isAuthorized(player) then return end
+				createAndStartStateMachine("ProjectileAttackJob", "Ranged_" .. charEntityId .. "_" .. tostring(os.clock()), {
+					CharacterEntityId = charEntityId,
+					PlayerEntityId = playerEntityId,
+				}, "Validate")
+			end)
+
 			registerEntityCommand(orchestrator, charEntityId, "ToggleWeapon", function(player)
 				if not isAuthorized(player) then return end
 				createAndStartStateMachine("ToggleWeaponJob", "Toggle_" .. charEntityId .. "_" .. tostring(os.clock()), {
