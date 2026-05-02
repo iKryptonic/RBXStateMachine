@@ -303,7 +303,8 @@ function DamageJob:RegisterStates()
 				return
 			end
 
-			local baseDamage = resolveWeaponBaseDamage(orchestrator, attackerEntity)
+			local explicitBaseDamage = tonumber(fsm.BaseDamage)
+			local baseDamage = explicitBaseDamage or resolveWeaponBaseDamage(orchestrator, attackerEntity)
 			local computedDamage = DamageCalculator.Compute(baseDamage, fsm.Context._isVictimBlocking == true)
 			fsm.Context._computedDamage = computedDamage
 			fsm.State = "ApplyDamage"

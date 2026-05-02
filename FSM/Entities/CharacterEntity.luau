@@ -31,6 +31,8 @@ local CharacterEntity = {
 		EquipLock      = { Type = "any",     Replicate = false, Persist = false },
 		CombatLock     = { Type = "boolean", Replicate = false, Persist = false },
 		CCLock         = { Type = "boolean", Replicate = false, Persist = false },
+		AbilityCooldowns = { Type = "any",     Replicate = false, Persist = false },
+		ActiveCastId   = { Type = "string",  Replicate = true,  Persist = false },
 		ActionSeq      = { Type = "number",  Replicate = true,  Persist = false },
 		RecentActions  = { Type = "any",     Replicate = true,  Persist = false },
 		-- Client-derived state, replicated so other clients can drive remote animations
@@ -68,6 +70,8 @@ function CharacterEntity:GetContext(params: { [any]: any })
 		EquipLock = {},
 		CombatLock = false,
 		CCLock = false,
+		AbilityCooldowns = {},
+		ActiveCastId = "",
 		ActionSeq = 0,
 		RecentActions = {},
 		LocomotionState = "Idle",

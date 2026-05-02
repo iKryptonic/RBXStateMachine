@@ -102,6 +102,39 @@ local function applyPlayerDefaults(playerEntity: any, player: Player, userId: nu
 		dirty = true
 	end
 
+	if typeof(playerEntity.LearnedAbilities) ~= "table" then
+		playerEntity.LearnedAbilities = {}
+		dirty = true
+	end
+
+	if typeof(playerEntity.AbilityBindings) ~= "table" then
+		playerEntity.AbilityBindings = { Q = "", E = "", R = "", F = "" }
+		dirty = true
+	else
+		local nextBindings = table.clone(playerEntity.AbilityBindings)
+		for _, key in ipairs({ "Q", "E", "R", "F" }) do
+			if typeof(nextBindings[key]) ~= "string" then
+				nextBindings[key] = ""
+				dirty = true
+			end
+		end
+		playerEntity.AbilityBindings = nextBindings
+	end
+
+	if typeof(playerEntity.QuickItemSlots) ~= "table" then
+		playerEntity.QuickItemSlots = { "", "", "", "" }
+		dirty = true
+	else
+		local nextQuickSlots = table.clone(playerEntity.QuickItemSlots)
+		for index = 1, 4 do
+			if typeof(nextQuickSlots[index]) ~= "string" then
+				nextQuickSlots[index] = ""
+				dirty = true
+			end
+		end
+		playerEntity.QuickItemSlots = nextQuickSlots
+	end
+
 	if type(playerEntity.Revision) ~= "number" then
 		playerEntity.Revision = 0
 		dirty = true
@@ -190,6 +223,16 @@ local function applyCharacterDefaults(charEntity: any, character: Model, userId:
 
 	if charEntity.CCLock ~= false then
 		charEntity.CCLock = false
+		dirty = true
+	end
+
+	if typeof(charEntity.AbilityCooldowns) ~= "table" then
+		charEntity.AbilityCooldowns = {}
+		dirty = true
+	end
+
+	if type(charEntity.ActiveCastId) ~= "string" then
+		charEntity.ActiveCastId = ""
 		dirty = true
 	end
 
@@ -431,6 +474,33 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine("ProjectileAttackJob", "Ranged_" .. charEntityId .. "_" .. tostring(os.clock()), {
 					CharacterEntityId = charEntityId,
 					PlayerEntityId = playerEntityId,
+				}, "Validate")
+			end)
+
+			registerEntityCommand(orchestrator, charEntityId, "RequestAbility", function(player, abilityId)
+				if not isAuthorized(player) then return end
+				createAndStartStateMachine("CastFSM", "Cast_" .. charEntityId .. "_" .. tostring(os.clock()), {
+					CharacterEntityId = charEntityId,
+					PlayerEntityId = playerEntityId,
+					AbilityId = abilityId,
+				}, "Validate")
+			end)
+
+			registerEntityCommand(orchestrator, charEntityId, "RequestUseItem", function(player, slotIndex)
+				if not isAuthorized(player) then return end
+				local playerEntity = orchestrator.GetEntity(playerEntityId)
+				if not playerEntity then return end
+				local slots = playerEntity.QuickItemSlots
+				if typeof(slots) ~= "table" then return end
+				local numericSlotIndex = tonumber(slotIndex)
+				if typeof(numericSlotIndex) ~= "number" then return end
+				local itemId = slots[numericSlotIndex]
+				if typeof(itemId) ~= "string" or itemId == "" then return end
+				createAndStartStateMachine("CastFSM", "Item_" .. charEntityId .. "_" .. tostring(os.clock()), {
+					CharacterEntityId = charEntityId,
+					PlayerEntityId = playerEntityId,
+					ConsumableId = itemId,
+					SlotIndex = numericSlotIndex,
 				}, "Validate")
 			end)
 
