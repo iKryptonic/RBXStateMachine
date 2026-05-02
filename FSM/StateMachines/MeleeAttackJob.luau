@@ -22,17 +22,34 @@ local DEFAULT_MELEE_DAMAGE = {
 	[3] = 15,  -- Uppercut
 	[4] = 9,   -- Kick
 }
-local MELEE_DURATIONS = {
-	[1] = 0.43,  -- Punch
-	[2] = 0.72,  -- Knee (0.22 + 0.5)
-	[3] = 0.72,  -- Uppercut (0.22 + 0.5)
-	[4] = 0.75,  -- Kick (0.25 + 0.5)
-}
-local MELEE_ANIMATION_NAMES = {
-	[1] = { "RightPunch", "LeftPunch" },
-	[2] = { "LeftKnee1", "LeftKnee2" },
-	[3] = { "Uppercut1", "Uppercut2" },
-	[4] = { "RightKick1", "LeftKick" },
+-- Each slot defines the full sequence of animations with their durations
+local MELEE_SEQUENCES = {
+	[1] = { -- Punch: alternating single moves
+		Type = "Alternate",
+		Moves = {
+			{{ Name = "RightPunch", Speed = 0.5, Duration = 0.43 }},
+			{{ Name = "LeftPunch", Speed = 0.5, Duration = 0.43 }},
+		},
+	},
+	[2] = { -- Knee: 2-phase sequence
+		Type = "Sequence",
+		Moves = {
+			{{ Name = "LeftKnee1", Speed = 0.25, Duration = 0.22 }, { Name = "LeftKnee2", Speed = 0.5, Duration = 0.5 }},
+		},
+	},
+	[3] = { -- Uppercut: 2-phase sequence
+		Type = "Sequence",
+		Moves = {
+			{{ Name = "Uppercut1", Speed = 0.25, Duration = 0.22 }, { Name = "Uppercut2", Speed = 0.5, Duration = 0.5 }},
+		},
+	},
+	[4] = { -- Kick: alternating combos
+		Type = "Alternate",
+		Moves = {
+			{{ Name = "RightKick1", Speed = 0.25, Duration = 0.25 }, { Name = "RightKick2", Speed = 0.5, Duration = 0.5 }},
+			{{ Name = "LeftKick", Speed = 0.25, Duration = 0.22 }},
+		},
+	},
 }
 
 local function getSharedModule(name: string)
@@ -138,33 +155,53 @@ function MeleeAttackJob:RegisterStates()
 			local charEntity = fsm.Context._charEntity
 			local comboSlot = fsm.Context._comboSlot
 			local root = fsm.Context._root
-			local duration = MELEE_DURATIONS[comboSlot] or 0.5
 			local damage = DEFAULT_MELEE_DAMAGE[comboSlot] or 5
-			local animNames = MELEE_ANIMATION_NAMES[comboSlot]
 
-			-- Emit ONE animation intent (cycle through combo pointer)
+			local seqDef = MELEE_SEQUENCES[comboSlot]
+			if not seqDef then
+				fsm.State = "ReleaseLock"
+				return
+			end
+
+			-- Resolve which move to play (alternate or fixed sequence)
+			local pointers = charEntity._MeleePointers
+			if typeof(pointers) ~= "table" then pointers = {} end
+			local pointer = (pointers[comboSlot] or 0) + 1
+			if pointer > #seqDef.Moves then pointer = 1 end
+			pointers[comboSlot] = pointer
+			charEntity:SetContext("_MeleePointers", pointers)
+
+			local phases = seqDef.Moves[pointer]
+			local totalDuration = 0
+			for _, p in ipairs(phases) do totalDuration += p.Duration end
+
+			-- Emit each phase as a timed animation intent
 			local IntentSchema = getSharedModule("IntentSchema")
-			if IntentSchema and animNames and #animNames > 0 then
-				-- Track combo pointer per slot on the entity
-				local pointers = charEntity._MeleePointers
-				if typeof(pointers) ~= "table" then
-					pointers = {}
+			if IntentSchema then
+				local elapsed = 0
+				for _, phase in ipairs(phases) do
+					if elapsed > 0 then
+						task.delay(elapsed, function()
+							if not fsm.IsActive then return end
+							IntentSchema.AppendIntent(charEntity, {
+								Kind = "Animation",
+								Payload = { Name = phase.Name, Speed = phase.Speed, FadeTime = 0.1 },
+								SourceCharId = fsm.CharacterEntityId,
+							}, fsm.Id)
+						end)
+					else
+						IntentSchema.AppendIntent(charEntity, {
+							Kind = "Animation",
+							Payload = { Name = phase.Name, Speed = phase.Speed, FadeTime = 0.1 },
+							SourceCharId = fsm.CharacterEntityId,
+						}, fsm.Id)
+					end
+					elapsed += phase.Duration
 				end
-				local pointer = (pointers[comboSlot] or 0) + 1
-				if pointer > #animNames then pointer = 1 end
-				pointers[comboSlot] = pointer
-				charEntity:SetContext("_MeleePointers", pointers)
-
-				local animName = animNames[pointer]
-				IntentSchema.AppendIntent(charEntity, {
-					Kind = "Animation",
-					Payload = { Name = animName, Speed = 0.25, FadeTime = 0.1 },
-					SourceCharId = fsm.CharacterEntityId,
-				}, fsm.Id)
 			end
 
 			-- Scan for victims and deal damage at mid-point
-			task.delay(duration * 0.5, function()
+			task.delay(totalDuration * 0.5, function()
 				if not fsm.IsActive then return end
 				local orchestrator = getOrchestrator()
 				local victims = scanMeleeRange(orchestrator, fsm.CharacterEntityId, root, DEFAULT_MELEE_RADIUS)
@@ -176,8 +213,7 @@ function MeleeAttackJob:RegisterStates()
 				end
 			end)
 
-			-- Schedule transition to ReleaseLock after attack duration
-			fsm:ScheduleTransition(duration, "ReleaseLock")
+			fsm:ScheduleTransition(totalDuration, "ReleaseLock")
 		end,
 	}, { "ReleaseLock", "Failed" })
 
