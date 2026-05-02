@@ -10,6 +10,7 @@ local BlockJob = {
 
 local sharedAny = shared :: any
 
+-- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
 local function getOrchestrator()
 	local lower = sharedAny.fsm
 	if lower ~= nil then

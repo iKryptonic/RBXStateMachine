@@ -29,9 +29,7 @@ D = "DashRight",
 }
 
 local function getCharacterEntity(fsm: any): any?
-local orchestrator = (shared :: any).fsm
-if not orchestrator then return nil end
-return orchestrator.GetEntity(fsm.CharacterEntityId)
+	return fsm:GetEntity(fsm.CharacterEntityId)
 end
 
 local function getRootPart(fsm: any): BasePart?

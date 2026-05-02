@@ -14,6 +14,7 @@ local EquipJob = {
 local cachedEquipHelpers = nil :: any
 local cachedIntentSchema = nil :: any
 
+-- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
 local function getOrchestrator()
 	local lower = (shared :: any).fsm
 	if lower ~= nil then
