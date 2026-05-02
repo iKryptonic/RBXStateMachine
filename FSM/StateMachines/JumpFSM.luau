@@ -62,18 +62,17 @@ function JumpFSM:RegisterStates()
 		Transitions = {
 			{
 				Condition = function(fsm)
-					-- Check if flip was requested
-					if fsm.Context._flipRequested then return true end
-					-- Check if landed
+					return fsm.Context._flipRequested == true
+				end,
+				TargetState = "Flipping",
+			},
+			{
+				Condition = function(fsm)
 					local _, humanoid = getCharacterParts(fsm)
 					if not humanoid then return false end
-					if not isAirborne(humanoid) then return true end
-					return false
+					return not isAirborne(humanoid)
 				end,
-				TargetState = function(fsm)
-					if fsm.Context._flipRequested then return "Flipping" end
-					return "Grounded"
-				end,
+				TargetState = "Grounded",
 			},
 		},
 	}, { "Flipping", "Grounded" })
