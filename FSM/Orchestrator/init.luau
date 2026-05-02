@@ -136,6 +136,7 @@ function Orchestrator.CreateStateMachine(params: { StateMachineClass: any, State
 	ValidateRequest()
 	if not params.Context then params.Context = {} end
 	params.Context._Orchestrator = Orchestrator
+	params.Context.Orchestrator = Orchestrator  -- backward compat for framework FSMs
 	return Core.Factory.CreateStateMachine(params)
 end
 
