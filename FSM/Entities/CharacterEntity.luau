@@ -82,7 +82,7 @@ function CharacterEntity:ApplyChanges(changes: { [string]: any })
 
 	if changes.RecentActions or changes.ActionSeq then
 		local renderRouter = self._renderRouter
-		if renderRouter then
+		if renderRouter and typeof(renderRouter.ProcessRecentActions) == "function" then
 			local actions = self.RecentActions
 			if typeof(actions) == "table" then
 				renderRouter:ProcessRecentActions(actions, self.ActionSeq)
@@ -92,7 +92,7 @@ function CharacterEntity:ApplyChanges(changes: { [string]: any })
 
 	if changes.EquippedRight ~= nil or changes.EquippedLeft ~= nil then
 		local renderRouter = self._renderRouter
-		if renderRouter then
+		if renderRouter and typeof(renderRouter._handleEquipVisual) == "function" then
 			renderRouter:_handleEquipVisual({
 				Kind = if changes.EquippedRight ~= nil then "Equip" else "UnEquip",
 				Payload = { Hand = if changes.EquippedRight ~= nil then "Right" else "Left" },

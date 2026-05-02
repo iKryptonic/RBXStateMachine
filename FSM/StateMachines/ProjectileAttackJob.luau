@@ -117,16 +117,7 @@ function ProjectileAttackJob:RegisterStates()
 				return
 			end
 
-			-- Check mana
-			local manaCost = (itemData.ManaCost) or 10
-			if (charEntity.Mana or 0) < manaCost then
-				fsm:Fail("Not enough mana")
-				return
-			end
-			-- Deduct mana
-			charEntity.Mana = (charEntity.Mana or 50) - manaCost
-			charEntity:UpdateEntity()
-			fsm.Context._manaCost = manaCost
+			fsm.Context._manaCost = (itemData.ManaCost) or 10
 
 			fsm.Context._charEntity = charEntity
 			fsm.Context._character = character
@@ -156,6 +147,15 @@ function ProjectileAttackJob:RegisterStates()
 
 	self:AddState("Charge", {
 		OnEnter = function(_, fsm)
+			local charEntity = fsm.Context._charEntity
+			local manaCost = fsm.Context._manaCost or 10
+			if (charEntity.Mana or 0) < manaCost then
+				fsm.State = "ReleaseLock"
+				return
+			end
+			charEntity.Mana = (charEntity.Mana or 50) - manaCost
+			charEntity:UpdateEntity()
+
 			local IntentSchema = getSharedModule("IntentSchema")
 			if IntentSchema then
 				IntentSchema.AppendIntent(fsm.Context._charEntity, {
@@ -217,6 +217,7 @@ function ProjectileAttackJob:RegisterStates()
 			local hitConn
 			hitConn = projectile.Touched:Connect(function(hit)
 				if not fsm.IsActive or fsm.State ~= "WaitForImpact" then return end
+				if hit:IsDescendantOf(fsm.Context._character) then return end
 				local hitChar = hit.Parent
 				if not hitChar or hitChar == fsm.Context._character then return end
 				local hitHumanoid = hitChar:FindFirstChildOfClass("Humanoid")

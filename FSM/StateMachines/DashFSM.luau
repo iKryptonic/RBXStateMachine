@@ -66,7 +66,7 @@ function DashFSM:RegisterStates()
 					fsm.State = "Ready"
 					return
 				end
-				charEntity.Stamina = (charEntity.Stamina or 100) - staminaCost
+				charEntity.Stamina = math.max(0, (charEntity.Stamina or 100) - staminaCost)
 				pcall(function() charEntity:UpdateEntity() end)
 			end
 
