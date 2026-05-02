@@ -453,7 +453,11 @@ local function SyncEntitiesFromServer()
 end
 
 function Initialize()
-	if Initialized then return true end
+	-- Allow client to re-initialize even if server already did
+	-- (shared module instance, but client needs its own listeners/scheduler)
+	local isClient = RunService:IsClient()
+	if Initialized and not isClient then return true end
+	if Initialized and isClient and Orchestrator._clientInitialized then return true end
 	if _initializing then return false end
 	_initializing = true
 
@@ -681,6 +685,9 @@ function Initialize()
 	else
 		_initializing = false
 		Initialized = true
+		if RunService:IsClient() then
+			Orchestrator._clientInitialized = true
+		end
 	end
 	return Result
 end
