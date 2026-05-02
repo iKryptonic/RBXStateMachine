@@ -5,6 +5,10 @@
 --   States: Ready → ValidateDash → ValidateStamina → DeductStamina → ApplyImpulse → PlaySound → TriggerAnimation → WriteOverlay → DashActive → ClearOverlay → Cooldown → Ready
 
 local Debris = game:GetService("Debris")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
+assert(Helpers, "Helpers folder not found")
+local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 
 local DashFSM = {
 	Name = "DashFSM",
@@ -114,7 +118,10 @@ function DashFSM:RegisterStates()
 				return
 			end
 
-			charEntity.Stamina = math.max(0, (tonumber(charEntity.Stamina) or 0) - DASH_STAMINA_COST)
+			if not ResourceHelpers.deductStamina(charEntity, DASH_STAMINA_COST) then
+				fsm.State = "Ready"
+				return
+			end
 			pcall(function()
 				charEntity:UpdateEntity()
 			end)

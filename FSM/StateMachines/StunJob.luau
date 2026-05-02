@@ -2,6 +2,14 @@
 -- @Name StunJob
 -- @Description FSM state machine module.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
+assert(Helpers, "Helpers folder not found")
+local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
+local CrowdControlHelpers = require(Helpers:WaitForChild("CrowdControlHelpers"))
+local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
+local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
+
 local StunJob = {
 	Name = "StunJob",
 	className = "StunJob",
@@ -20,49 +28,8 @@ local StunJob = {
 	initialState = "Validate",
 }
 
-local function getSharedModule(orchestrator: any, name)
-	local getModule = orchestrator and orchestrator.GetModule
-	if type(getModule) == "function" then
-		local module = getModule(name)
-		if module ~= nil then
-			return module
-		end
-	end
-
-	local sharedFolder = game:GetService("ReplicatedStorage"):FindFirstChild("shared")
-	if sharedFolder then
-		local mod = sharedFolder:FindFirstChild(name)
-		if mod then
-			return require(mod)
-		end
-	end
-	error("Shared module not found: " .. name)
-end
-
 local function getIntentSchema(orchestrator: any)
-	return getSharedModule(orchestrator, "IntentSchema")
-end
-
-local function scheduleTransitionCompat(fsm: any, seconds: number, targetState: string, expectedState: string)
-	if type(fsm.ScheduleTransition) == "function" then
-		fsm:ScheduleTransition(seconds, targetState)
-		return
-	end
-
-	task.delay(seconds, function()
-		if fsm.IsActive and fsm.State == expectedState then
-			fsm.State = targetState
-		end
-	end)
-end
-
-local function failOrRelease(fsm: any, reason: string)
-	if fsm._ccLockHeld then
-		fsm._failureReason = reason
-		fsm.State = "ReleaseCCLock"
-	else
-		fsm:Fail(reason)
-	end
+	return ModuleLoader.requireSharedModule(orchestrator, "IntentSchema")
 end
 
 function StunJob:RegisterStates()
@@ -91,19 +58,18 @@ function StunJob:RegisterStates()
 	self:AddState("AcquireCCLock", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
-			if charEntity.CCLock then
-				fsm:Fail("CCLock already held")
+			local ok, reason = CrowdControlHelpers.acquireCCLock(charEntity)
+			if not ok then
+				if reason == "CCLock already held" then
+					fsm:Fail(reason)
+				else
+					fsm._failureReason = reason
+					fsm.State = "ReleaseCCLock"
+				end
 				return
 			end
 
 			fsm._ccLockHeld = true
-			charEntity.CCLock = true
-			if charEntity:UpdateEntity() == false then
-				fsm._failureReason = "Failed to acquire CCLock"
-				fsm.State = "ReleaseCCLock"
-				return
-			end
-
 			fsm.State = "ApplyFlags"
 		end,
 	}, { "ApplyFlags", "ReleaseCCLock", "Failed" })
@@ -111,11 +77,8 @@ function StunJob:RegisterStates()
 	self:AddState("ApplyFlags", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
-			charEntity.IsStunned = true
-			charEntity.CanMove = false
-			charEntity.MoveSpeedCap = 0
-			if charEntity:UpdateEntity() == false then
-				failOrRelease(fsm, "Failed to apply stun flags")
+			if not CrowdControlHelpers.applyFlags(charEntity, { IsStunned = true, CanMove = false, MoveSpeedCap = 0 }) then
+				StateTransitionHelpers.failOrRelease(fsm, "Failed to apply stun flags")
 				return
 			end
 
@@ -126,15 +89,11 @@ function StunJob:RegisterStates()
 
 	self:AddState("EmitStunIntent", {
 		OnEnter = function(_, fsm)
-			local IntentSchema = getIntentSchema(fsm:GetOrchestrator())
 			local ok, err = pcall(function()
-				IntentSchema.AppendIntent(fsm.CharacterEntity, {
-					Kind = "Animation",
-					Payload = { Name = "Stunned" },
-				})
+				IntentHelpers.appendIntent(fsm:GetOrchestrator(), fsm.CharacterEntity, "Animation", { Name = "Stunned" }, fsm.CharacterEntityId, fsm.CharacterEntityId)
 			end)
 			if not ok then
-				failOrRelease(fsm, "Failed to emit stun intent: " .. tostring(err))
+				StateTransitionHelpers.failOrRelease(fsm, "Failed to emit stun intent: " .. tostring(err))
 				return
 			end
 
@@ -144,18 +103,15 @@ function StunJob:RegisterStates()
 
 	self:AddState("WaitDuration", {
 		OnEnter = function(_, fsm)
-			scheduleTransitionCompat(fsm, fsm.Duration, "ClearFlags", "WaitDuration")
+			StateTransitionHelpers.scheduleTransitionCompat(fsm, fsm.Duration, "ClearFlags", "WaitDuration")
 		end,
 	}, { "ClearFlags", "ReleaseCCLock", "Failed" })
 
 	self:AddState("ClearFlags", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
-			charEntity.IsStunned = false
-			charEntity.CanMove = true
-			charEntity.MoveSpeedCap = 16
-			if charEntity:UpdateEntity() == false then
-				failOrRelease(fsm, "Failed to clear stun flags")
+			if not CrowdControlHelpers.applyFlags(charEntity, { IsStunned = false, CanMove = true, MoveSpeedCap = 16 }) then
+				StateTransitionHelpers.failOrRelease(fsm, "Failed to clear stun flags")
 				return
 			end
 
@@ -168,8 +124,7 @@ function StunJob:RegisterStates()
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
 			if charEntity and fsm._ccLockHeld then
-				charEntity.CCLock = false
-				if charEntity:UpdateEntity() == false and not fsm._failureReason then
+				if not CrowdControlHelpers.releaseCCLock(charEntity) and not fsm._failureReason then
 					fsm._failureReason = "Failed to release CCLock"
 				end
 			end

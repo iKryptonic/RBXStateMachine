@@ -4,6 +4,13 @@
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
+assert(Helpers, "Helpers folder not found")
+local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
+local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
+local CombatHelpers = require(Helpers:WaitForChild("CombatHelpers"))
+local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
+local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 
 local CastFSM = {
 	Name = "CastFSM",
@@ -42,53 +49,16 @@ local DEFAULT_PROJECTILE_SPEED = 120
 local DEFAULT_PROJECTILE_LIFETIME = 3
 local DEFAULT_DASH_DURATION = 0.2
 
-local function getSharedModule(orchestrator: any, name: string)
-	local getModule = orchestrator and orchestrator.GetModule
-	if type(getModule) == "function" then
-		local module = getModule(name)
-		if module ~= nil then
-			return module
-		end
-	end
-
-	local sharedFolder = ReplicatedStorage:FindFirstChild("shared")
-	if sharedFolder then
-		local mod = sharedFolder:FindFirstChild(name)
-		if mod and mod:IsA("ModuleScript") then
-			return require(mod)
-		end
-	end
-
-	local replicatedMod = ReplicatedStorage:FindFirstChild(name, true)
-	if replicatedMod and replicatedMod:IsA("ModuleScript") then
-		return require(replicatedMod)
-	end
-
-	error("Shared module not found: " .. name)
-end
-
 local function getAbilityDefs(orchestrator: any)
-	return getSharedModule(orchestrator, "AbilityDefs")
+	return ModuleLoader.requireSharedModule(orchestrator, "AbilityDefs")
 end
 
 local function getTalentTreeDefs(orchestrator: any)
-	return getSharedModule(orchestrator, "TalentTreeDefs")
+	return ModuleLoader.requireSharedModule(orchestrator, "TalentTreeDefs")
 end
 
 local function getStatusEffectDefs(orchestrator: any)
-	return getSharedModule(orchestrator, "StatusEffectDefs")
-end
-
-local function getHumanoidAndRoot(character: Model): (Humanoid?, BasePart?)
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not root then
-		root = character.PrimaryPart
-	end
-	if root and not root:IsA("BasePart") then
-		root = nil
-	end
-	return humanoid, root :: BasePart?
+	return ModuleLoader.requireSharedModule(orchestrator, "StatusEffectDefs")
 end
 
 local function getItemData(itemId: string?): any?
@@ -219,24 +189,6 @@ local function resolveCastDef(fsm: any, orchestrator: any): any?
 	return castDef
 end
 
-local function appendIntent(
-	orchestrator: any,
-	characterEntity: any,
-	kind: string,
-	payload: { [string]: any },
-	sourceCharId: string,
-	targetCharId: string?,
-	lockId: string?
-)
-	local intentSchema = getSharedModule(orchestrator, "IntentSchema")
-	intentSchema.AppendIntent(characterEntity, {
-		Kind = kind,
-		Payload = payload,
-		SourceCharId = sourceCharId,
-		TargetCharId = targetCharId or sourceCharId,
-	}, lockId)
-end
-
 local function resolveTargetEntity(orchestrator: any, charEntity: any): any?
 	local targetEntityId = charEntity.TargetEntityId
 	if typeof(targetEntityId) ~= "string" or targetEntityId == "" then
@@ -248,77 +200,12 @@ end
 local function resolveTargetPosition(orchestrator: any, charEntity: any, fallbackRoot: BasePart): Vector3
 	local targetEntity = resolveTargetEntity(orchestrator, charEntity)
 	if targetEntity and targetEntity.Instance and targetEntity.Instance:IsA("Model") then
-		local _, targetRoot = getHumanoidAndRoot(targetEntity.Instance)
+		local _, targetRoot = EntityHelpers.getHumanoidAndRoot(targetEntity.Instance)
 		if targetRoot then
 			return targetRoot.Position
 		end
 	end
 	return fallbackRoot.Position + fallbackRoot.CFrame.LookVector * 10
-end
-
-local function scanVictims(orchestrator: any, sourceCharId: string, origin: Vector3, radius: number): { any }
-	local candidates = {} :: { { Entity: any, Distance: number } }
-	local entities = if typeof(orchestrator.GetEntities) == "function" then orchestrator.GetEntities() else {}
-	for entityId, entity in pairs(entities) do
-		if entityId == sourceCharId then
-			continue
-		end
-
-		local character = entity and entity.Instance
-		if not character or not character:IsA("Model") then
-			continue
-		end
-
-		local humanoid, root = getHumanoidAndRoot(character)
-		if not humanoid or humanoid.Health <= 0 or not root then
-			continue
-		end
-
-		local distance = (root.Position - origin).Magnitude
-		if distance <= radius then
-			table.insert(candidates, {
-				Entity = entity,
-				Distance = distance,
-			})
-		end
-	end
-
-	table.sort(candidates, function(a, b)
-		return a.Distance < b.Distance
-	end)
-
-	local victims = {}
-	for _, entry in ipairs(candidates) do
-		table.insert(victims, entry.Entity)
-	end
-	return victims
-end
-
-local function createDamageJob(
-	orchestrator: any,
-	attackerCharEntityId: string,
-	victimEntity: any,
-	attackName: string,
-	baseDamage: number
-)
-	local victimUserId = victimEntity and victimEntity.UserId
-	if typeof(victimUserId) ~= "number" then
-		return
-	end
-
-	local job = orchestrator.CreateStateMachine({
-		StateMachineClass = "DamageJob",
-		StateMachineId = string.format("CastDamage_%s_%s_%s", attackerCharEntityId, attackName, tostring(os.clock())),
-		Context = {
-			AttackerCharEntityId = attackerCharEntityId,
-			VictimUserId = victimUserId,
-			AttackName = attackName,
-			BaseDamage = baseDamage,
-		},
-	})
-	if job then
-		job:Start({ State = "Validate" })
-	end
 end
 
 local function clampResource(value: number, maximum: number): number
@@ -327,8 +214,7 @@ end
 
 local function applyHealthChange(charEntity: any, humanoid: Humanoid, amount: number, lockId: string?)
 	local maxHealth = tonumber(charEntity.MaxHealth) or humanoid.MaxHealth
-	local nextHealth = clampResource((tonumber(charEntity.Health) or humanoid.Health) + amount, maxHealth)
-	charEntity.Health = nextHealth
+	local nextHealth = ResourceHelpers.restoreResource(charEntity, "Health", amount, "MaxHealth")
 	humanoid.Health = math.clamp(nextHealth, 0, humanoid.MaxHealth)
 	charEntity:UpdateEntity(lockId)
 end
@@ -342,7 +228,7 @@ local function applyResourceRestore(
 )
 	local current = tonumber(charEntity[fieldName]) or 0
 	local maximum = tonumber(charEntity[maxFieldName]) or current
-	charEntity[fieldName] = clampResource(current + amount, maximum)
+	ResourceHelpers.restoreResource(charEntity, fieldName, amount, maxFieldName)
 	charEntity:UpdateEntity(lockId)
 end
 
@@ -540,7 +426,7 @@ local function spawnProjectile(orchestrator: any, fsm: any, castDef: any, charEn
 		end
 
 		if victimEntity then
-			createDamageJob(
+			CombatHelpers.createDamageJob(
 				orchestrator,
 				fsm.CharacterEntityId,
 				victimEntity,
@@ -638,7 +524,7 @@ function CastFSM:RegisterStates()
 				return
 			end
 
-			local humanoid, rootPart = getHumanoidAndRoot(character)
+			local humanoid, rootPart = EntityHelpers.getHumanoidAndRoot(character)
 			if not humanoid or humanoid.Health <= 0 or not rootPart then
 				fsm:Fail("Character cannot cast")
 				return
@@ -742,8 +628,16 @@ function CastFSM:RegisterStates()
 				fsm.State = "ReleaseLock"
 				return
 			end
-			charEntity.Stamina = math.max(0, (tonumber(charEntity.Stamina) or 0) - castDef.StaminaCost)
-			charEntity.Mana = math.max(0, (tonumber(charEntity.Mana) or 0) - castDef.ManaCost)
+			if not ResourceHelpers.deductStamina(charEntity, castDef.StaminaCost) then
+				fsm.Context._releaseReason = "Not enough stamina"
+				fsm.State = "ReleaseLock"
+				return
+			end
+			if not ResourceHelpers.deductMana(charEntity, castDef.ManaCost) then
+				fsm.Context._releaseReason = "Not enough mana"
+				fsm.State = "ReleaseLock"
+				return
+			end
 			charEntity:UpdateEntity(fsm.Id)
 			fsm.State = "EmitCastAnimation"
 		end,
@@ -767,7 +661,7 @@ function CastFSM:RegisterStates()
 			charEntity:UpdateEntity(fsm.Id)
 
 			if typeof(castDef.Animation) == "string" and castDef.Animation ~= "" then
-				appendIntent(fsm:GetOrchestrator(), charEntity, "Animation", {
+				IntentHelpers.appendIntent(fsm:GetOrchestrator(), charEntity, "Animation", {
 					Name = castDef.Animation,
 					Speed = 1,
 					FadeTime = 0.1,
@@ -846,17 +740,17 @@ function CastFSM:RegisterStates()
 			end
 
 			local radius = tonumber(executeContext.CastDef.EffectRadius) or DEFAULT_MELEE_RADIUS
-			local victim = scanVictims(
+			local victimEntry = CombatHelpers.scanVictims(
 				executeContext.Orchestrator,
 				fsm.CharacterEntityId,
 				executeContext.RootPart.Position,
 				radius
 			)[1]
-			if victim then
-				createDamageJob(
+			if victimEntry then
+				CombatHelpers.createDamageJob(
 					executeContext.Orchestrator,
 					fsm.CharacterEntityId,
-					victim,
+					victimEntry.Entity,
 					executeContext.AttackName,
 					tonumber(executeContext.CastDef.Damage) or 0
 				)
@@ -873,13 +767,13 @@ function CastFSM:RegisterStates()
 			end
 
 			local radius = tonumber(executeContext.CastDef.EffectRadius) or DEFAULT_MELEE_RADIUS
-			for _, victim in ipairs(
-				scanVictims(executeContext.Orchestrator, fsm.CharacterEntityId, executeContext.RootPart.Position, radius)
+			for _, victimEntry in ipairs(
+				CombatHelpers.scanVictims(executeContext.Orchestrator, fsm.CharacterEntityId, executeContext.RootPart.Position, radius)
 			) do
-				createDamageJob(
+				CombatHelpers.createDamageJob(
 					executeContext.Orchestrator,
 					fsm.CharacterEntityId,
-					victim,
+					victimEntry.Entity,
 					executeContext.AttackName,
 					tonumber(executeContext.CastDef.Damage) or 0
 				)
@@ -986,7 +880,7 @@ function CastFSM:RegisterStates()
 			local targetEntity = resolveTargetEntity(executeContext.Orchestrator, executeContext.CharEntity)
 			local dashDirection = executeContext.RootPart.CFrame.LookVector
 			if targetEntity and targetEntity.Instance and targetEntity.Instance:IsA("Model") then
-				local _, targetRoot = getHumanoidAndRoot(targetEntity.Instance)
+				local _, targetRoot = EntityHelpers.getHumanoidAndRoot(targetEntity.Instance)
 				if targetRoot then
 					local offset = targetRoot.Position - executeContext.RootPart.Position
 					if offset.Magnitude > 0.01 then
@@ -1002,7 +896,7 @@ function CastFSM:RegisterStates()
 			bodyVelocity.Parent = executeContext.RootPart
 			Debris:AddItem(bodyVelocity, DEFAULT_DASH_DURATION)
 			if targetEntity then
-				createDamageJob(
+				CombatHelpers.createDamageJob(
 					executeContext.Orchestrator,
 					fsm.CharacterEntityId,
 					targetEntity,
@@ -1029,11 +923,11 @@ function CastFSM:RegisterStates()
 			local radius = tonumber(executeContext.CastDef.AoERadius)
 				or tonumber(executeContext.CastDef.EffectRadius)
 				or DEFAULT_MELEE_RADIUS
-			for _, victim in ipairs(scanVictims(executeContext.Orchestrator, fsm.CharacterEntityId, origin, radius)) do
-				createDamageJob(
+			for _, victimEntry in ipairs(CombatHelpers.scanVictims(executeContext.Orchestrator, fsm.CharacterEntityId, origin, radius)) do
+				CombatHelpers.createDamageJob(
 					executeContext.Orchestrator,
 					fsm.CharacterEntityId,
-					victim,
+					victimEntry.Entity,
 					executeContext.AttackName,
 					tonumber(executeContext.CastDef.Damage) or 0
 				)
@@ -1052,7 +946,7 @@ function CastFSM:RegisterStates()
 				return
 			end
 			if typeof(castDef.FinishAnimation) == "string" and castDef.FinishAnimation ~= "" then
-				appendIntent(fsm:GetOrchestrator(), charEntity, "Animation", {
+				IntentHelpers.appendIntent(fsm:GetOrchestrator(), charEntity, "Animation", {
 					Name = castDef.FinishAnimation,
 					Speed = 1,
 					FadeTime = 0.1,

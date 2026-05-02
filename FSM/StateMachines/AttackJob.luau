@@ -4,6 +4,11 @@
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
+assert(Helpers, "Helpers folder not found")
+local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
+local CombatHelpers = require(Helpers:WaitForChild("CombatHelpers"))
+local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
 
 local AttackJob = {
 	Name = "AttackJob",
@@ -32,31 +37,6 @@ local DEFAULT_CONSTRAINTS = {
 	MouseLocked = true,
 }
 
-local function getSharedModule(orchestrator: any, name: string)
-	local getModule = orchestrator and orchestrator.GetModule
-	if type(getModule) == "function" then
-		local module = getModule(name)
-		if module ~= nil then
-			return module
-		end
-	end
-
-	local sharedFolder = game:GetService("ReplicatedStorage"):FindFirstChild("shared")
-	if sharedFolder then
-		local mod = sharedFolder:FindFirstChild(name)
-		if mod then
-			return require(mod)
-		end
-	end
-
-	local replicatedMod = ReplicatedStorage:FindFirstChild(name, true)
-	if replicatedMod then
-		return require(replicatedMod)
-	end
-
-	error("Shared module not found: " .. name)
-end
-
 local function transitionToFailure(fsm: any, reason: string)
 	fsm.Context._failureReason = reason
 	if fsm.State == "ReleaseCombatLock" then
@@ -64,18 +44,6 @@ local function transitionToFailure(fsm: any, reason: string)
 	else
 		fsm.State = "RollbackConstraints"
 	end
-end
-
-local function getHumanoidAndRoot(character: Model): (Humanoid?, BasePart?)
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not root then
-		root = character.PrimaryPart
-	end
-	if root and not root:IsA("BasePart") then
-		root = nil
-	end
-	return humanoid, root :: BasePart?
 end
 
 local function chooseValue(value: any, defaultValue: any): any
@@ -90,58 +58,6 @@ local function chooseValue(value: any, defaultValue: any): any
 		return defaultValue
 	end
 	return value
-end
-
-local function buildIntentPayload(kind: string, rawIntent: { [string]: any }): { [string]: any }?
-	if kind == "Animation" then
-		local name = rawIntent.Name or rawIntent.AnimationName
-		if typeof(name) ~= "string" or name == "" then
-			return nil
-		end
-		return {
-			Name = name,
-			Speed = if typeof(rawIntent.Speed) == "number" then rawIntent.Speed else 1,
-			FadeTime = if typeof(rawIntent.FadeTime) == "number" then rawIntent.FadeTime else 0.1,
-		}
-	elseif kind == "Sound" then
-		local soundId = rawIntent.SoundId or rawIntent.Id
-		if soundId == nil then
-			return nil
-		end
-		return {
-			SoundId = tostring(soundId),
-			Volume = if typeof(rawIntent.Volume) == "number" then rawIntent.Volume else 0.5,
-			Pitch = if typeof(rawIntent.Pitch) == "number" then rawIntent.Pitch else 1,
-		}
-	elseif kind == "Effect" then
-		local name = rawIntent.Name or rawIntent.EffectName
-		if typeof(name) ~= "string" or name == "" then
-			return nil
-		end
-		local payload = table.clone(rawIntent)
-		payload.Name = name
-		payload.EffectName = nil
-		return payload
-	end
-	return nil
-end
-
-local function appendIntent(
-	orchestrator: any,
-	characterEntity: any,
-	kind: string,
-	payload: { [string]: any },
-	sourceCharId: string,
-	targetCharId: string?,
-	lockId: string?
-)
-	local IntentSchema = getSharedModule(orchestrator, "IntentSchema")
-	IntentSchema.AppendIntent(characterEntity, {
-		Kind = kind,
-		Payload = payload,
-		SourceCharId = sourceCharId,
-		TargetCharId = targetCharId or sourceCharId,
-	}, lockId)
 end
 
 local function appendOptionalIntent(
@@ -160,9 +76,9 @@ local function appendOptionalIntent(
 		return
 	end
 
-	local payload = buildIntentPayload(kind, intentDef)
+	local payload = IntentHelpers.buildIntentPayload(kind, intentDef)
 	if payload then
-		appendIntent(orchestrator, characterEntity, kind, payload, sourceCharId, sourceCharId, lockId)
+		IntentHelpers.appendIntent(orchestrator, characterEntity, kind, payload, sourceCharId, sourceCharId, lockId)
 	end
 end
 
@@ -237,48 +153,6 @@ local function logTimelineStep(fsm: any, message: string)
 	})
 end
 
-local function scanVictims(
-	orchestrator: any,
-	attackerCharEntityId: string,
-	attackerRoot: BasePart,
-	radius: number,
-	fsm: any?
-): { any }
-	local victims = {}
-	local entities = if type(orchestrator.GetEntities) == "function" then orchestrator.GetEntities() else {}
-	for entityId, entity in pairs(entities) do
-		if entityId == attackerCharEntityId then
-			continue
-		end
-
-		local character = entity and entity.Instance
-		if not character or not character:IsA("Model") then
-			continue
-		end
-
-		local humanoid, root = getHumanoidAndRoot(character)
-		if not humanoid or humanoid.Health <= 0 or not root then
-			continue
-		end
-
-		local offset = root.Position - attackerRoot.Position
-		local distance = offset.Magnitude
-		if distance <= 0 or distance >= radius then
-			continue
-		end
-
-		local direction = offset.Unit
-		if attackerRoot.CFrame.LookVector:Dot(direction) > 0 then
-			table.insert(victims, entity)
-		end
-	end
-
-	if fsm then
-		logTimelineStep(fsm, string.format("Damage scan found %d victims in radius %.2f", #victims, radius))
-	end
-	return victims
-end
-
 local function resolveTimelineLength(combo: any): number
 	local explicit = combo.t
 	if typeof(explicit) == "number" and explicit > 0 then
@@ -309,25 +183,17 @@ local function applyDamageToVictim(orchestrator: any, fsm: any, victimEntity: an
 	end
 
 	logTimelineStep(fsm, string.format("Creating DamageJob for victim %s at frame %d", victimId, frameNumber))
-	local damageJob = orchestrator.CreateStateMachine({
-		StateMachineClass = "DamageJob",
-		StateMachineId = string.format(
-			"%s/Damage/%d/%s/%s",
-			fsm.Id,
-			frameNumber,
-			victimId,
-			HttpService:GenerateGUID(false)
-		),
-		Context = {
-			AttackerCharEntityId = fsm.CharacterEntityId,
-			VictimUserId = victimUserId,
-			AttackName = fsm.Context._attackName,
-		},
-	})
+	local damageJob = CombatHelpers.createDamageJob(
+		orchestrator,
+		fsm.CharacterEntityId,
+		victimEntity,
+		fsm.Context._attackName,
+		nil,
+		string.format("%s_%d_%s", fsm.Id, frameNumber, HttpService:GenerateGUID(false))
+	)
 	if not damageJob then
 		error("Failed to create DamageJob")
 	end
-	damageJob:Start({ State = "Validate" })
 	return true
 end
 
@@ -339,7 +205,7 @@ local function playHitSound(characterEntity: any, entry: { any }, fsm: any)
 	end
 
 	logTimelineStep(fsm, "Emitting hit sound " .. tostring(hitSoundId))
-	appendIntent(fsm:GetOrchestrator(), characterEntity, "Sound", {
+	IntentHelpers.appendIntent(fsm:GetOrchestrator(), characterEntity, "Sound", {
 		SoundId = tostring(hitSoundId),
 		Volume = tonumber(chooseValue(entry[4], 0.5)) or 0.5,
 		Pitch = tonumber(chooseValue(entry[5], 1)) or 1,
@@ -358,7 +224,10 @@ local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: numb
 	local debounceHit = entry[6] == true
 	local debounceDelay = tonumber(chooseValue(entry[7], 0.15)) or 0.15
 	local radius = tonumber(chooseValue(entry[8], DEFAULT_RADIUS)) or DEFAULT_RADIUS
-	local victims = scanVictims(orchestrator, fsm.CharacterEntityId, attackerRoot, radius, fsm)
+	local victims = CombatHelpers.scanForwardVictims(orchestrator, fsm.CharacterEntityId, attackerRoot, radius)
+	if fsm then
+		logTimelineStep(fsm, string.format("Damage scan found %d victims in radius %.2f", #victims, radius))
+	end
 	local hitOccurred = false
 
 	local hitDebounces = fsm.Context._hitDebounces
@@ -415,7 +284,7 @@ local function processTimelineEntry(fsm: any, entry: { any })
 	elseif tag == "Sound" then
 		local soundId = chooseValue(entry[3], nil)
 		if soundId ~= nil then
-			appendIntent(orchestrator, characterEntity, "Sound", {
+			IntentHelpers.appendIntent(orchestrator, characterEntity, "Sound", {
 				SoundId = tostring(soundId),
 				Volume = tonumber(chooseValue(entry[4], 0.5)) or 0.5,
 				Pitch = tonumber(chooseValue(entry[5], 1)) or 1,
@@ -424,12 +293,12 @@ local function processTimelineEntry(fsm: any, entry: { any })
 	elseif tag == "Effect" then
 		local effectName = chooseValue(entry[3], nil)
 		if typeof(effectName) == "string" and effectName ~= "" then
-			appendIntent(orchestrator, characterEntity, "Effect", {
+			IntentHelpers.appendIntent(orchestrator, characterEntity, "Effect", {
 				Name = effectName,
 			}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 		end
 	else
-		appendIntent(orchestrator, characterEntity, "Animation", {
+		IntentHelpers.appendIntent(orchestrator, characterEntity, "Animation", {
 			Name = tag,
 			Speed = tonumber(chooseValue(entry[3], 1)) or 1,
 			FadeTime = 0.1,
@@ -463,7 +332,7 @@ function AttackJob:RegisterStates()
 				return
 			end
 
-			local humanoid, root = getHumanoidAndRoot(character)
+			local humanoid, root = EntityHelpers.getHumanoidAndRoot(character)
 			if not humanoid or humanoid.Health <= 0 or not root then
 				transitionToFailure(fsm, "Character cannot attack without a living humanoid root")
 				return
