@@ -12,7 +12,15 @@ local ReplicateIntentJob = {
 	initialState = "Validate",
 }
 
-local function getSharedModule(name: string)
+local function getSharedModule(orchestrator: any, name: string)
+	local getModule = orchestrator and orchestrator.GetModule
+	if type(getModule) == "function" then
+		local module = getModule(name)
+		if module ~= nil then
+			return module
+		end
+	end
+
 	local sharedFolder = game:GetService("ReplicatedStorage"):FindFirstChild("shared")
 	if sharedFolder then
 		local mod = sharedFolder:FindFirstChild(name)
@@ -121,7 +129,7 @@ end
 function ReplicateIntentJob:RegisterStates()
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
-			local orchestrator = shared.fsm
+			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
 				fsm:Fail("Orchestrator unavailable")
 				return
@@ -137,13 +145,13 @@ function ReplicateIntentJob:RegisterStates()
 				return
 			end
 
-			local characterEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
+			local characterEntity = fsm:GetEntity(fsm.CharacterEntityId)
 			if not characterEntity then
 				fsm:Fail("Character entity not found")
 				return
 			end
 
-			local AllowLists = getSharedModule("AllowLists")
+			local AllowLists = getSharedModule(fsm:GetOrchestrator(), "AllowLists")
 			if not AllowLists.IsValidClientIntent(fsm.Kind) then
 				fsm:Fail("Client intent kind is not allowed")
 				return
@@ -160,7 +168,7 @@ function ReplicateIntentJob:RegisterStates()
 
 	self:AddState("NormalizePayload", {
 		OnEnter = function(_, fsm)
-			local intentSchema = getSharedModule("IntentSchema")
+			local intentSchema = getSharedModule(fsm:GetOrchestrator(), "IntentSchema")
 			local payload, err = sanitizePayload(intentSchema, fsm.Payload or {}, {})
 			if err then
 				fsm:Fail(err)
@@ -190,7 +198,7 @@ function ReplicateIntentJob:RegisterStates()
 
 	self:AddState("CheckAllowList", {
 		OnEnter = function(_, fsm)
-			local AllowLists = getSharedModule("AllowLists")
+			local AllowLists = getSharedModule(fsm:GetOrchestrator(), "AllowLists")
 			local payload = fsm.Context._normalizedPayload
 			if typeof(payload) ~= "table" then
 				fsm:Fail("Normalized payload missing")
@@ -209,7 +217,7 @@ function ReplicateIntentJob:RegisterStates()
 
 	self:AddState("ApplyToEntity", {
 		OnEnter = function(_, fsm)
-			local IntentSchema = getSharedModule("IntentSchema")
+			local IntentSchema = getSharedModule(fsm:GetOrchestrator(), "IntentSchema")
 			local characterEntity = fsm.Context._characterEntity
 			local payload = fsm.Context._normalizedPayload
 			if not characterEntity or typeof(payload) ~= "table" then

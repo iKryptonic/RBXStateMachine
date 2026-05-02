@@ -20,7 +20,15 @@ local DEFAULT_CONSTRAINTS = {
 	MouseLocked = true,
 }
 
-local function getSharedModule(name: string)
+local function getSharedModule(orchestrator: any, name: string)
+	local getModule = orchestrator and orchestrator.GetModule
+	if type(getModule) == "function" then
+		local module = getModule(name)
+		if module ~= nil then
+			return module
+		end
+	end
+
 	local sharedFolder = game:GetService("ReplicatedStorage"):FindFirstChild("shared")
 	if sharedFolder then
 		local mod = sharedFolder:FindFirstChild(name)
@@ -106,8 +114,8 @@ local function buildIntentPayload(kind: string, rawIntent: { [string]: any }): {
 	return nil
 end
 
-local function appendIntent(characterEntity: any, kind: string, payload: { [string]: any }, sourceCharId: string, targetCharId: string?, lockId: string?)
-	local IntentSchema = getSharedModule("IntentSchema")
+local function appendIntent(orchestrator: any, characterEntity: any, kind: string, payload: { [string]: any }, sourceCharId: string, targetCharId: string?, lockId: string?)
+	local IntentSchema = getSharedModule(orchestrator, "IntentSchema")
 	IntentSchema.AppendIntent(characterEntity, {
 		Kind = kind,
 		Payload = payload,
@@ -116,7 +124,7 @@ local function appendIntent(characterEntity: any, kind: string, payload: { [stri
 	}, lockId)
 end
 
-local function appendOptionalIntent(characterEntity: any, intentDef: any, sourceCharId: string, lockId: string?)
+local function appendOptionalIntent(orchestrator: any, characterEntity: any, intentDef: any, sourceCharId: string, lockId: string?)
 	if typeof(intentDef) ~= "table" then
 		return
 	end
@@ -128,7 +136,7 @@ local function appendOptionalIntent(characterEntity: any, intentDef: any, source
 
 	local payload = buildIntentPayload(kind, intentDef)
 	if payload then
-		appendIntent(characterEntity, kind, payload, sourceCharId, sourceCharId, lockId)
+		appendIntent(orchestrator, characterEntity, kind, payload, sourceCharId, sourceCharId, lockId)
 	end
 end
 
@@ -240,7 +248,7 @@ local function resolveTimelineLength(combo: any): number
 end
 
 local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: number)
-	local orchestrator = shared.fsm
+	local orchestrator = fsm:GetOrchestrator()
 	local characterEntity = fsm.Context._characterEntity
 	local attackerRoot = fsm.Context._root
 	if not orchestrator or not characterEntity or not attackerRoot then
@@ -302,7 +310,7 @@ local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: numb
 
 	local hitSoundId = chooseValue(entry[3], nil)
 	if hitOccurred and hitSoundId ~= nil then
-		appendIntent(characterEntity, "Sound", {
+		appendIntent(orchestrator, characterEntity, "Sound", {
 			SoundId = tostring(hitSoundId),
 			Volume = tonumber(chooseValue(entry[4], 0.5)) or 0.5,
 			Pitch = tonumber(chooseValue(entry[5], 1)) or 1,
@@ -316,6 +324,8 @@ local function processTimelineEntry(fsm: any, entry: { any })
 		error("Attack timeline missing character entity")
 	end
 
+	local orchestrator = fsm:GetOrchestrator()
+
 	local tag = entry[1]
 	if typeof(tag) ~= "string" then
 		return
@@ -326,7 +336,7 @@ local function processTimelineEntry(fsm: any, entry: { any })
 	elseif tag == "Sound" then
 		local soundId = chooseValue(entry[3], nil)
 		if soundId ~= nil then
-			appendIntent(characterEntity, "Sound", {
+			appendIntent(orchestrator, characterEntity, "Sound", {
 				SoundId = tostring(soundId),
 				Volume = tonumber(chooseValue(entry[4], 0.5)) or 0.5,
 				Pitch = tonumber(chooseValue(entry[5], 1)) or 1,
@@ -335,12 +345,12 @@ local function processTimelineEntry(fsm: any, entry: { any })
 	elseif tag == "Effect" then
 		local effectName = chooseValue(entry[3], nil)
 		if typeof(effectName) == "string" and effectName ~= "" then
-			appendIntent(characterEntity, "Effect", {
+			appendIntent(orchestrator, characterEntity, "Effect", {
 				Name = effectName,
 			}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 		end
 	else
-		appendIntent(characterEntity, "Animation", {
+		appendIntent(orchestrator, characterEntity, "Animation", {
 			Name = tag,
 			Speed = tonumber(chooseValue(entry[3], 1)) or 1,
 			FadeTime = 0.1,
@@ -351,7 +361,7 @@ end
 function AttackJob:RegisterStates()
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
-			local orchestrator = shared.fsm
+			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
 				transitionToFailure(fsm, "Orchestrator unavailable")
 				return
@@ -362,7 +372,7 @@ function AttackJob:RegisterStates()
 				return
 			end
 
-			local characterEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
+			local characterEntity = fsm:GetEntity(fsm.CharacterEntityId)
 			if not characterEntity then
 				transitionToFailure(fsm, "Character entity not found")
 				return
@@ -391,7 +401,7 @@ function AttackJob:RegisterStates()
 				return
 			end
 
-			local playerEntity = orchestrator.GetEntity(playerEntityId)
+			local playerEntity = fsm:GetEntity(playerEntityId)
 			if not playerEntity then
 				transitionToFailure(fsm, "Player entity not found")
 				return
@@ -534,7 +544,7 @@ function AttackJob:RegisterStates()
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity then
 				local attackDef = fsm.Context._selectedCombo
-				appendOptionalIntent(characterEntity, if typeof(attackDef) == "table" then attackDef.WindupIntent else nil, fsm.CharacterEntityId, fsm.Id)
+				appendOptionalIntent(fsm:GetOrchestrator(), characterEntity, if typeof(attackDef) == "table" then attackDef.WindupIntent else nil, fsm.CharacterEntityId, fsm.Id)
 			end
 			fsm.State = "PlayTimeline"
 		end,
@@ -597,7 +607,7 @@ function AttackJob:RegisterStates()
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity then
 				local attackDef = fsm.Context._selectedCombo
-				appendOptionalIntent(characterEntity, if typeof(attackDef) == "table" then attackDef.RecoveryIntent else nil, fsm.CharacterEntityId, fsm.Id)
+				appendOptionalIntent(fsm:GetOrchestrator(), characterEntity, if typeof(attackDef) == "table" then attackDef.RecoveryIntent else nil, fsm.CharacterEntityId, fsm.Id)
 			end
 			fsm.State = "RollbackConstraints"
 		end,

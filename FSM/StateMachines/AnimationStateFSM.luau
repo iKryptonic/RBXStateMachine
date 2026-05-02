@@ -11,29 +11,8 @@ local AnimationStateFSM = {
 	initialState = "Idle",
 }
 
-local sharedAny = shared :: any
-
--- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
-local function getOrchestrator()
-	local lower = sharedAny.fsm
-	if lower ~= nil then
-		return lower.Orchestrator or lower
-	end
-
-	local upper = sharedAny.FSM
-	if upper ~= nil and upper.Orchestrator then
-		return upper.Orchestrator
-	end
-
-	return nil
-end
-
 local function getCharacterEntity(fsm: any): any?
-	local orchestrator = getOrchestrator()
-	if not orchestrator then
-		return nil
-	end
-	return orchestrator.GetEntity(fsm.CharacterEntityId)
+	return fsm:GetEntity(fsm.CharacterEntityId)
 end
 
 local function writeObservedState(fsm: any, state: string)

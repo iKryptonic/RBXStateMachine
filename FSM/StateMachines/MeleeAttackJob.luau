@@ -50,19 +50,21 @@ local MELEE_SEQUENCES = {
 	},
 }
 
-local function getSharedModule(name: string)
+local function getSharedModule(orchestrator: any, name: string)
+	local getModule = orchestrator and orchestrator.GetModule
+	if type(getModule) == "function" then
+		local module = getModule(name)
+		if module ~= nil then
+			return module
+		end
+	end
+
 	local RS = game:GetService("ReplicatedStorage")
 	local mod = RS:FindFirstChild(name, true)
 	if mod and mod:IsA("ModuleScript") then
 		return require(mod)
 	end
 	return nil
-end
-
-local function getOrchestrator()
-	local lower = (shared :: any).fsm
-	if lower ~= nil then return lower.Orchestrator or lower end
-	error("Orchestrator not found")
 end
 
 local function queueRelease(fsm: any, nextState: string, reason: string?)
@@ -90,8 +92,8 @@ local function scanMeleeRange(orchestrator: any, attackerCharEntityId: string, a
 	return victims
 end
 
-local function appendAnimationIntent(charEntity: any, fsm: any, phase: any)
-	local IntentSchema = getSharedModule("IntentSchema")
+local function appendAnimationIntent(orchestrator: any, charEntity: any, fsm: any, phase: any)
+	local IntentSchema = getSharedModule(orchestrator, "IntentSchema")
 	if not IntentSchema then
 		return
 	end
@@ -120,7 +122,7 @@ local function emitDueAnimationPhases(fsm: any, elapsed: number)
 
 		local phase = phases[nextPhaseIndex]
 		if typeof(phase) == "table" then
-			appendAnimationIntent(charEntity, fsm, phase)
+			appendAnimationIntent(fsm:GetOrchestrator(), charEntity, fsm, phase)
 		end
 		nextPhaseIndex += 1
 	end
@@ -142,7 +144,7 @@ function MeleeAttackJob:RegisterStates()
 				return
 			end
 
-			local charEntity = orchestrator.GetEntity(charEntityId)
+			local charEntity = fsm:GetEntity(charEntityId)
 			if not charEntity then
 				fsm:Fail("CharacterEntity not found")
 				return
@@ -272,7 +274,7 @@ function MeleeAttackJob:RegisterStates()
 				queueRelease(fsm, "Failed", "Initial melee phase missing")
 				return
 			end
-			appendAnimationIntent(charEntity, fsm, firstPhase)
+			appendAnimationIntent(fsm:GetOrchestrator(), charEntity, fsm, firstPhase)
 			fsm.Context._nextPhaseIndex = 2
 			fsm.State = "ScheduleDamageWindow"
 		end,
@@ -298,7 +300,7 @@ function MeleeAttackJob:RegisterStates()
 
 	self:AddState("ScanVictims", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local attackerRoot = fsm.Context._root
 			local victims = {}
 			if attackerRoot and attackerRoot.Parent then
@@ -318,7 +320,7 @@ function MeleeAttackJob:RegisterStates()
 
 	self:AddState("ProcessVictim", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local victims = fsm.Context._victims
 			local victimIndex = fsm.Context._victimIndex or 1
 			local victim = typeof(victims) == "table" and victims[victimIndex] or nil

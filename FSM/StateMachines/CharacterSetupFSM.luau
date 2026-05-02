@@ -11,23 +11,6 @@ local CharacterSetupFSM = {
 	initialState = "Validating",
 }
 
-local sharedAny = shared :: any
-
--- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
-local function getOrchestrator()
-	local lower = sharedAny.fsm
-	if lower ~= nil then
-		return lower.Orchestrator or lower
-	end
-
-	local upper = sharedAny.FSM
-	if upper ~= nil and upper.Orchestrator then
-		return upper.Orchestrator
-	end
-
-	return nil
-end
-
 local function destroyManaged(value: any)
 	if value == nil then
 		return
@@ -177,7 +160,7 @@ function CharacterSetupFSM:RegisterStates()
 			fsm:ScheduleTransition(10, "Failed", { "Timed out waiting for CharacterEntity/PlayerEntity" })
 		end,
 		OnHeartbeat = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
 				return
 			end

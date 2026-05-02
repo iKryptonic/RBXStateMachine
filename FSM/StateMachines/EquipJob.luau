@@ -14,22 +14,15 @@ local EquipJob = {
 local cachedEquipHelpers = nil :: any
 local cachedIntentSchema = nil :: any
 
--- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
-local function getOrchestrator()
-	local lower = (shared :: any).fsm
-	if lower ~= nil then
-		return lower.Orchestrator or lower
+local function requireSharedModule(orchestrator: any, moduleName: string)
+	local getModule = orchestrator and orchestrator.GetModule
+	if type(getModule) == "function" then
+		local module = getModule(moduleName)
+		if module ~= nil then
+			return module
+		end
 	end
 
-	local upper = (shared :: any).FSM
-	if upper ~= nil and upper.Orchestrator then
-		return upper.Orchestrator
-	end
-
-	error("Orchestrator is not registered")
-end
-
-local function requireSharedModule(moduleName: string)
 	local replicatedStorage = game:GetService("ReplicatedStorage")
 
 	local sharedFolder = replicatedStorage:FindFirstChild("shared")
@@ -48,16 +41,16 @@ local function requireSharedModule(moduleName: string)
 	error("Shared module not found: " .. moduleName)
 end
 
-local function getEquipHelpers()
+local function getEquipHelpers(orchestrator: any)
 	if not cachedEquipHelpers then
-		cachedEquipHelpers = requireSharedModule("EquipHelpers")
+		cachedEquipHelpers = requireSharedModule(orchestrator, "EquipHelpers")
 	end
 	return cachedEquipHelpers
 end
 
-local function getIntentSchema()
+local function getIntentSchema(orchestrator: any)
 	if not cachedIntentSchema then
-		cachedIntentSchema = requireSharedModule("IntentSchema")
+		cachedIntentSchema = requireSharedModule(orchestrator, "IntentSchema")
 	end
 	return cachedIntentSchema
 end
@@ -75,7 +68,7 @@ end
 function EquipJob:RegisterStates()
 	self:AddState("ValidateRequest", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			local playerEntity = orchestrator.GetEntity(fsm.PlayerEntityId)
 			if not charEntity then
@@ -113,7 +106,7 @@ function EquipJob:RegisterStates()
 
 	self:AddState("AcquireEquipLock", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
 				fsm:Fail("CharacterEntity no longer exists")
@@ -136,7 +129,8 @@ function EquipJob:RegisterStates()
 
 	self:AddState("ResolveItemMeta", {
 		OnEnter = function(_, fsm)
-			local equipHelpers = getEquipHelpers()
+			local orchestrator = fsm:GetOrchestrator()
+			local equipHelpers = getEquipHelpers(orchestrator)
 			local item, itemData = equipHelpers.CloneItem(fsm.ItemId)
 			if not item then
 				queueRollback(fsm, "Item not found in assets: " .. tostring(fsm.ItemId))
@@ -164,8 +158,8 @@ function EquipJob:RegisterStates()
 
 	self:AddState("PreUnEquip", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
-			local equipHelpers = getEquipHelpers()
+			local orchestrator = fsm:GetOrchestrator()
+			local equipHelpers = getEquipHelpers(orchestrator)
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
 				queueRollback(fsm, "CharacterEntity no longer exists")
@@ -205,8 +199,8 @@ function EquipJob:RegisterStates()
 
 	self:AddState("CloneAsset", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
-			local equipHelpers = getEquipHelpers()
+			local orchestrator = fsm:GetOrchestrator()
+			local equipHelpers = getEquipHelpers(orchestrator)
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
 				queueRollback(fsm, "CharacterEntity no longer exists")
@@ -226,8 +220,8 @@ function EquipJob:RegisterStates()
 
 	self:AddState("CreateWeld", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
-			local equipHelpers = getEquipHelpers()
+			local orchestrator = fsm:GetOrchestrator()
+			local equipHelpers = getEquipHelpers(orchestrator)
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
 				queueRollback(fsm, "CharacterEntity no longer exists")
@@ -255,7 +249,8 @@ function EquipJob:RegisterStates()
 
 	self:AddState("MountItem", {
 		OnEnter = function(_, fsm)
-			local equipHelpers = getEquipHelpers()
+			local orchestrator = fsm:GetOrchestrator()
+			local equipHelpers = getEquipHelpers(orchestrator)
 			equipHelpers.MountItem(fsm.Context._clonedItem, fsm.Context._handPart)
 			fsm.State = "CommitState"
 		end,
@@ -263,7 +258,7 @@ function EquipJob:RegisterStates()
 
 	self:AddState("CommitState", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			local playerEntity = orchestrator.GetEntity(fsm.PlayerEntityId)
 			if not charEntity then
@@ -291,8 +286,8 @@ function EquipJob:RegisterStates()
 
 	self:AddState("EmitIntent", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
-			local intentSchema = getIntentSchema()
+			local orchestrator = fsm:GetOrchestrator()
+			local intentSchema = getIntentSchema(orchestrator)
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			if not charEntity then
 				queueRollback(fsm, "CharacterEntity no longer exists")
@@ -313,7 +308,7 @@ function EquipJob:RegisterStates()
 
 	self:AddState("ReleaseEquipLock", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
 			if charEntity then
 				local equipLock = if typeof(charEntity.EquipLock) == "table" then table.clone(charEntity.EquipLock) else {}

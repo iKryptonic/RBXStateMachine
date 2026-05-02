@@ -20,14 +20,12 @@ local DEFAULT_PROJECTILE_DAMAGE = 20
 local DEFAULT_CHARGE_TIME = 0.3
 local DEFAULT_GRAVITY = Vector3.new(0, -30, 0)
 
--- TODO: Prefer fsm:GetOrchestrator() / fsm:GetEntity() now that Orchestrator injects itself into Context.
-local function getOrchestrator()
-	local lower = (shared :: any).fsm
-	if lower ~= nil then return lower.Orchestrator or lower end
-	error("Orchestrator not found")
-end
-
-local function getSharedModule(name: string)
+local function getSharedModule(orchestrator: any, name: string)
+	local getModule = orchestrator and orchestrator.GetModule
+	if type(getModule) == "function" then
+		local module = getModule(name)
+		if module ~= nil then return module end
+	end
 	local RS = game:GetService("ReplicatedStorage")
 	local mod = RS:FindFirstChild(name, true)
 	if mod and mod:IsA("ModuleScript") then return require(mod) end
@@ -97,14 +95,14 @@ end
 function ProjectileAttackJob:RegisterStates()
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local charEntityId = fsm.CharacterEntityId
 			if typeof(charEntityId) ~= "string" or charEntityId == "" then
 				fsm:Fail("CharacterEntityId required")
 				return
 			end
 
-			local charEntity = orchestrator.GetEntity(charEntityId)
+			local charEntity = fsm:GetEntity(charEntityId)
 			if not charEntity then
 				fsm:Fail("CharacterEntity not found")
 				return
@@ -200,7 +198,7 @@ function ProjectileAttackJob:RegisterStates()
 
 	self:AddState("EmitChargeAnimation", {
 		OnEnter = function(_, fsm)
-			local IntentSchema = getSharedModule("IntentSchema")
+			local IntentSchema = getSharedModule(fsm:GetOrchestrator(), "IntentSchema")
 			if IntentSchema then
 				IntentSchema.AppendIntent(fsm.Context._charEntity, {
 					Kind = "Animation",
@@ -236,7 +234,7 @@ function ProjectileAttackJob:RegisterStates()
 
 	self:AddState("EmitFireAnimation", {
 		OnEnter = function(_, fsm)
-			local IntentSchema = getSharedModule("IntentSchema")
+			local IntentSchema = getSharedModule(fsm:GetOrchestrator(), "IntentSchema")
 			if IntentSchema then
 				IntentSchema.AppendIntent(fsm.Context._charEntity, {
 					Kind = "Animation",
@@ -314,7 +312,7 @@ function ProjectileAttackJob:RegisterStates()
 					return
 				end
 
-				local orchestrator = getOrchestrator()
+				local orchestrator = fsm:GetOrchestrator()
 				fsm.Context._impactResolved = true
 				fsm.Context._hitData = {
 					Hit = hit,
@@ -336,7 +334,7 @@ function ProjectileAttackJob:RegisterStates()
 
 	self:AddState("ProcessHit", {
 		OnEnter = function(_, fsm)
-			local orchestrator = getOrchestrator()
+			local orchestrator = fsm:GetOrchestrator()
 			local hitData = fsm.Context._hitData
 			local victimEntity = hitData and hitData.VictimEntity
 			if victimEntity and typeof(victimEntity.UserId) == "number" then
