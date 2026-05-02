@@ -6,8 +6,8 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CastFSM = {
 	Name = "CastFSM",
 	className = "CastFSM",
-	validStates = { "Idle", "Validate", "Casting", "Execute", "Cooldown", "Failed" },
-	terminalStates = { "Idle", "Failed" },
+	validStates = { "Idle", "ValidateAbility", "ValidateResources", "AcquireLock", "DeductResources", "EmitCastAnimation", "WaitCastDuration", "ValidateNotInterrupted", "ExecuteEffect", "EmitFinishAnimation", "SetCooldown", "ReleaseLock", "Completed", "Failed" },
+	terminalStates = { "Completed", "Failed" },
 	initialState = "Idle",
 }
 
@@ -503,14 +503,6 @@ local function executeCastEffect(fsm: any, castDef: any, charEntity: any, player
 	local effectType = castDef.EffectType
 	local attackName = castDef.Id or castDef.Name or "Cast"
 
-	if typeof(castDef.FinishAnimation) == "string" and castDef.FinishAnimation ~= "" then
-		appendIntent(charEntity, "Animation", {
-			Name = castDef.FinishAnimation,
-			Speed = 1,
-			FadeTime = 0.1,
-		}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
-	end
-
 	if effectType == "MeleeSingle" then
 		local radius = tonumber(castDef.EffectRadius) or DEFAULT_MELEE_RADIUS
 		local victims = scanVictims(orchestrator, fsm.CharacterEntityId, rootPart.Position, radius)
@@ -569,9 +561,9 @@ local function executeCastEffect(fsm: any, castDef: any, charEntity: any, player
 end
 
 function CastFSM:RegisterStates()
-	self:AddState("Idle", function() end, { "Validate" })
+	self:AddState("Idle", function() end, { "ValidateAbility" })
 
-	self:AddState("Validate", {
+	self:AddState("ValidateAbility", {
 		OnEnter = function(_, fsm)
 			local orchestrator = getOrchestrator()
 			local charEntityId = fsm.CharacterEntityId
@@ -639,15 +631,6 @@ function CastFSM:RegisterStates()
 				end
 			end
 
-			if (tonumber(charEntity.Stamina) or 0) < castDef.StaminaCost then
-				fsm:Fail("Not enough stamina")
-				return
-			end
-			if (tonumber(charEntity.Mana) or 0) < castDef.ManaCost then
-				fsm:Fail("Not enough mana")
-				return
-			end
-
 			local cooldowns = if typeof(charEntity.AbilityCooldowns) == "table" then charEntity.AbilityCooldowns else {}
 			local cooldownEnd = tonumber(cooldowns[castDef.Id]) or 0
 			if castDef.SourceType == "Ability" and cooldownEnd > os.clock() then
@@ -656,49 +639,86 @@ function CastFSM:RegisterStates()
 			end
 
 			if castDef.SourceType == "Consumable" then
-				if not playerEntity or not (containerHasItem(playerEntity.Inventory, castDef.Id) or containerHasItem(playerEntity.BagContents, castDef.Id)) then
+				if not (containerHasItem(playerEntity.Inventory, castDef.Id) or containerHasItem(playerEntity.BagContents, castDef.Id)) then
 					fsm:Fail("Consumable not found")
 					return
 				end
 			end
 
-			if not charEntity:AcquireLock(fsm.Id) then
-				fsm:Fail("Character is already performing another action")
-				return
-			end
-
-			fsm.Context._lockHeld = true
 			fsm.Context._charEntity = charEntity
 			fsm.Context._playerEntity = playerEntity
 			fsm.Context._character = character
 			fsm.Context._humanoid = humanoid
 			fsm.Context._rootPart = rootPart
 			fsm.Context._slotIndex = tonumber(fsm.SlotIndex)
-
-			charEntity.ActiveCastId = castDef.Id
-			charEntity:UpdateEntity(fsm.Id)
-
-			if castDef.CastTime > 0 then
-				fsm.State = "Casting"
-			else
-				fsm.State = "Execute"
-			end
+			fsm.State = "ValidateResources"
 		end,
-	}, { "Casting", "Execute", "Failed" })
+	}, { "ValidateResources", "Failed" })
 
-	self:AddState("Casting", {
+	self:AddState("ValidateResources", {
 		OnEnter = function(_, fsm)
 			local castDef = fsm.Context._castDef
 			local charEntity = fsm.Context._charEntity
 			if not castDef or not charEntity then
-				fsm:Fail("Casting context missing")
+				fsm:Fail("Cast context missing")
+				return
+			end
+			if (tonumber(charEntity.Stamina) or 0) < castDef.StaminaCost then
+				fsm:Fail("Not enough stamina")
+				return
+			end
+			if (tonumber(charEntity.Mana) or 0) < castDef.ManaCost then
+				fsm:Fail("Not enough mana")
+				return
+			end
+			fsm.State = "AcquireLock"
+		end,
+	}, { "AcquireLock", "Failed" })
+
+	self:AddState("AcquireLock", {
+		OnEnter = function(_, fsm)
+			local charEntity = fsm.Context._charEntity
+			if not charEntity or not charEntity:AcquireLock(fsm.Id) then
+				fsm:Fail("Character is already performing another action")
+				return
+			end
+			fsm.Context._lockHeld = true
+			fsm.State = "DeductResources"
+		end,
+	}, { "DeductResources", "Failed" })
+
+	self:AddState("DeductResources", {
+		OnEnter = function(_, fsm)
+			local castDef = fsm.Context._castDef
+			local charEntity = fsm.Context._charEntity
+			if not castDef or not charEntity then
+				fsm.Context._releaseReason = "Cast context missing"
+				fsm.State = "ReleaseLock"
+				return
+			end
+			charEntity.Stamina = math.max(0, (tonumber(charEntity.Stamina) or 0) - castDef.StaminaCost)
+			charEntity.Mana = math.max(0, (tonumber(charEntity.Mana) or 0) - castDef.ManaCost)
+			charEntity:UpdateEntity(fsm.Id)
+			fsm.State = "EmitCastAnimation"
+		end,
+	}, { "EmitCastAnimation", "ReleaseLock" })
+
+	self:AddState("EmitCastAnimation", {
+		OnEnter = function(_, fsm)
+			local castDef = fsm.Context._castDef
+			local charEntity = fsm.Context._charEntity
+			if not castDef or not charEntity then
+				fsm.Context._releaseReason = "Casting context missing"
+				fsm.State = "ReleaseLock"
 				return
 			end
 
-			charEntity.CanMove = false
+			charEntity.ActiveCastId = castDef.Id
+			if castDef.CastTime > 0 then
+				charEntity.CanMove = false
+				fsm.Context._movementLocked = true
+			end
 			charEntity:UpdateEntity(fsm.Id)
-			fsm.Context._movementLocked = true
-			fsm.Context._castEndsAt = os.clock() + castDef.CastTime
 
 			if typeof(castDef.Animation) == "string" and castDef.Animation ~= "" then
 				appendIntent(charEntity, "Animation", {
@@ -707,28 +727,47 @@ function CastFSM:RegisterStates()
 					FadeTime = 0.1,
 				}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 			end
+			fsm.State = "WaitCastDuration"
 		end,
-		OnHeartbeat = function(_, fsm, _dt)
+	}, { "WaitCastDuration", "ReleaseLock" })
+
+	self:AddState("WaitCastDuration", {
+		OnEnter = function(_, fsm)
+			local castDef = fsm.Context._castDef
+			if not castDef then
+				fsm.Context._releaseReason = "Cast definition missing"
+				fsm.State = "ReleaseLock"
+				return
+			end
+			local castTime = tonumber(castDef.CastTime) or 0
+			if castTime > 0 then
+				fsm:ScheduleTransition(castTime, "ValidateNotInterrupted")
+			else
+				fsm.State = "ValidateNotInterrupted"
+			end
+		end,
+	}, { "ValidateNotInterrupted", "ReleaseLock" })
+
+	self:AddState("ValidateNotInterrupted", {
+		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
 			local humanoid = fsm.Context._humanoid
-			if not charEntity or not humanoid then
-				fsm:Fail("Casting context missing")
+			local rootPart = fsm.Context._rootPart
+			if not charEntity or not humanoid or not rootPart or not rootPart.Parent then
+				fsm.Context._releaseReason = "Cast context missing"
+				fsm.State = "ReleaseLock"
 				return
 			end
-
 			if charEntity.IsStunned == true or charEntity.IsKnocked == true or humanoid.Health <= 0 then
-				fsm:Fail("Cast interrupted")
+				fsm.Context._releaseReason = "Cast interrupted"
+				fsm.State = "ReleaseLock"
 				return
 			end
-
-			local castEndsAt = tonumber(fsm.Context._castEndsAt) or 0
-			if os.clock() >= castEndsAt then
-				fsm.State = "Execute"
-			end
+			fsm.State = "ExecuteEffect"
 		end,
-	}, { "Execute", "Failed" })
+	}, { "ExecuteEffect", "ReleaseLock" })
 
-	self:AddState("Execute", {
+	self:AddState("ExecuteEffect", {
 		OnEnter = function(_, fsm)
 			local castDef = fsm.Context._castDef
 			local charEntity = fsm.Context._charEntity
@@ -736,63 +775,89 @@ function CastFSM:RegisterStates()
 			local humanoid = fsm.Context._humanoid
 			local rootPart = fsm.Context._rootPart
 			if not castDef or not charEntity or not humanoid or not rootPart then
-				fsm:Fail("Execute context missing")
+				fsm.Context._releaseReason = "Execute context missing"
+				fsm.State = "ReleaseLock"
 				return
 			end
-
-			if castDef.CastTime <= 0 and typeof(castDef.Animation) == "string" and castDef.Animation ~= "" then
-				appendIntent(charEntity, "Animation", {
-					Name = castDef.Animation,
-					Speed = 1,
-					FadeTime = 0.1,
-				}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
-			end
-
-			charEntity.Stamina = math.max(0, (tonumber(charEntity.Stamina) or 0) - castDef.StaminaCost)
-			charEntity.Mana = math.max(0, (tonumber(charEntity.Mana) or 0) - castDef.ManaCost)
-			charEntity:UpdateEntity(fsm.Id)
-
 			executeCastEffect(fsm, castDef, charEntity, playerEntity, humanoid, rootPart)
-			fsm.State = "Cooldown"
+			fsm.State = "EmitFinishAnimation"
 		end,
-	}, { "Cooldown", "Failed" })
+	}, { "EmitFinishAnimation", "ReleaseLock" })
 
-	self:AddState("Cooldown", {
+	self:AddState("EmitFinishAnimation", {
 		OnEnter = function(_, fsm)
 			local castDef = fsm.Context._castDef
 			local charEntity = fsm.Context._charEntity
 			if not castDef or not charEntity then
-				fsm:Fail("Cooldown context missing")
+				fsm.Context._releaseReason = "Finish animation context missing"
+				fsm.State = "ReleaseLock"
 				return
 			end
+			if typeof(castDef.FinishAnimation) == "string" and castDef.FinishAnimation ~= "" then
+				appendIntent(charEntity, "Animation", {
+					Name = castDef.FinishAnimation,
+					Speed = 1,
+					FadeTime = 0.1,
+				}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
+			end
+			fsm.State = "SetCooldown"
+		end,
+	}, { "SetCooldown", "ReleaseLock" })
 
+	self:AddState("SetCooldown", {
+		OnEnter = function(_, fsm)
+			local castDef = fsm.Context._castDef
+			local charEntity = fsm.Context._charEntity
+			if not castDef or not charEntity then
+				fsm.Context._releaseReason = "Cooldown context missing"
+				fsm.State = "ReleaseLock"
+				return
+			end
 			local cooldowns = if typeof(charEntity.AbilityCooldowns) == "table" then table.clone(charEntity.AbilityCooldowns) else {}
 			cooldowns[castDef.Id] = os.clock() + (tonumber(castDef.Cooldown) or 0)
 			charEntity.AbilityCooldowns = cooldowns
 			charEntity:SetContext("_abilityCooldowns", cooldowns)
-			charEntity.ActiveCastId = ""
+			charEntity:UpdateEntity(fsm.Id)
+			fsm.State = "ReleaseLock"
+		end,
+	}, { "ReleaseLock" })
+
+	self:AddState("ReleaseLock", {
+		OnEnter = function(_, fsm)
+			local charEntity = fsm.Context._charEntity
+			local castDef = fsm.Context._castDef
+			if not charEntity then
+				fsm:Fail(fsm.Context._releaseReason or "Character entity missing during cleanup")
+				return
+			end
 			if fsm.Context._movementLocked then
 				charEntity.CanMove = true
 				fsm.Context._movementLocked = false
 			end
+			if castDef and charEntity.ActiveCastId == castDef.Id then
+				charEntity.ActiveCastId = ""
+			end
 			charEntity:UpdateEntity(fsm.Id)
-
 			if fsm.Context._lockHeld then
 				charEntity:ReleaseLock(fsm.Id)
 				fsm.Context._lockHeld = false
 			end
-
-			fsm.State = "Idle"
+			if fsm.Context._releaseReason then
+				fsm:Fail(tostring(fsm.Context._releaseReason))
+				return
+			end
+			fsm.State = "Completed"
 		end,
-	}, { "Idle", "Failed" })
+	}, { "Completed", "Failed" })
 
+	self:AddState("Completed", function() end, {})
 	self:AddState("Failed", function() end, {})
 end
 
 function CastFSM.RequestCast(fsm: any, abilityDef: any, charEntityId: string)
 	fsm.Context._abilityDef = abilityDef
 	fsm.Context.CharacterEntityId = charEntityId
-	fsm.State = "Validate"
+	fsm.State = "ValidateAbility"
 end
 
 function CastFSM:OnCleanup()
