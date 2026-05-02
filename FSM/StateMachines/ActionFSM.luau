@@ -118,6 +118,9 @@ function ActionFSM:RegisterStates()
 		Timeout = 0.2,
 		OnTimeout = "None",
 	}, { "None" })
+
+	self:AddState("Completed", function() end, {})
+	self:AddState("Failed", function() end, {})
 end
 
 -- Public API: request a melee attack sequence
