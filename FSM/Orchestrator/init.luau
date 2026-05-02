@@ -74,16 +74,26 @@ end
 function Orchestrator:StartServiceManager()
 	if Orchestrator._serviceManager then return Orchestrator._serviceManager end
 
-	local serviceManager = require(script.ServiceManager)
-	serviceManager.Initialize(Orchestrator)
-	-- Don't show by default — use ServiceManager.Toggle() or keybind to open
+	local ok, serviceManager = pcall(require, script.ServiceManager)
+	if not ok or not serviceManager then
+		warn("[Orchestrator] Failed to load ServiceManager:", serviceManager)
+		return nil
+	end
+	
+	local initOk, initErr = pcall(function()
+		serviceManager.Initialize(Orchestrator)
+	end)
+	if not initOk then
+		warn("[Orchestrator] ServiceManager.Initialize failed:", initErr)
+		return nil
+	end
+	
 	Orchestrator._serviceManager = serviceManager
-
 	return serviceManager
 end
 
 function Orchestrator:GetServiceManager()
-	return Orchestrator._serviceManager
+	return Orchestrator and Orchestrator._serviceManager or nil
 end
 
 function Orchestrator.CreateEntity(params: { EntityClass: any, EntityId: string, Context: {any}?, Persistent: boolean?, PersistenceKey: string? })
