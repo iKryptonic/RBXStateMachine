@@ -213,7 +213,8 @@ function MeleeAttackJob:RegisterStates()
 				(typeof(equippedRight) == "string" and equippedRight ~= "")
 				or (typeof(equippedLeft) == "string" and equippedLeft ~= "")
 			then
-				fsm:Fail("Weapon is drawn — use AttackJob instead")
+				-- Weapon drawn: silently complete — client may be slightly out of sync
+				fsm.State = "Complete"
 				return
 			end
 
@@ -225,7 +226,7 @@ function MeleeAttackJob:RegisterStates()
 			fsm.Context._comboSlot = comboSlot
 			fsm.State = "AcquireLock"
 		end,
-	}, { "AcquireLock", "Failed" })
+	}, { "AcquireLock", "Complete", "Failed" })
 
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
