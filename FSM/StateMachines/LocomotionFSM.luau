@@ -26,6 +26,11 @@ local function getCharacterParts(fsm: any): (any?, any?, any?)
 	end
 	local character = charEntity.Instance
 	if not character then
+		local Players = game:GetService("Players")
+		local localPlayer = Players.LocalPlayer
+		character = localPlayer and localPlayer.Character
+	end
+	if not character then
 		return nil, nil, nil
 	end
 	return charEntity, character:FindFirstChildOfClass("Humanoid"), character:FindFirstChild("HumanoidRootPart")
