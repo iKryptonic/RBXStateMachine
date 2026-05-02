@@ -74,7 +74,9 @@ local function stateMachineMatchesPlayer(fsm: any, candidateId: string, stateMac
 
 	local stateMachineId = getStateMachineField(stateMachine, "StateMachineId")
 	if type(stateMachineId) == "string" then
-		if string.find(stateMachineId, playerEntityId, 1, true) or string.find(stateMachineId, charEntityId, 1, true) then
+		if
+			string.find(stateMachineId, playerEntityId, 1, true) or string.find(stateMachineId, charEntityId, 1, true)
+		then
 			return true
 		end
 	end
@@ -138,7 +140,11 @@ function PlayerTeardownFSM:RegisterStates()
 			fsm.Context._cancelledStateMachineIds = cancelledIds
 			fsm:Log({
 				Level = "INFO",
-				Message = string.format("PlayerTeardownFSM cancelled %d state machines for userId %s", cancelled, tostring(fsm.UserId)),
+				Message = string.format(
+					"PlayerTeardownFSM cancelled %d state machines for userId %s",
+					cancelled,
+					tostring(fsm.UserId)
+				),
 				Data = { CancelledIds = cancelledIds },
 			})
 			fsm.State = "FlushEntities"
@@ -162,7 +168,11 @@ function PlayerTeardownFSM:RegisterStates()
 
 			fsm:Log({
 				Level = "INFO",
-				Message = string.format("PlayerTeardownFSM flushed %d persistent entities for userId %s", flushedCount, tostring(fsm.UserId)),
+				Message = string.format(
+					"PlayerTeardownFSM flushed %d persistent entities for userId %s",
+					flushedCount,
+					tostring(fsm.UserId)
+				),
 			})
 			fsm.State = "DeleteEntities"
 		end,
@@ -184,7 +194,11 @@ function PlayerTeardownFSM:RegisterStates()
 
 			fsm:Log({
 				Level = "INFO",
-				Message = string.format("PlayerTeardownFSM deleted %d entities for userId %s", #deletedIds, tostring(fsm.UserId)),
+				Message = string.format(
+					"PlayerTeardownFSM deleted %d entities for userId %s",
+					#deletedIds,
+					tostring(fsm.UserId)
+				),
 				Data = { DeletedIds = deletedIds },
 			})
 			fsm.State = "Completed"
@@ -193,13 +207,23 @@ function PlayerTeardownFSM:RegisterStates()
 
 	self:AddState("Completed", {
 		OnEnter = function(_, fsm)
-			fsm:Log({ Level = "INFO", Message = string.format("PlayerTeardownFSM completed for userId %s", tostring(fsm.UserId)) })
+			fsm:Log({
+				Level = "INFO",
+				Message = string.format("PlayerTeardownFSM completed for userId %s", tostring(fsm.UserId)),
+			})
 		end,
 	}, {})
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm, reason)
-			fsm:Log({ Level = "ERROR", Message = string.format("PlayerTeardownFSM failed for userId %s: %s", tostring(fsm.UserId), tostring(reason or "unknown error")) })
+			fsm:Log({
+				Level = "ERROR",
+				Message = string.format(
+					"PlayerTeardownFSM failed for userId %s: %s",
+					tostring(fsm.UserId),
+					tostring(reason or "unknown error")
+				),
+			})
 		end,
 	}, {})
 end

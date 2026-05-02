@@ -1,4 +1,6 @@
 --!strict
+-- @Name ToggleWeaponJob
+-- @Description FSM state machine module.
 
 local HttpService = game:GetService("HttpService")
 
@@ -10,7 +12,15 @@ local ToggleWeaponJob = {
 	initialState = "Validate",
 }
 
-local function beginChildJob(fsm: any, orchestrator: any, stateName: string, childClass: any, initialState: string, context: { [string]: any }, failureLabel: string)
+local function beginChildJob(
+	fsm: any,
+	orchestrator: any,
+	stateName: string,
+	childClass: any,
+	initialState: string,
+	context: { [string]: any },
+	failureLabel: string
+)
 	if not childClass then
 		fsm:Fail(failureLabel .. " job is unavailable")
 		return
@@ -18,7 +28,12 @@ local function beginChildJob(fsm: any, orchestrator: any, stateName: string, chi
 
 	local subJob = orchestrator.CreateStateMachine({
 		StateMachineClass = childClass,
-		StateMachineId = string.format("%s_%s_%s", tostring(fsm.Id or "ToggleWeaponJob"), stateName, HttpService:GenerateGUID(false)),
+		StateMachineId = string.format(
+			"%s_%s_%s",
+			tostring(fsm.Id or "ToggleWeaponJob"),
+			stateName,
+			HttpService:GenerateGUID(false)
+		),
 		Context = context,
 		AutoStart = false,
 	})

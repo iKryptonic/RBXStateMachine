@@ -1,9 +1,23 @@
 --!strict
+-- @Name BlockJob
+-- @Description FSM state machine module.
 
 local BlockJob = {
 	Name = "BlockJob",
 	className = "BlockJob",
-	validStates = { "Validate", "AcquireBlockState", "ApplyMovementRestriction", "BroadcastBlockUpdate", "EmitBlockIntent", "WaitForRelease", "ReleaseBlockState", "RestoreMovement", "BroadcastUnblockUpdate", "Completed", "Failed" },
+	validStates = {
+		"Validate",
+		"AcquireBlockState",
+		"ApplyMovementRestriction",
+		"BroadcastBlockUpdate",
+		"EmitBlockIntent",
+		"WaitForRelease",
+		"ReleaseBlockState",
+		"RestoreMovement",
+		"BroadcastUnblockUpdate",
+		"Completed",
+		"Failed",
+	},
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
@@ -20,7 +34,9 @@ local function getSharedModule(orchestrator: any, name)
 	local sharedFolder = game:GetService("ReplicatedStorage"):FindFirstChild("shared")
 	if sharedFolder then
 		local mod = sharedFolder:FindFirstChild(name)
-		if mod then return require(mod) end
+		if mod then
+			return require(mod)
+		end
 	end
 	error("Shared module not found: " .. name)
 end

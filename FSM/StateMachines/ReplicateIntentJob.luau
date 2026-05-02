@@ -83,7 +83,12 @@ local function sanitizePayload(intentSchema: any, payload: any, seen: { [table]:
 				return nil, nestedErr
 			end
 			sanitized[key] = nested
-		elseif valueType == "Instance" or valueType == "userdata" or valueType == "function" or valueType == "thread" then
+		elseif
+			valueType == "Instance"
+			or valueType == "userdata"
+			or valueType == "function"
+			or valueType == "thread"
+		then
 			seen[payload] = nil
 			return nil, "Payload contains non-serializable values"
 		else
@@ -178,8 +183,12 @@ function ReplicateIntentJob:RegisterStates()
 			local normalizedPayload = if typeof(payload) == "table" then payload else {}
 			if fsm.Kind == "Animation" then
 				normalizedPayload.Name = normalizedPayload.Name or normalizedPayload.AnimationName
-				normalizedPayload.Speed = if typeof(normalizedPayload.Speed) == "number" then normalizedPayload.Speed else 1
-				normalizedPayload.FadeTime = if typeof(normalizedPayload.FadeTime) == "number" then normalizedPayload.FadeTime else 0.1
+				normalizedPayload.Speed = if typeof(normalizedPayload.Speed) == "number"
+					then normalizedPayload.Speed
+					else 1
+				normalizedPayload.FadeTime = if typeof(normalizedPayload.FadeTime) == "number"
+					then normalizedPayload.FadeTime
+					else 0.1
 			elseif fsm.Kind == "Effect" then
 				normalizedPayload.Name = normalizedPayload.Name or normalizedPayload.EffectName
 			elseif fsm.Kind == "Sound" then
@@ -187,8 +196,12 @@ function ReplicateIntentJob:RegisterStates()
 				if soundId ~= nil then
 					normalizedPayload.SoundId = tostring(soundId)
 				end
-				normalizedPayload.Volume = if typeof(normalizedPayload.Volume) == "number" then normalizedPayload.Volume else 0.5
-				normalizedPayload.Pitch = if typeof(normalizedPayload.Pitch) == "number" then normalizedPayload.Pitch else 1
+				normalizedPayload.Volume = if typeof(normalizedPayload.Volume) == "number"
+					then normalizedPayload.Volume
+					else 0.5
+				normalizedPayload.Pitch = if typeof(normalizedPayload.Pitch) == "number"
+					then normalizedPayload.Pitch
+					else 1
 			end
 
 			fsm.Context._normalizedPayload = normalizedPayload
@@ -239,7 +252,6 @@ function ReplicateIntentJob:RegisterStates()
 	self:AddState("Failed", function() end, {})
 end
 
-function ReplicateIntentJob:OnCleanup()
-end
+function ReplicateIntentJob:OnCleanup() end
 
 return ReplicateIntentJob
