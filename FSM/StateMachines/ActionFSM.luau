@@ -122,10 +122,31 @@ function ActionFSM:RegisterStates()
 		OnTimeout = "None",
 	}, { "None" })
 
-	-- HitReact: stagger from being hit
+	-- HitReact: stagger from being hit (knockback impulse + overlay)
 	self:AddState("HitReact", {
 		OnEnter = function(_, fsm)
 			writeActionOverlay(fsm, "HitReact")
+
+			-- Apply knockback impulse (merged from HitReactController)
+			local orchestrator = fsm:GetOrchestrator()
+			local charEntity = orchestrator and orchestrator.GetEntity(fsm.CharacterEntityId)
+			if charEntity and charEntity.IsBlocking then
+				return -- no knockback while blocking
+			end
+			local character = charEntity and charEntity.Instance
+			local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+			if rootPart and rootPart:IsA("BasePart") then
+				local knockDirection = -rootPart.CFrame.LookVector
+				local bodyVelocity = Instance.new("BodyVelocity")
+				bodyVelocity.MaxForce = Vector3.new(math.huge, 0, math.huge)
+				bodyVelocity.Velocity = knockDirection * 25
+				bodyVelocity.Parent = rootPart
+				task.delay(0.15, function()
+					if bodyVelocity.Parent then
+						bodyVelocity:Destroy()
+					end
+				end)
+			end
 		end,
 		Timeout = 0.2,
 		OnTimeout = "None",

@@ -622,7 +622,10 @@ function LoadPlayerJob:RegisterStates()
 				local nextValue = isBlocking == true
 				if charEntity.IsBlocking ~= nextValue then
 					charEntity.IsBlocking = nextValue
-					charEntity:UpdateEntity()
+					-- Best-effort commit — entity may be locked by a combat FSM.
+					-- The field is staged regardless; the next UpdateEntity from the
+					-- lock holder will commit it.
+					pcall(function() charEntity:UpdateEntity() end)
 				end
 			end)
 
@@ -1051,7 +1054,7 @@ function LoadPlayerJob:RegisterStates()
 				local nextValue = isSprinting == true
 				if charEntity.SprintIntent ~= nextValue then
 					charEntity.SprintIntent = nextValue
-					charEntity:UpdateEntity()
+					pcall(function() charEntity:UpdateEntity() end)
 				end
 			end)
 
