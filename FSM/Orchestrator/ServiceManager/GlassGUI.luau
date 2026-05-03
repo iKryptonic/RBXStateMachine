@@ -1,5 +1,9 @@
 --!strict
-
+-- @Name ServiceManager/GlassGUI.luau
+-- @Author iKrypto
+-- @Description Programmatic Glass Engine ScreenGui builder.
+-- Creates the entire UI shell: sidebar icon rail, breadcrumb bar, body container,
+-- bottom status bar, and insight notification area. No serialized GUI dependency.
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -28,7 +32,15 @@ local function ClampWindowPosition(position: UDim2, anchorPoint: Vector2, absolu
 	)
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- CONSTRUCTOR
+-- ══════════════════════════════════════════════════════════════
 
+--[[
+	Create the GlassGUI controller around a PlayerGui.
+	Stores window state, callback hooks, and lazily populated instance references
+	until Build materializes the visual shell.
+]]
 function GlassGUI.new(playerGui: PlayerGui): any
 	local self = setmetatable({}, GlassGUI)
 	self._playerGui = playerGui
@@ -58,7 +70,15 @@ function GlassGUI.new(playerGui: PlayerGui): any
 	return self
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- BUILD FULL GUI
+-- ══════════════════════════════════════════════════════════════
 
+--[[
+	Create and attach the full ServiceManager ScreenGui shell.
+	Builds the window chrome, sidebar, breadcrumb bar, body host, status bar, and
+	insight toast, then returns the finished ScreenGui instance.
+]]
 function GlassGUI:Build(): ScreenGui
 	-- Root ScreenGui
 	local sg = Instance.new("ScreenGui")
@@ -76,7 +96,7 @@ function GlassGUI:Build(): ScreenGui
 	main.Name = "MainWindow"
 	main.Size = UDim2.new(0.85, 0, 0.85, 0)
 	main.Position = UDim2.new(0.5, 0, 0.5, 0)
-	main.AnchorPoint = Vector2.new(0.5, 0.5)
+main.AnchorPoint = Vector2.new(0.5, 0.5)
 	main.BackgroundColor3 = Theme.Colors.RootBG
 	main.BackgroundTransparency = 0
 	main.BorderSizePixel = 0
@@ -121,6 +141,9 @@ function GlassGUI:Build(): ScreenGui
 	return sg
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- TITLE BAR (top 32px)
+-- ══════════════════════════════════════════════════════════════
 
 function GlassGUI:_BuildTitleBar(parent: Frame)
 	local bar = Instance.new("Frame")
@@ -173,7 +196,7 @@ function GlassGUI:_BuildTitleBar(parent: Frame)
 	pillStroke.Parent = pill
 
 	pill.MouseButton1Click:Connect(function()
-		local nextMode = if self._contextMode == "client" then"server" else"client"
+		local nextMode = if self._contextMode == "client" then "server" else "client"
 		self:SetContextMode(nextMode)
 		if self._onContextToggle then
 			self._onContextToggle(nextMode)
@@ -247,6 +270,9 @@ function GlassGUI:_BuildTitleBar(parent: Frame)
 	end
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- SIDEBAR (left 48px icon rail)
+-- ══════════════════════════════════════════════════════════════
 
 function GlassGUI:_BuildSidebar(parent: Frame)
 	local sidebar = Instance.new("Frame")
@@ -283,14 +309,14 @@ function GlassGUI:_BuildSidebar(parent: Frame)
 
 	-- Build subsystem icons
 	local subsystems = {
-		{ Id = "TASKS", Order = 1 },
-		{ Id = "FSM", Order = 2 },
-		{ Id = "ENTITY", Order = 3 },
-		{ Id = "NETWORK", Order = 4 },
+		{ Id = "TASKS",     Order = 1 },
+		{ Id = "FSM",       Order = 2 },
+		{ Id = "ENTITY",    Order = 3 },
+		{ Id = "NETWORK",   Order = 4 },
 		{ Id = "DATASTORE", Order = 5 },
-		{ Id = "INSIGHTS", Order = 6 },
-		{ Id = "CONSOLE", Order = 7 },
-		{ Id = "LOGS", Order = 8 },
+		{ Id = "INSIGHTS",  Order = 6 },
+		{ Id = "CONSOLE",   Order = 7 },
+		{ Id = "LOGS",      Order = 8 },
 	}
 
 	-- Short text labels for sidebar icons (fallback when images don't load)
@@ -389,6 +415,9 @@ function GlassGUI:_BuildSidebar(parent: Frame)
 	end
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- BREADCRUMB BAR (horizontal bar below title, right of sidebar)
+-- ══════════════════════════════════════════════════════════════
 
 function GlassGUI:_BuildBreadcrumbBar(parent: Frame)
 	local bar = Instance.new("Frame")
@@ -464,7 +493,11 @@ function GlassGUI:_BuildBreadcrumbBar(parent: Frame)
 	end)
 end
 
-
+--[[
+	Rebuild the breadcrumb bar from the navigator's current crumb trail.
+	Intermediate crumbs become clickable when a handler is supplied, while the
+	first crumb retains subsystem coloring for orientation.
+]]
 function GlassGUI:UpdateBreadcrumbs(crumbs: { { Id: string, Label: string, Depth: number } }, onCrumbClick: ((id: string) -> ())?)
 	local bar = self._breadcrumbBar
 	if not bar then return end
@@ -532,6 +565,9 @@ function GlassGUI:UpdateBreadcrumbs(crumbs: { { Id: string, Label: string, Depth
 	end
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- BODY CONTAINER (main content area)
+-- ══════════════════════════════════════════════════════════════
 
 function GlassGUI:_BuildBodyContainer(parent: Frame)
 	local body = Instance.new("Frame")
@@ -559,12 +595,17 @@ function GlassGUI:_BuildBodyContainer(parent: Frame)
 	host.Parent = body
 end
 
-
+--[[
+	Return the LayerHost frame used by ZAxisNavigator for subsystem content.
+]]
 function GlassGUI:GetBodyContainer(): Frame?
 	if not self._bodyContainer then return nil end
 	return self._bodyContainer:FindFirstChild("LayerHost") :: Frame?
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- STATUS BAR (bottom 24px)
+-- ══════════════════════════════════════════════════════════════
 
 function GlassGUI:_BuildStatusBar(parent: Frame)
 	local bar = Instance.new("Frame")
@@ -648,13 +689,16 @@ function GlassGUI:_BuildStatusBar(parent: Frame)
 	perfPad.Parent = perfLabel
 end
 
-
+--[[
+	Apply a partial status snapshot to the bottom status bar widgets.
+	Callers can update connection state, insight count, and FPS independently.
+]]
 function GlassGUI:UpdateStatusBar(props: {
 	Connected: boolean?,
 	Mode: string?,
 	InsightCount: number?,
 	FPS: number?,
-	})
+})
 	local bar = self._statusBar
 	if not bar then return end
 
@@ -665,14 +709,14 @@ function GlassGUI:UpdateStatusBar(props: {
 			dot.BackgroundColor3 = if props.Connected then Theme.Colors.Success else Theme.Colors.Danger
 		end
 		if lbl then
-			lbl.Text = if props.Connected then"CONNECTED" else"DISCONNECTED"
+			lbl.Text = if props.Connected then "CONNECTED" else "DISCONNECTED"
 		end
 	end
 
 	if props.InsightCount ~= nil then
 		local lbl = bar:FindFirstChild("InsightLabel") :: TextLabel?
 		if lbl then
-			lbl.Text = tostring(props.InsightCount) .." insights"
+			lbl.Text = tostring(props.InsightCount) .. " insights"
 			lbl.TextColor3 = if props.InsightCount > 0 then Theme.Colors.Warning else Theme.Colors.TextMuted
 		end
 	end
@@ -688,6 +732,9 @@ function GlassGUI:UpdateStatusBar(props: {
 	end
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- INSIGHT TOAST (bottom-right overlay notification)
+-- ══════════════════════════════════════════════════════════════
 
 function GlassGUI:_BuildInsightToast(parent: Frame)
 	local toast = Instance.new("Frame")
@@ -742,7 +789,10 @@ function GlassGUI:_BuildInsightToast(parent: Frame)
 	descLabel.TextWrapped = true
 end
 
-
+--[[
+	Show a temporary insight notification in the bottom-right overlay.
+	Severity controls the accent color, while duration determines auto-dismiss.
+]]
 function GlassGUI:ShowInsightToast(title: string, description: string, severity: string?, duration: number?)
 	local toast = self._insightToast
 	if not toast then return end
@@ -788,7 +838,14 @@ function GlassGUI:ShowInsightToast(title: string, description: string, severity:
 	end)
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- SIDEBAR SELECTION
+-- ══════════════════════════════════════════════════════════════
 
+--[[
+	Update sidebar selection visuals and optionally notify the orchestrator about
+	a subsystem change.
+]]
 function GlassGUI:SelectSubsystem(id: string, suppressCallback: boolean?)
 	local prev = self._activeSubsystem
 	self._activeSubsystem = id
@@ -831,7 +888,14 @@ function GlassGUI:SelectSubsystem(id: string, suppressCallback: boolean?)
 	end
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- WINDOW CONTROLS
+-- ══════════════════════════════════════════════════════════════
 
+--[[
+	Show the window, using a reduced first-show path because Roblox will not tween
+	freshly enabled ScreenGuis reliably on the same frame.
+]]
 function GlassGUI:Show()
 	if not self._screenGui then return end
 	local wasEnabled = self._screenGui.Enabled
@@ -857,7 +921,9 @@ function GlassGUI:Show()
 	end
 end
 
-
+--[[
+	Animate the window closed and disable the ScreenGui when the collapse completes.
+]]
 function GlassGUI:Hide()
 	if not self._screenGui then return end
 	local main = self._mainFrame
@@ -876,12 +942,18 @@ function GlassGUI:Hide()
 	end
 end
 
-
+--[[
+	Return whether the GUI is currently marked visible.
+]]
 function GlassGUI:IsVisible(): boolean
 	return self._visible
 end
 
-
+--[[
+	Toggle between minimized and expanded window states.
+	Preserves the user's last resized dimensions so restore returns to the same
+	working layout.
+]]
 function GlassGUI:ToggleMinimize()
 	self._minimized = not self._minimized
 	local main = self._mainFrame
@@ -909,6 +981,9 @@ function GlassGUI:ToggleMinimize()
 	end
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- DRAGGING
+-- ══════════════════════════════════════════════════════════════
 
 function GlassGUI:_SetupDragging(main: Frame)
 	local titleBar = main:FindFirstChild("TitleBar") :: Frame?
@@ -960,6 +1035,9 @@ function GlassGUI:_SetupDragging(main: Frame)
 	end))
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- RESIZING (bottom-right corner grip)
+-- ══════════════════════════════════════════════════════════════
 
 function GlassGUI:_SetupResizing(main: Frame)
 	local MIN_WIDTH = 600
@@ -1026,39 +1104,43 @@ function GlassGUI:_SetupResizing(main: Frame)
 	end))
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- CALLBACKS
+-- ══════════════════════════════════════════════════════════════
 
+-- Register a callback fired when the active subsystem changes.
 function GlassGUI:OnSubsystemSelected(callback: (name: string) -> ())
 	self._onSubsystemSelected = callback
 end
 
-
+-- Register a callback fired after minimize state changes.
 function GlassGUI:OnMinimizeToggle(callback: (minimized: boolean) -> ())
 	self._onMinimizeToggle = callback
 end
 
-
+-- Register a callback fired when the close button is pressed.
 function GlassGUI:OnClose(callback: () -> ())
 	self._onClose = callback
 end
 
-
+-- Register a callback fired when the client/server pill is toggled.
 function GlassGUI:OnContextToggle(callback: (mode: string) -> ())
 	self._onContextToggle = callback
 end
 
-
+-- Register a callback fired when the breadcrumb back button is pressed.
 function GlassGUI:OnBackClick(callback: () -> ())
 	self._onBackClick = callback
 end
 
-
+-- Register a callback fired when the current subsystem is clicked again.
 function GlassGUI:OnSubsystemReselected(callback: (name: string) -> ())
 	self._onSubsystemReselected = callback
 end
---[=[
-	@description Updates module state through `GlassGUI.SetContextMode`.
-]=]
 
+--[[
+	Update the client/server mode pill to reflect the orchestrator's active mode.
+]]
 function GlassGUI:SetContextMode(mode: string)
 	self._contextMode = mode
 	local pill = self._contextPill
@@ -1066,7 +1148,7 @@ function GlassGUI:SetContextMode(mode: string)
 
 	local isServer = mode == "server"
 	local color = if isServer then Theme.Colors.Purple else Theme.Colors.Accent
-	local text = if isServer then"SERVER" else"CLIENT"
+	local text = if isServer then "SERVER" else "CLIENT"
 
 	pill.Text = text
 	TweenService:Create(pill, Theme.Tween.Fast, {
@@ -1080,7 +1162,13 @@ function GlassGUI:SetContextMode(mode: string)
 	end
 end
 
+-- ══════════════════════════════════════════════════════════════
+-- CLEANUP
+-- ══════════════════════════════════════════════════════════════
 
+--[[
+	Disconnect all retained GUI event handlers and destroy the ScreenGui shell.
+]]
 function GlassGUI:Destroy()
 	-- Release all stored connections (drag, resize, hover, button clicks).
 	-- Without this, UserInputService callbacks survive the ScreenGui's destroy
