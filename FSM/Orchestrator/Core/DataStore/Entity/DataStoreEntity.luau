@@ -129,7 +129,7 @@ function DataStoreEntity:_ExecuteRequest(requestFn, maxRetries)
 	local Orchestrator = self.Orchestrator
 	if not Orchestrator then error("DataStoreEntity missing Orchestrator context") end
 
-	self.ActiveRequests = (self.ActiveRequests or 0) + 1
+	self.ActiveRequests = ((self.ActiveRequests or 0) + 1)
 
 	-- Promise-like wrapping
 	local bindable = Instance.new("BindableEvent")

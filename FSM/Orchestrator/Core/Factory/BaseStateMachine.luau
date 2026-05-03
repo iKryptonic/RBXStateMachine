@@ -1314,18 +1314,6 @@ end
 	@writes None (subclass-defined)
 ]=]
 function BaseStateMachine:OnCleanup()
-	self.Logger:Log
-	{ 
-		Level = "WARN", 
-		Message = "Abstract Method 'OnCleanup' called.", 
-		OperationId = self.Id 
-	}
-	self.Logger:Log
-	{ 
-		Level = "WARN", 
-		Message = "Subclasses must implement 'OnCleanup' to handle cleanup tasks.", 
-		OperationId = self.Id 
-	}
 end
 
 --[=[
