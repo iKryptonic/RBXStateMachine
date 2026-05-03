@@ -507,20 +507,23 @@ end
 	@description Registers a Roblox Instance for tracked cleanup when the FSM is destroyed.
 	Unlike Manage(), TrackInstance provides profiler-visible metadata (label, creation time)
 	so the ServiceManager can report which FSMs own which Instances and detect orphans.
-	The Instance is also added to _cleanupTasks for automatic destruction on Destroy().
 
 	@param inst Instance -- The Roblox Instance to track
 	@param label string? -- Optional human-readable label (e.g., "WeaponClone", "Hitbox")
+	@param trackOnly boolean? -- If true, only monitors (no auto-destroy). Use for Instances that outlive the FSM.
 	@return Instance -- The same Instance (for inline chaining)
 	@writes self._managedInstances, self._cleanupTasks
 ]=]
-function BaseStateMachine:TrackInstance(inst: Instance, label: string?): Instance
+function BaseStateMachine:TrackInstance(inst: Instance, label: string?, trackOnly: boolean?): Instance
 	table.insert(self._managedInstances, {
 		Instance = inst,
 		Label = label or inst.Name,
 		CreatedAt = os.clock(),
+		TrackOnly = trackOnly or false,
 	})
-	table.insert(self._cleanupTasks, inst)
+	if not trackOnly then
+		table.insert(self._cleanupTasks, inst)
+	end
 	return inst
 end
 

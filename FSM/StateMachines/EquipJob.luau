@@ -177,7 +177,7 @@ function EquipJob:RegisterStates()
 				StateTransitionHelpers.queueRollback(fsm, "Item not found in assets: " .. tostring(fsm.ItemId))
 				return
 			end
-			fsm:TrackInstance(item, "WeaponClone:" .. tostring(fsm.ItemId))
+			fsm:TrackInstance(item, "WeaponClone:" .. tostring(fsm.ItemId), true)
 			if not itemData then
 				item:Destroy()
 				StateTransitionHelpers.queueRollback(fsm, "Item has no Data module: " .. tostring(fsm.ItemId))
