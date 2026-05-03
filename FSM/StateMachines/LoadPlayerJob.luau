@@ -678,6 +678,7 @@ function LoadPlayerJob:RegisterStates()
 					{
 						CharacterEntityId = charEntityId,
 						Hand = hand or "Right",
+						ForceRemove = true,
 					},
 					"ValidateRequest"
 				)

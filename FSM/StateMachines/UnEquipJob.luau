@@ -187,10 +187,12 @@ function UnEquipJob:RegisterStates()
 					warn(message)
 				end
 			else
-				if itemData and itemData.Stowable then
-					equipHelpers.StowItem(item, character, weld, itemData)
-				else
+				-- ForceRemove: always destroy (e.g. explicit unequip from inventory)
+				-- Otherwise: stow if possible, else drop
+				if fsm.Context.ForceRemove or not (itemData and itemData.Stowable) then
 					equipHelpers.DropItem(item, weld)
+				else
+					equipHelpers.StowItem(item, character, weld, itemData)
 				end
 			end
 
