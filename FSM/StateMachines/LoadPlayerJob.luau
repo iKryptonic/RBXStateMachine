@@ -127,6 +127,13 @@ local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player:
 		dirty = true
 	end
 
+	for _, statName in ipairs({ "StatPoints", "Strength", "Agility", "Vitality", "Endurance", "Intelligence", "Luck" }) do
+		if type(playerEntity[statName]) ~= "number" then
+			playerEntity[statName] = 0
+			dirty = true
+		end
+	end
+
 	if typeof(playerEntity.AbilityBindings) ~= "table" then
 		playerEntity.AbilityBindings = { Q = "", E = "", R = "", F = "" }
 		dirty = true
@@ -276,6 +283,55 @@ local function applyCharacterDefaults(charEntity: any, character: Model, userId:
 	if dirty then
 		charEntity:UpdateEntity()
 	end
+end
+
+local function applyDerivedCharacterStats(orchestrator: any, playerEntity: any, charEntity: any, refillResources: boolean?): boolean
+	if not playerEntity or not charEntity then
+		return false
+	end
+
+	local talentTreeDefs = ModuleLoader.getSharedModule(orchestrator, "TalentTreeDefs")
+	local statDefs = ModuleLoader.getSharedModule(orchestrator, "StatDefs")
+	local passiveEffects = if talentTreeDefs and type(talentTreeDefs.GetMergedPassiveEffects) == "function"
+		then talentTreeDefs.GetMergedPassiveEffects(playerEntity)
+		else {}
+	local statBonuses = if statDefs and type(statDefs.ComputeBonuses) == "function" then statDefs.ComputeBonuses(playerEntity) else {}
+
+	local nextMaxHealth = 100 + (tonumber(passiveEffects.MaxHealth) or 0) + (tonumber(statBonuses.MaxHealthBonus) or 0)
+	local nextMaxStamina = 100 + (tonumber(passiveEffects.MaxStamina) or 0) + (tonumber(statBonuses.MaxStaminaBonus) or 0)
+	local nextMaxMana = 50 + (tonumber(passiveEffects.MaxMana) or 0) + (tonumber(statBonuses.MaxManaBonus) or 0)
+	local dirty = false
+
+	if tonumber(charEntity.MaxHealth) ~= nextMaxHealth then
+		charEntity.MaxHealth = nextMaxHealth
+		dirty = true
+	end
+	if tonumber(charEntity.MaxStamina) ~= nextMaxStamina then
+		charEntity.MaxStamina = nextMaxStamina
+		dirty = true
+	end
+	if tonumber(charEntity.MaxMana) ~= nextMaxMana then
+		charEntity.MaxMana = nextMaxMana
+		dirty = true
+	end
+
+	local nextHealth = if refillResources then nextMaxHealth else math.clamp(tonumber(charEntity.Health) or nextMaxHealth, 0, nextMaxHealth)
+	local nextStamina = if refillResources then nextMaxStamina else math.clamp(tonumber(charEntity.Stamina) or nextMaxStamina, 0, nextMaxStamina)
+	local nextMana = if refillResources then nextMaxMana else math.clamp(tonumber(charEntity.Mana) or nextMaxMana, 0, nextMaxMana)
+	if tonumber(charEntity.Health) ~= nextHealth then
+		charEntity.Health = nextHealth
+		dirty = true
+	end
+	if tonumber(charEntity.Stamina) ~= nextStamina then
+		charEntity.Stamina = nextStamina
+		dirty = true
+	end
+	if tonumber(charEntity.Mana) ~= nextMana then
+		charEntity.Mana = nextMana
+		dirty = true
+	end
+
+	return dirty
 end
 
 local function getCommandRegistrationContext(fsm: any)
@@ -429,14 +485,19 @@ function LoadPlayerJob:RegisterStates()
 			if playerEntity then
 				local passiveEffects =
 					ModuleLoader.requireSharedModule(orchestrator, "TalentTreeDefs").GetMergedPassiveEffects(playerEntity)
-				local appliedPassiveBonuses = false
+				local appliedDerivedBonuses = false
 				for stat, bonus in pairs(passiveEffects) do
-					if typeof(bonus) == "number" and typeof(charEntity[stat]) == "number" then
-						charEntity[stat] = (tonumber(charEntity[stat]) or 0) + bonus
-						appliedPassiveBonuses = true
+					if stat ~= "MaxHealth" and stat ~= "MaxStamina" and stat ~= "MaxMana" then
+						if typeof(bonus) == "number" and typeof(charEntity[stat]) == "number" then
+							charEntity[stat] = (tonumber(charEntity[stat]) or 0) + bonus
+							appliedDerivedBonuses = true
+						end
 					end
 				end
-				if appliedPassiveBonuses then
+				if applyDerivedCharacterStats(orchestrator, playerEntity, charEntity, true) then
+					appliedDerivedBonuses = true
+				end
+				if appliedDerivedBonuses then
 					EntityHelpers.syncHumanoidFromEntity(charEntity)
 					charEntity:UpdateEntity()
 				end
@@ -712,7 +773,7 @@ function LoadPlayerJob:RegisterStates()
 
 	self:AddState("RegisterUtilityCommands", {
 		OnEnter = function(_, fsm)
-			local orchestrator, charEntityId, _, _, isAuthorized = getCommandRegistrationContext(fsm)
+			local orchestrator, charEntityId, playerEntityId, _, isAuthorized = getCommandRegistrationContext(fsm)
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestAction", function(player, kind, payload)
 				if not isAuthorized(player) then
@@ -748,6 +809,61 @@ function LoadPlayerJob:RegisterStates()
 					statusEffectHelper.Apply(orchestrator, targetId, requestedEffectId)
 				end
 			)
+
+			registerEntityCommand(orchestrator, charEntityId, "RequestAllocateStat", function(player, statName)
+				if not isAuthorized(player) then
+					return
+				end
+				local statDefs = ModuleLoader.getSharedModule(orchestrator, "StatDefs")
+				if not statDefs or not statDefs.Stats or statDefs.Stats[statName] == nil then
+					return
+				end
+
+				local playerEntity = orchestrator.GetEntity(playerEntityId)
+				if not playerEntity then
+					return
+				end
+
+				local statPoints = tonumber(playerEntity.StatPoints) or 0
+				if statPoints <= 0 then
+					return
+				end
+
+				local requestedStatName = tostring(statName or "")
+				local currentValue = tonumber(playerEntity[requestedStatName]) or 0
+				if currentValue >= (tonumber(statDefs.MAX_STAT_LEVEL) or 100) then
+					return
+				end
+
+				local lockId = "AllocStat_" .. charEntityId
+				if not playerEntity:AcquireLock(lockId) then
+					return
+				end
+
+				local updateOk, updateErr = pcall(function()
+					playerEntity[requestedStatName] = currentValue + 1
+					playerEntity.StatPoints = statPoints - 1
+					playerEntity:UpdateEntity(lockId)
+				end)
+				playerEntity:ReleaseLock(lockId)
+				if not updateOk then
+					warn("[StatGui] Failed to allocate stat: " .. tostring(updateErr))
+					return
+				end
+
+				local charEntity = orchestrator.GetEntity(charEntityId)
+				if charEntity then
+					local charLockId = "StatBonus_" .. charEntityId
+					if charEntity:AcquireLock(charLockId) then
+						local shouldUpdate = applyDerivedCharacterStats(orchestrator, playerEntity, charEntity, false)
+						if shouldUpdate then
+							EntityHelpers.syncHumanoidFromEntity(charEntity)
+							charEntity:UpdateEntity(charLockId)
+						end
+						charEntity:ReleaseLock(charLockId)
+					end
+				end
+			end)
 
 			registerEntityCommand(orchestrator, charEntityId, "SetSprinting", function(player, isSprinting)
 				if not isAuthorized(player) then
