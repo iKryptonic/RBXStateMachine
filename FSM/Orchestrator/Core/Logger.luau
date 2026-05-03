@@ -18,7 +18,7 @@ type LogEntry = {
 -- Configuration
 local SHOW_TIMESTAMP = true
 local USE_RICH_TEXT = false
-local MAX_LOG_HISTORY = 500
+local MAX_LOG_HISTORY = 50
 
 local Initialized, Settings = false, nil
 --[[

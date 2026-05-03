@@ -173,7 +173,7 @@ function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {
 	-- Each entry: { From: string?, To: string, Time: number }
 	self.TransitionHistory = {} :: { { From: string?, To: string, Time: number } }
 	-- Clamp to a sane range so users can't accidentally set this to 10M.
-	local histMax = 100
+	local histMax = 30
 	if type(params) == "table" and type((params :: any).TransitionHistoryMax) == "number" then
 		histMax = math.clamp(math.floor((params :: any).TransitionHistoryMax), 10, 500)
 	end
@@ -1523,6 +1523,8 @@ function BaseStateMachine:Destroy()
 	if self._pendingTransitions then table.clear(self._pendingTransitions) end
 	-- Free history ring buffer
 	if self.TransitionHistory then table.clear(self.TransitionHistory) end
+	-- Free logger history
+	if self.Logger and self.Logger.History then table.clear(self.Logger.History) end
 
     local context = self.Context
     if type(context) == "table" then
