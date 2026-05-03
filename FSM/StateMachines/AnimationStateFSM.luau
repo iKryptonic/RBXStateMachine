@@ -1,7 +1,8 @@
 --!strict
--- @Name AnimationStateFSM
--- @Author Copilot
--- @Description Supplementary client FSM for animation blending observability.
+--[=[
+	@module AnimationStateFSM
+	@description Defines the `AnimationStateFSM` state machine module and its exported API.
+]=]
 
 local AnimationStateFSM = {
 	Name = "AnimationStateFSM",
@@ -49,8 +50,18 @@ local function syncObservedState(fsm: any)
 		fsm.State = desiredState
 	end
 end
+--[=[
+	@description Handles `RegisterStates` for `AnimationStateFSM`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function AnimationStateFSM:RegisterStates()
+	--[=[
+		@state Idle
+		@description Handles the `Idle` state for `AnimationStateFSM`.
+	]=]
+
 	self:AddState("Idle", {
 		OnEnter = function(_, fsm)
 			writeObservedState(fsm, "Idle")
@@ -59,6 +70,10 @@ function AnimationStateFSM:RegisterStates()
 			syncObservedState(fsm)
 		end,
 	}, { "BaseAnimation", "ActionOverlay", "Blending" })
+	--[=[
+		@state BaseAnimation
+		@description Handles the `BaseAnimation` state for `AnimationStateFSM`.
+	]=]
 
 	self:AddState("BaseAnimation", {
 		OnEnter = function(_, fsm)
@@ -68,6 +83,10 @@ function AnimationStateFSM:RegisterStates()
 			syncObservedState(fsm)
 		end,
 	}, { "Idle", "ActionOverlay", "Blending" })
+	--[=[
+		@state ActionOverlay
+		@description Handles the `ActionOverlay` state for `AnimationStateFSM`.
+	]=]
 
 	self:AddState("ActionOverlay", {
 		OnEnter = function(_, fsm)
@@ -77,6 +96,10 @@ function AnimationStateFSM:RegisterStates()
 			syncObservedState(fsm)
 		end,
 	}, { "Idle", "BaseAnimation", "Blending" })
+	--[=[
+		@state Blending
+		@description Handles the `Blending` state for `AnimationStateFSM`.
+	]=]
 
 	self:AddState("Blending", {
 		OnEnter = function(_, fsm)
@@ -86,6 +109,10 @@ function AnimationStateFSM:RegisterStates()
 			syncObservedState(fsm)
 		end,
 	}, { "Idle", "BaseAnimation", "ActionOverlay" })
+	--[=[
+		@state Completed
+		@description Handles the `Completed` terminal state for `AnimationStateFSM`.
+	]=]
 
 	self:AddState("Completed", {
 		OnEnter = function(_, fsm)
@@ -96,6 +123,10 @@ function AnimationStateFSM:RegisterStates()
 			})
 		end,
 	}, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `AnimationStateFSM`.
+	]=]
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm, reason)
@@ -110,6 +141,12 @@ function AnimationStateFSM:RegisterStates()
 		end,
 	}, {})
 end
+--[=[
+	@description Implements `AnimationStateFSM.MarkBlend`.
+	@param fsm any -- `fsm` input parameter.
+	@param duration number? -- `duration` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function AnimationStateFSM.MarkBlend(fsm: any, duration: number?)
 	local seconds = if typeof(duration) == "number" and duration >= 0 then duration else 0.15

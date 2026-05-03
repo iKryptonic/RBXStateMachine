@@ -1,9 +1,8 @@
 --!strict
--- @Name MeleeAttackJob
--- @Author iKrypto
--- @Description Server-authoritative unarmed melee attack FSM.
---   Validates combat state, acquires lock, emits animation intents,
---   and processes damage — parallel to AttackJob for weapons.
+--[=[
+	@module MeleeAttackJob
+	@description Defines the `MeleeAttackJob` state machine module and its exported API.
+]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
@@ -113,8 +112,18 @@ local function emitDueAnimationPhases(fsm: any, elapsed: number)
 
 	fsm.Context._nextPhaseIndex = nextPhaseIndex
 end
+--[=[
+	@description Handles `RegisterStates` for `MeleeAttackJob`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MeleeAttackJob:RegisterStates()
+	--[=[
+		@state Validate
+		@description Handles the `Validate` state for `MeleeAttackJob`.
+	]=]
+
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -172,6 +181,10 @@ function MeleeAttackJob:RegisterStates()
 			fsm.State = "AcquireLock"
 		end,
 	}, { "AcquireLock", "Completed", "Failed" })
+	--[=[
+		@state AcquireLock
+		@description Handles the `AcquireLock` state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
@@ -184,6 +197,10 @@ function MeleeAttackJob:RegisterStates()
 			fsm.State = "ValidateStamina"
 		end,
 	}, { "ValidateStamina", "Completed", "Failed" })
+	--[=[
+		@state ValidateStamina
+		@description Handles the `ValidateStamina` state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("ValidateStamina", {
 		OnEnter = function(_, fsm)
@@ -196,6 +213,10 @@ function MeleeAttackJob:RegisterStates()
 			fsm.State = "DeductStamina"
 		end,
 	}, { "DeductStamina", "ReleaseLock" })
+	--[=[
+		@state DeductStamina
+		@description Handles the `DeductStamina` state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("DeductStamina", {
 		OnEnter = function(_, fsm)
@@ -209,6 +230,10 @@ function MeleeAttackJob:RegisterStates()
 			fsm.State = "ResolveSequence"
 		end,
 	}, { "ResolveSequence" })
+	--[=[
+		@state ResolveSequence
+		@description Handles the `ResolveSequence` state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("ResolveSequence", {
 		OnEnter = function(_, fsm)
@@ -254,6 +279,10 @@ function MeleeAttackJob:RegisterStates()
 			fsm.State = "EmitPhaseAnimation"
 		end,
 	}, { "EmitPhaseAnimation", "ReleaseLock" })
+	--[=[
+		@state EmitPhaseAnimation
+		@description Handles the `EmitPhaseAnimation` state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("EmitPhaseAnimation", {
 		OnEnter = function(_, fsm)
@@ -269,6 +298,10 @@ function MeleeAttackJob:RegisterStates()
 			fsm.State = "ScheduleDamageWindow"
 		end,
 	}, { "ScheduleDamageWindow", "ReleaseLock" })
+	--[=[
+		@state ScheduleDamageWindow
+		@description Handles the `ScheduleDamageWindow` state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("ScheduleDamageWindow", {
 		OnEnter = function(_, fsm)
@@ -281,12 +314,20 @@ function MeleeAttackJob:RegisterStates()
 			end
 		end,
 	}, { "WaitForDamageWindow", "ScanVictims" })
+	--[=[
+		@state WaitForDamageWindow
+		@description Handles the `WaitForDamageWindow` state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("WaitForDamageWindow", {
 		OnHeartbeat = function(_, fsm)
 			emitDueAnimationPhases(fsm, fsm.StateDuration)
 		end,
 	}, { "ScanVictims", "Failed" })
+	--[=[
+		@state ScanVictims
+		@description Handles the `ScanVictims` state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("ScanVictims", {
 		OnEnter = function(_, fsm)
@@ -307,6 +348,10 @@ function MeleeAttackJob:RegisterStates()
 			end
 		end,
 	}, { "ProcessVictim", "WaitForRecovery" })
+	--[=[
+		@state ProcessVictim
+		@description Handles the `ProcessVictim` state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("ProcessVictim", {
 		OnEnter = function(_, fsm)
@@ -345,6 +390,10 @@ function MeleeAttackJob:RegisterStates()
 			fsm.State = "ApplyKnockback"
 		end,
 	}, { "ApplyKnockback", "WaitForRecovery" })
+	--[=[
+		@state ApplyKnockback
+		@description Handles the `ApplyKnockback` state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("ApplyKnockback", {
 		OnEnter = function(_, fsm)
@@ -365,6 +414,10 @@ function MeleeAttackJob:RegisterStates()
 			end
 		end,
 	}, { "ProcessVictim", "WaitForRecovery" })
+	--[=[
+		@state WaitForRecovery
+		@description Handles the `WaitForRecovery` state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("WaitForRecovery", {
 		OnEnter = function(_, fsm)
@@ -382,6 +435,10 @@ function MeleeAttackJob:RegisterStates()
 			emitDueAnimationPhases(fsm, damageScanOffset + fsm.StateDuration)
 		end,
 	}, { "ReleaseLock", "Failed" })
+	--[=[
+		@state ReleaseLock
+		@description Handles the `ReleaseLock` state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("ReleaseLock", {
 		OnEnter = function(_, fsm)
@@ -398,8 +455,17 @@ function MeleeAttackJob:RegisterStates()
 			fsm.State = "Completed"
 		end,
 	}, { "Completed", "Failed" })
+	--[=[
+		@state Completed
+		@description Handles the `Completed` terminal state for `MeleeAttackJob`.
+	]=]
 
 	self:AddState("Completed", function() end, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `MeleeAttackJob`.
+	]=]
+
 	self:AddState("Failed", function() end, {})
 end
 

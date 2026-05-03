@@ -27,13 +27,12 @@ export type Task = {
     CreationTime: number,
     LastRunTime: number?,
 }
+--[=[
+	@description Returns the data produced by `TaskPool.Get`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return Task -- Return value produced by the implementation, if any.
+]=]
 
---[[
-    @description Returns a task object from the pool or creates a new one.
-    @return Task -- Reusable task record ready to be populated by Scheduler:Schedule
-    @reads TaskPool._count, TaskPool._storage
-    @writes TaskPool._count, TaskPool._storage
-]]
 function TaskPool.Get(): Task
     if TaskPool._count > 0 then
         local t = TaskPool._storage[TaskPool._count]
@@ -59,14 +58,12 @@ function TaskPool.Get(): Task
         LastRunTime = nil,
     }
 end
+--[=[
+	@description Implements `TaskPool.Release`.
+	@param t Task -- `t` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-    @description Cleans and returns a task object to the pool.
-    @param t Task -- Task record that is no longer scheduled or running
-    @return ()
-    @reads None
-    @writes t.*, TaskPool._count, TaskPool._storage
-]]
 function TaskPool.Release(t: Task)
     -- IMPORTANT: Nil out the Action to prevent closure/environment leaks
     t.Action = nil :: any
@@ -87,14 +84,12 @@ function TaskPool.Release(t: Task)
     TaskPool._count += 1
     TaskPool._storage[TaskPool._count] = t
 end
+--[=[
+	@description Implements `TaskPool.Shrink`.
+	@param target number? -- `target` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-    @description Reduces the pool size to a target amount to reclaim memory.
-    @param target number? -- The amount of objects to keep (defaults to 10)
-    @return ()
-    @reads TaskPool._count
-    @writes TaskPool._storage, TaskPool._count
-]]
 function TaskPool.Shrink(target: number?)
     local keepCount = target or 10
     if TaskPool._count <= keepCount then return end

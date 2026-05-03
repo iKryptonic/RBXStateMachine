@@ -1,6 +1,8 @@
 --!strict
--- @Name CastFSM
--- @Description FSM state machine module.
+--[=[
+	@module CastFSM
+	@description Defines the `CastFSM` state machine module and its exported API.
+]=]
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -484,9 +486,23 @@ local function resolveExecuteContext(fsm: any)
 		AttackName = getCastAttackName(castDef),
 	}
 end
+--[=[
+	@description Handles `RegisterStates` for `CastFSM`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function CastFSM:RegisterStates()
+	--[=[
+		@state Idle
+		@description Handles the `Idle` state for `CastFSM`.
+	]=]
+
 	self:AddState("Idle", function() end, { "ValidateAbility" })
+	--[=[
+		@state ValidateAbility
+		@description Handles the `ValidateAbility` state for `CastFSM`.
+	]=]
 
 	self:AddState("ValidateAbility", {
 		OnEnter = function(_, fsm)
@@ -588,6 +604,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "ValidateResources"
 		end,
 	}, { "ValidateResources", "Failed" })
+	--[=[
+		@state ValidateResources
+		@description Handles the `ValidateResources` state for `CastFSM`.
+	]=]
 
 	self:AddState("ValidateResources", {
 		OnEnter = function(_, fsm)
@@ -608,6 +628,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "AcquireLock"
 		end,
 	}, { "AcquireLock", "Failed" })
+	--[=[
+		@state AcquireLock
+		@description Handles the `AcquireLock` state for `CastFSM`.
+	]=]
 
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
@@ -620,6 +644,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "DeductResources"
 		end,
 	}, { "DeductResources", "Failed" })
+	--[=[
+		@state DeductResources
+		@description Handles the `DeductResources` state for `CastFSM`.
+	]=]
 
 	self:AddState("DeductResources", {
 		OnEnter = function(_, fsm)
@@ -644,6 +672,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "EmitCastAnimation"
 		end,
 	}, { "EmitCastAnimation", "ReleaseLock" })
+	--[=[
+		@state EmitCastAnimation
+		@description Handles the `EmitCastAnimation` state for `CastFSM`.
+	]=]
 
 	self:AddState("EmitCastAnimation", {
 		OnEnter = function(_, fsm)
@@ -672,6 +704,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "WaitCastDuration"
 		end,
 	}, { "WaitCastDuration", "ReleaseLock" })
+	--[=[
+		@state WaitCastDuration
+		@description Handles the `WaitCastDuration` state for `CastFSM`.
+	]=]
 
 	self:AddState("WaitCastDuration", {
 		OnEnter = function(_, fsm)
@@ -689,6 +725,10 @@ function CastFSM:RegisterStates()
 			end
 		end,
 	}, { "ValidateNotInterrupted", "ReleaseLock" })
+	--[=[
+		@state ValidateNotInterrupted
+		@description Handles the `ValidateNotInterrupted` state for `CastFSM`.
+	]=]
 
 	self:AddState("ValidateNotInterrupted", {
 		OnEnter = function(_, fsm)
@@ -708,6 +748,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "Execute"
 		end,
 	}, { "Execute", "ReleaseLock" })
+	--[=[
+		@state Execute
+		@description Handles the `Execute` state for `CastFSM`.
+	]=]
 
 	self:AddState("Execute", {
 		OnEnter = function(_, fsm)
@@ -733,6 +777,10 @@ function CastFSM:RegisterStates()
 		"ExecuteTargetedAoE",
 		"ReleaseLock",
 	})
+	--[=[
+		@state ExecuteMeleeSingle
+		@description Handles the `ExecuteMeleeSingle` state for `CastFSM`.
+	]=]
 
 	self:AddState("ExecuteMeleeSingle", {
 		OnEnter = function(_, fsm)
@@ -760,6 +808,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "EmitFinishAnimation"
 		end,
 	}, { "EmitFinishAnimation", "ReleaseLock" })
+	--[=[
+		@state ExecuteMeleeAoE
+		@description Handles the `ExecuteMeleeAoE` state for `CastFSM`.
+	]=]
 
 	self:AddState("ExecuteMeleeAoE", {
 		OnEnter = function(_, fsm)
@@ -783,6 +835,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "EmitFinishAnimation"
 		end,
 	}, { "EmitFinishAnimation", "ReleaseLock" })
+	--[=[
+		@state ExecuteProjectile
+		@description Handles the `ExecuteProjectile` state for `CastFSM`.
+	]=]
 
 	self:AddState("ExecuteProjectile", {
 		OnEnter = function(_, fsm)
@@ -801,6 +857,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "EmitFinishAnimation"
 		end,
 	}, { "EmitFinishAnimation", "ReleaseLock" })
+	--[=[
+		@state ExecuteSelfHeal
+		@description Handles the `ExecuteSelfHeal` state for `CastFSM`.
+	]=]
 
 	self:AddState("ExecuteSelfHeal", {
 		OnEnter = function(_, fsm)
@@ -818,6 +878,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "EmitFinishAnimation"
 		end,
 	}, { "EmitFinishAnimation", "ReleaseLock" })
+	--[=[
+		@state ExecuteInstantHeal
+		@description Handles the `ExecuteInstantHeal` state for `CastFSM`.
+	]=]
 
 	self:AddState("ExecuteInstantHeal", {
 		OnEnter = function(_, fsm)
@@ -835,6 +899,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "EmitFinishAnimation"
 		end,
 	}, { "EmitFinishAnimation", "ReleaseLock" })
+	--[=[
+		@state ExecuteInstantStamina
+		@description Handles the `ExecuteInstantStamina` state for `CastFSM`.
+	]=]
 
 	self:AddState("ExecuteInstantStamina", {
 		OnEnter = function(_, fsm)
@@ -853,6 +921,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "EmitFinishAnimation"
 		end,
 	}, { "EmitFinishAnimation", "ReleaseLock" })
+	--[=[
+		@state ExecuteInstantMana
+		@description Handles the `ExecuteInstantMana` state for `CastFSM`.
+	]=]
 
 	self:AddState("ExecuteInstantMana", {
 		OnEnter = function(_, fsm)
@@ -871,6 +943,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "EmitFinishAnimation"
 		end,
 	}, { "EmitFinishAnimation", "ReleaseLock" })
+	--[=[
+		@state ExecuteDash
+		@description Handles the `ExecuteDash` state for `CastFSM`.
+	]=]
 
 	self:AddState("ExecuteDash", {
 		OnEnter = function(_, fsm)
@@ -909,6 +985,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "EmitFinishAnimation"
 		end,
 	}, { "EmitFinishAnimation", "ReleaseLock" })
+	--[=[
+		@state ExecuteTargetedAoE
+		@description Handles the `ExecuteTargetedAoE` state for `CastFSM`.
+	]=]
 
 	self:AddState("ExecuteTargetedAoE", {
 		OnEnter = function(_, fsm)
@@ -937,6 +1017,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "EmitFinishAnimation"
 		end,
 	}, { "EmitFinishAnimation", "ReleaseLock" })
+	--[=[
+		@state EmitFinishAnimation
+		@description Handles the `EmitFinishAnimation` state for `CastFSM`.
+	]=]
 
 	self:AddState("EmitFinishAnimation", {
 		OnEnter = function(_, fsm)
@@ -957,6 +1041,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "SetCooldown"
 		end,
 	}, { "SetCooldown", "ReleaseLock" })
+	--[=[
+		@state SetCooldown
+		@description Handles the `SetCooldown` state for `CastFSM`.
+	]=]
 
 	self:AddState("SetCooldown", {
 		OnEnter = function(_, fsm)
@@ -981,6 +1069,10 @@ function CastFSM:RegisterStates()
 			fsm.State = "ReleaseLock"
 		end,
 	}, { "ReleaseLock" })
+	--[=[
+		@state ReleaseLock
+		@description Handles the `ReleaseLock` state for `CastFSM`.
+	]=]
 
 	self:AddState("ReleaseLock", {
 		OnEnter = function(_, fsm)
@@ -1009,16 +1101,37 @@ function CastFSM:RegisterStates()
 			fsm.State = "Completed"
 		end,
 	}, { "Completed", "Failed" })
+	--[=[
+		@state Completed
+		@description Handles the `Completed` terminal state for `CastFSM`.
+	]=]
 
 	self:AddState("Completed", function() end, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `CastFSM`.
+	]=]
+
 	self:AddState("Failed", function() end, {})
 end
+--[=[
+	@description Handles `RequestCast` for `CastFSM`.
+	@param fsm any -- `fsm` input parameter.
+	@param abilityDef any -- `abilityDef` input parameter.
+	@param charEntityId string -- `charEntityId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function CastFSM.RequestCast(fsm: any, abilityDef: any, charEntityId: string)
 	fsm.Context._abilityDef = abilityDef
 	fsm.Context.CharacterEntityId = charEntityId
 	fsm.State = "ValidateAbility"
 end
+--[=[
+	@description Implements `CastFSM.OnCleanup`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function CastFSM:OnCleanup()
 	local charEntity = self.Context._charEntity

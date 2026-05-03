@@ -1,8 +1,8 @@
 --!strict
--- @Name DashFSM
--- @Author iKrypto
--- @Description Client-side FSM managing dash lifecycle.
---   States: Ready → ValidateDash → ValidateStamina → DeductStamina → ApplyImpulse → PlaySound → TriggerAnimation → WriteOverlay → DashActive → ClearOverlay → Cooldown → Ready
+--[=[
+	@module DashFSM
+	@description Defines the `DashFSM` state machine module and its exported API.
+]=]
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -79,8 +79,18 @@ local function getImpulseDirection(rootPart: BasePart, direction: string): Vecto
 	end
 	return nil
 end
+--[=[
+	@description Handles `RegisterStates` for `DashFSM`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function DashFSM:RegisterStates()
+	--[=[
+		@state Ready
+		@description Handles the `Ready` state for `DashFSM`.
+	]=]
+
 	self:AddState("Ready", {
 		OnEnter = function(_, fsm)
 			fsm.Context._dashDirection = nil
@@ -88,6 +98,10 @@ function DashFSM:RegisterStates()
 			fsm.Context._rootPart = nil
 		end,
 	}, { "ValidateDash" })
+	--[=[
+		@state ValidateDash
+		@description Handles the `ValidateDash` state for `DashFSM`.
+	]=]
 
 	self:AddState("ValidateDash", {
 		OnEnter = function(_, fsm)
@@ -104,6 +118,10 @@ function DashFSM:RegisterStates()
 			fsm.State = "ValidateStamina"
 		end,
 	}, { "ValidateStamina", "Ready" })
+	--[=[
+		@state ValidateStamina
+		@description Handles the `ValidateStamina` state for `DashFSM`.
+	]=]
 
 	self:AddState("ValidateStamina", {
 		OnEnter = function(_, fsm)
@@ -116,6 +134,10 @@ function DashFSM:RegisterStates()
 			fsm.State = "DeductStamina"
 		end,
 	}, { "DeductStamina", "Ready" })
+	--[=[
+		@state DeductStamina
+		@description Handles the `DeductStamina` state for `DashFSM`.
+	]=]
 
 	self:AddState("DeductStamina", {
 		OnEnter = function(_, fsm)
@@ -135,6 +157,10 @@ function DashFSM:RegisterStates()
 			fsm.State = "ApplyImpulse"
 		end,
 	}, { "ApplyImpulse", "Ready" })
+	--[=[
+		@state ApplyImpulse
+		@description Handles the `ApplyImpulse` state for `DashFSM`.
+	]=]
 
 	self:AddState("ApplyImpulse", {
 		OnEnter = function(_, fsm)
@@ -160,6 +186,10 @@ function DashFSM:RegisterStates()
 			fsm.State = "PlaySound"
 		end,
 	}, { "PlaySound", "Ready" })
+	--[=[
+		@state PlaySound
+		@description Handles the `PlaySound` state for `DashFSM`.
+	]=]
 
 	self:AddState("PlaySound", {
 		OnEnter = function(_, fsm)
@@ -175,6 +205,10 @@ function DashFSM:RegisterStates()
 			fsm.State = "TriggerAnimation"
 		end,
 	}, { "TriggerAnimation" })
+	--[=[
+		@state TriggerAnimation
+		@description Handles the `TriggerAnimation` state for `DashFSM`.
+	]=]
 
 	self:AddState("TriggerAnimation", {
 		OnEnter = function(_, fsm)
@@ -187,6 +221,10 @@ function DashFSM:RegisterStates()
 			fsm.State = "WriteOverlay"
 		end,
 	}, { "WriteOverlay" })
+	--[=[
+		@state WriteOverlay
+		@description Handles the `WriteOverlay` state for `DashFSM`.
+	]=]
 
 	self:AddState("WriteOverlay", {
 		OnEnter = function(_, fsm)
@@ -201,12 +239,20 @@ function DashFSM:RegisterStates()
 			fsm.State = "DashActive"
 		end,
 	}, { "DashActive", "Ready" })
+	--[=[
+		@state DashActive
+		@description Handles the `DashActive` state for `DashFSM`.
+	]=]
 
 	self:AddState("DashActive", {
 		OnEnter = function(_, fsm)
 			fsm:ScheduleTransition(ACTIVE_DURATION, "ClearOverlay")
 		end,
 	}, { "ClearOverlay" })
+	--[=[
+		@state ClearOverlay
+		@description Handles the `ClearOverlay` state for `DashFSM`.
+	]=]
 
 	self:AddState("ClearOverlay", {
 		OnEnter = function(_, fsm)
@@ -217,16 +263,35 @@ function DashFSM:RegisterStates()
 			fsm.State = "Cooldown"
 		end,
 	}, { "Cooldown" })
+	--[=[
+		@state Cooldown
+		@description Handles the `Cooldown` state for `DashFSM`.
+	]=]
 
 	self:AddState("Cooldown", {
 		OnEnter = function(_, fsm)
 			fsm:ScheduleTransition(COOLDOWN, "Ready")
 		end,
 	}, { "Ready" })
+	--[=[
+		@state Completed
+		@description Handles the `Completed` terminal state for `DashFSM`.
+	]=]
 
 	self:AddState("Completed", function() end, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `DashFSM`.
+	]=]
+
 	self:AddState("Failed", function() end, {})
 end
+--[=[
+	@description Implements `DashFSM.TryDash`.
+	@param fsm any -- `fsm` input parameter.
+	@param direction string -- `direction` input parameter.
+	@return boolean -- Return value produced by the implementation, if any.
+]=]
 
 function DashFSM.TryDash(fsm: any, direction: string): boolean
 	if fsm.State ~= "Ready" then

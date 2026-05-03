@@ -1,7 +1,8 @@
 --!strict
--- @Name RetryBehavior
--- @Author iKrypto
--- @Description Behavior Tree definition for DataStore request retry logic.
+--[=[
+	@module RetryBehavior
+	@description Defines the `RetryBehavior` module and its exported API.
+]=]
 
 local BehaviorTree
 do
@@ -18,14 +19,12 @@ do
 end
 
 local RetryBehavior = {}
+--[=[
+	@description Creates the result managed by `RetryBehavior.Create`.
+	@param Orchestrator any -- `Orchestrator` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Builds the retry behavior tree used by RequestFSM instances.
-	@param Orchestrator any -- Shared orchestrator facade used by the surrounding FSM context
-	@return (context: any) -> string -- BehaviorTree node that mutates request context and drives FSM transitions
-	@reads BehaviorTree constructors, context.RequestFunction, context.MaxRetries, context.RetryCount, context.FSM
-	@writes context.Result, context.LastError, context.RetryCount, context.FSM.WaitSpan
-]]
 function RetryBehavior.Create(Orchestrator)
 	local BT = BehaviorTree
 

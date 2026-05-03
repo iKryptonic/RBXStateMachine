@@ -120,17 +120,12 @@ local CompiledClasses = {
 	StateMachines = {},
 	Entities = {}
 };
-
 --[=[
-	@description Initializes the Factory module and all sub-modules (BaseEntity,
-	BaseStateMachine, BehaviorTree, Registry, PersistenceManager). Scans game
-	descendants for Entity/StateMachine folders and auto-compiles them.
-
-	@param Util table -- Orchestrator utility table
-	@return ()
-	@reads game:GetDescendants()
-	@writes Utility, Logger, CompiledClasses
+	@description Handles `Initialize` for `Factory`.
+	@param Util any -- `Util` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Factory.Initialize(Util)
 	if Initialized then return end
 	Initialized = true
@@ -164,16 +159,13 @@ function Factory.Initialize(Util)
 	end
 	Logger:Log({ Level = "INFO", Message = "Factory initialized" })
 end
-
 --[=[
-	@description Retrieves a compiled class by type and name.
-
-	@param typeName string -- "Entity" or "StateMachine" (aliases supported)
-	@param name string -- The class name to look up
-	@return any -- The compiled subclass table
-	@reads CompiledClasses
-	@writes None
+	@description Returns the data produced by `Factory.Get`.
+	@param typeName string -- `typeName` input parameter.
+	@param name string -- `name` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Factory.Get(typeName: string, name: string): any
 	assert(Initialized, "Factory not initialized")
 	-- Process aliases: Entity -> Entities, StateMachine -> StateMachines
@@ -194,16 +186,12 @@ function Factory.Get(typeName: string, name: string): any
 
 	return category[name] or Logger:Log({ Level = "ERROR", Message = `[SubClass] {typeName} '{name}' is not registered or compiled.` })
 end
-
 --[=[
-	@description Returns the entire compiled classes table for a given type.
-	The returned table is shared; do not mutate it.
-
-	@param typeName string -- "Entity" | "StateMachine" (aliases supported)
-	@return { [string]: any } -- Map of class name → compiled subclass
-	@reads CompiledClasses
-	@writes None
+	@description Returns the data produced by `Factory.GetAll`.
+	@param typeName string -- `typeName` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Factory.GetAll(typeName: string): any
 	assert(Initialized, "Factory not initialized")
 	local configKey = typeName
@@ -314,17 +302,12 @@ local function CompileModule(child: ModuleScript, typeName: string, classBase: a
 		Logger:Log({ Level = "ERROR", Message = string.format("Failed to require '%s' or invalid return type: %s", child.Name, tostring(result)) })
 	end
 end
-
 --[=[
-	@description Compiles all ModuleScripts in a given folder (and nested sub-folders)
-	into registered subclasses. Called automatically during Initialize() for
-	matching folders, but can also be invoked manually for late-loaded content.
-
-	@param configurationFolder Folder -- Folder containing Entity or StateMachine modules
-	@return ()
-	@reads configurationFolder:GetDescendants()
-	@writes CompiledClasses
+	@description Implements `Factory.CompileFolder`.
+	@param configurationFolder Folder -- `configurationFolder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Factory.CompileFolder(configurationFolder: Folder)
 	assert(Initialized, "Factory not initialized")
 	
@@ -347,24 +330,12 @@ function Factory.CompileFolder(configurationFolder: Folder)
 		end
 	end
 end
-
 --[=[
-	@description Creates (or retrieves) a unique Entity instance by ID.
-	Resolves the class, checks the Registry for existing instances, checks the
-	entity pool, constructs a new instance, injects context, registers in the
-	Registry, optionally loads persistent state, and wires up replication and
-	destruction hooks.
-
-	@param params table
-		- EntityClass: any -- Class name (string) or class table
-		- EntityId: string? -- Unique ID (auto-generated GUID if omitted)
-		- Context: { [any]: any }? -- Arbitrary context data
-		- Persistent: boolean? -- Whether to load/save persistent state
-		- PersistenceKey: string? -- Custom DataStore key (defaults to EntityId)
-	@return any? -- The Entity instance, or nil on failure
-	@reads Factory.Registry, Factory.PersistenceManager
-	@writes Factory.Registry (registers entity)
+	@description Creates the result managed by `Factory.CreateEntity`.
+	@param params { EntityClass: any, EntityId: string?, Context: {any}?, Persistent: boolean?, PersistenceKey: string?, InitialData: { [string]: any }? } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Context: {any}?, Persistent: boolean?, PersistenceKey: string?, InitialData: { [string]: any }? })
 assert(Initialized, "Factory not initialized")
 local EntityClass = ResolveClass("Entity", params.EntityClass)
@@ -630,18 +601,11 @@ Logger:Log({ Level = "DEBUG", Message = "Created Entity " .. entityId })
 return entity
 end
 --[=[
-	@description Creates a StateMachine instance, registers it in the Registry,
-	and wires up automatic cleanup on Completed/Failed/Cancelled signals. On
-	the server, also wires StateChanged for client replication.
-
-	@param params table
-		- StateMachineClass: any -- Class name (string) or class table
-		- StateMachineId: string? -- Unique ID (auto-generated GUID if omitted)
-		- Context: { [any]: any }? -- Arbitrary context data
-	@return any? -- The StateMachine instance, or nil on failure
-	@reads Factory.Registry
-	@writes Factory.Registry (registers state machine)
+	@description Creates the result managed by `Factory.CreateStateMachine`.
+	@param params { StateMachineClass: any, StateMachineId: string?, Context: {any}?, AutoStart: boolean?, InitialState: string? } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Factory.CreateStateMachine(params: { StateMachineClass: any, StateMachineId: string?, Context: {any}?, AutoStart: boolean?, InitialState: string? })
 	assert(Initialized, "Factory not initialized")
 	local StateMachineClass = ResolveClass("StateMachine", params.StateMachineClass)

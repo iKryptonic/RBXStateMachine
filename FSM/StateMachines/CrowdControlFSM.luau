@@ -1,6 +1,8 @@
 --!strict
--- @Name CrowdControlFSM
--- @Description FSM state machine module.
+--[=[
+	@module CrowdControlFSM
+	@description Defines the `CrowdControlFSM` state machine module and its exported API.
+]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
@@ -72,8 +74,18 @@ end
 local function getOperationLabel(routeConfig: RouteConfig): string
 	return string.lower(routeConfig.logPrefix)
 end
+--[=[
+	@description Handles `RegisterStates` for `CrowdControlFSM`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function CrowdControlFSM:RegisterStates()
+	--[=[
+		@state Validate
+		@description Handles the `Validate` state for `CrowdControlFSM`.
+	]=]
+
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			if not fsm:GetOrchestrator() then
@@ -103,6 +115,10 @@ function CrowdControlFSM:RegisterStates()
 			fsm.State = "RouteBranch"
 		end,
 	}, { "RouteBranch", "Failed" })
+	--[=[
+		@state RouteBranch
+		@description Handles the `RouteBranch` state for `CrowdControlFSM`.
+	]=]
 
 	self:AddState("RouteBranch", {
 		OnEnter = function(_, fsm)
@@ -120,6 +136,10 @@ function CrowdControlFSM:RegisterStates()
 			fsm.State = "AcquireCCLock"
 		end,
 	}, { "AcquireCCLock", "Failed" })
+	--[=[
+		@state AcquireCCLock
+		@description Handles the `AcquireCCLock` state for `CrowdControlFSM`.
+	]=]
 
 	self:AddState("AcquireCCLock", {
 		OnEnter = function(_, fsm)
@@ -139,6 +159,10 @@ function CrowdControlFSM:RegisterStates()
 			fsm.State = "ApplyFlags"
 		end,
 	}, { "ApplyFlags", "ReleaseCCLock", "Failed" })
+	--[=[
+		@state ApplyFlags
+		@description Handles the `ApplyFlags` state for `CrowdControlFSM`.
+	]=]
 
 	self:AddState("ApplyFlags", {
 		OnEnter = function(_, fsm)
@@ -161,6 +185,10 @@ function CrowdControlFSM:RegisterStates()
 			fsm.State = "EmitIntent"
 		end,
 	}, { "EmitIntent", "ReleaseCCLock", "Failed" })
+	--[=[
+		@state EmitIntent
+		@description Handles the `EmitIntent` state for `CrowdControlFSM`.
+	]=]
 
 	self:AddState("EmitIntent", {
 		OnEnter = function(_, fsm)
@@ -193,12 +221,20 @@ function CrowdControlFSM:RegisterStates()
 			fsm.State = "WaitDuration"
 		end,
 	}, { "WaitDuration", "ReleaseCCLock", "Failed" })
+	--[=[
+		@state WaitDuration
+		@description Handles the `WaitDuration` state for `CrowdControlFSM`.
+	]=]
 
 	self:AddState("WaitDuration", {
 		OnEnter = function(_, fsm)
 			StateTransitionHelpers.scheduleTransitionCompat(fsm, fsm.Duration, "ClearFlags", "WaitDuration")
 		end,
 	}, { "ClearFlags", "ReleaseCCLock", "Failed" })
+	--[=[
+		@state ClearFlags
+		@description Handles the `ClearFlags` state for `CrowdControlFSM`.
+	]=]
 
 	self:AddState("ClearFlags", {
 		OnEnter = function(_, fsm)
@@ -221,6 +257,10 @@ function CrowdControlFSM:RegisterStates()
 			fsm.State = "ReleaseCCLock"
 		end,
 	}, { "ReleaseCCLock", "Failed" })
+	--[=[
+		@state ReleaseCCLock
+		@description Handles the `ReleaseCCLock` state for `CrowdControlFSM`.
+	]=]
 
 	self:AddState("ReleaseCCLock", {
 		OnEnter = function(_, fsm)
@@ -240,6 +280,11 @@ function CrowdControlFSM:RegisterStates()
 		end,
 	}, { "Completed", "Failed" })
 end
+--[=[
+	@description Implements `CrowdControlFSM.OnCleanup`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function CrowdControlFSM:OnCleanup()
 	local charEntity = self.CharacterEntity

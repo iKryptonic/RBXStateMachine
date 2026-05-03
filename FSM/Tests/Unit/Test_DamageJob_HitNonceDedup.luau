@@ -1,7 +1,8 @@
 --!nocheck
--- @Name Test_DamageJob_HitNonceDedup
--- @Author iKrypto
--- @Description Unit tests for the hit nonce deduplication concept used by DamageJob.
+--[=[
+	@module Test_DamageJob_HitNonceDedup
+	@description Defines the `Test_DamageJob_HitNonceDedup` module and its exported API.
+]=]
 
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)
 
@@ -35,6 +36,11 @@ local function rememberNonce(processedNonces, attackerUserId, nonce, now)
 	nonceMap[nonce] = now + NONCE_EXPIRY
 	return true
 end
+--[=[
+	@description Implements `Test_DamageJob_HitNonceDedup.Run`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Test_DamageJob_HitNonceDedup.Run()
 	local tester = TestBase.new("DamageJob_HitNonceDedup")

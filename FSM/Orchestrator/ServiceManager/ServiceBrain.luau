@@ -1,19 +1,19 @@
 --!strict
--- @Name ServiceManager/ServiceBrain.luau
--- @Author iKrypto
--- @Description Top-level Behavior Tree that orchestrates all Nexus subsystem modules.
--- Uses the framework's BehaviorTree to coordinate rendering, data fetching, insights, and animations.
+--[=[
+	@module ServiceBrain
+	@description Defines the `ServiceBrain` module and its exported API.
+]=]
 
 local ServiceBrain = {}
 
 local BehaviorTree: any = nil
 local Status: any = nil
+--[=[
+	@description Handles `Initialize` for `ServiceBrain`.
+	@param Orchestrator any -- `Orchestrator` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Cache the framework BehaviorTree references used by the Nexus brain.
-	Must run before Build so the returned tree can construct condition/action
-	nodes against the orchestrator's factory.
-]]
 function ServiceBrain.Initialize(Orchestrator: any)
 	BehaviorTree = Orchestrator.Factory.BehaviorTree
 	Status = BehaviorTree.BehaviorTreeStatus
@@ -177,16 +177,12 @@ local function SyncContextData(ctx: any): string
 	-- Server mode is handled by ConnectionFSM polling
 	return Status.Success
 end
+--[=[
+	@description Creates the result managed by `ServiceBrain.Build`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return (context: any) -> string -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- TREE CONSTRUCTION
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Build the top-level behavior tree tick function.
-	The resulting tree syncs context, refreshes subsystem data when needed,
-	renders dirty UI, and always advances animation work.
-]]
 function ServiceBrain.Build(): (context: any) -> string
 	-- The root tree:
 	-- Sequence: must be initialized

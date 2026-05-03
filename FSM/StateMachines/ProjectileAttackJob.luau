@@ -1,8 +1,8 @@
 --!strict
--- @Name ProjectileAttackJob
--- @Author iKrypto
--- @Description Server-authoritative ranged attack FSM for bows, staves, and spell casters.
---   Spawns a projectile, tracks collision, and creates DamageJob on hit.
+--[=[
+	@module ProjectileAttackJob
+	@description Defines the `ProjectileAttackJob` state machine module and its exported API.
+]=]
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -111,8 +111,18 @@ local function getVictimEntity(orchestrator: any, targetModel: Model): any?
 	end
 	return nil
 end
+--[=[
+	@description Handles `RegisterStates` for `ProjectileAttackJob`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProjectileAttackJob:RegisterStates()
+	--[=[
+		@state Validate
+		@description Handles the `Validate` state for `ProjectileAttackJob`.
+	]=]
+
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -181,6 +191,10 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "AcquireLock"
 		end,
 	}, { "AcquireLock", "Failed" })
+	--[=[
+		@state AcquireLock
+		@description Handles the `AcquireLock` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
@@ -193,6 +207,10 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "ValidateMana"
 		end,
 	}, { "ValidateMana", "Failed" })
+	--[=[
+		@state ValidateMana
+		@description Handles the `ValidateMana` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("ValidateMana", {
 		OnEnter = function(_, fsm)
@@ -205,6 +223,10 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "DeductMana"
 		end,
 	}, { "DeductMana", "ReleaseLock" })
+	--[=[
+		@state DeductMana
+		@description Handles the `DeductMana` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("DeductMana", {
 		OnEnter = function(_, fsm)
@@ -218,6 +240,10 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "EmitChargeAnimation"
 		end,
 	}, { "EmitChargeAnimation" })
+	--[=[
+		@state EmitChargeAnimation
+		@description Handles the `EmitChargeAnimation` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("EmitChargeAnimation", {
 		OnEnter = function(_, fsm)
@@ -225,6 +251,10 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "WaitCharge"
 		end,
 	}, { "WaitCharge" })
+	--[=[
+		@state WaitCharge
+		@description Handles the `WaitCharge` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("WaitCharge", {
 		OnEnter = function(_, fsm)
@@ -236,6 +266,10 @@ function ProjectileAttackJob:RegisterStates()
 			end
 		end,
 	}, { "ValidateForFire", "Failed" })
+	--[=[
+		@state ValidateForFire
+		@description Handles the `ValidateForFire` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("ValidateForFire", {
 		OnEnter = function(_, fsm)
@@ -247,6 +281,10 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "EmitFireAnimation"
 		end,
 	}, { "EmitFireAnimation", "ReleaseLock" })
+	--[=[
+		@state EmitFireAnimation
+		@description Handles the `EmitFireAnimation` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("EmitFireAnimation", {
 		OnEnter = function(_, fsm)
@@ -254,6 +292,10 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "SpawnProjectile"
 		end,
 	}, { "SpawnProjectile" })
+	--[=[
+		@state SpawnProjectile
+		@description Handles the `SpawnProjectile` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("SpawnProjectile", {
 		OnEnter = function(_, fsm)
@@ -273,6 +315,10 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "ConfigurePhysics"
 		end,
 	}, { "ConfigurePhysics" })
+	--[=[
+		@state ConfigurePhysics
+		@description Handles the `ConfigurePhysics` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("ConfigurePhysics", {
 		OnEnter = function(_, fsm)
@@ -294,6 +340,10 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "RegisterHitDetection"
 		end,
 	}, { "RegisterHitDetection", "ReleaseLock" })
+	--[=[
+		@state RegisterHitDetection
+		@description Handles the `RegisterHitDetection` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("RegisterHitDetection", {
 		OnEnter = function(_, fsm)
@@ -335,12 +385,20 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "WaitForImpact"
 		end,
 	}, { "WaitForImpact", "ReleaseLock", "ProcessHit" })
+	--[=[
+		@state WaitForImpact
+		@description Handles the `WaitForImpact` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("WaitForImpact", {
 		OnEnter = function(_, fsm)
 			fsm:ScheduleTransition(fsm.Context._lifetime or DEFAULT_PROJECTILE_LIFETIME, "DestroyProjectile")
 		end,
 	}, { "DestroyProjectile", "ProcessHit" })
+	--[=[
+		@state ProcessHit
+		@description Handles the `ProcessHit` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("ProcessHit", {
 		OnEnter = function(_, fsm)
@@ -359,6 +417,10 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "ApplyProjectileKnockback"
 		end,
 	}, { "ApplyProjectileKnockback" })
+	--[=[
+		@state ApplyProjectileKnockback
+		@description Handles the `ApplyProjectileKnockback` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("ApplyProjectileKnockback", {
 		OnEnter = function(_, fsm)
@@ -381,6 +443,10 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "DestroyProjectile"
 		end,
 	}, { "DestroyProjectile" })
+	--[=[
+		@state DestroyProjectile
+		@description Handles the `DestroyProjectile` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("DestroyProjectile", {
 		OnEnter = function(_, fsm)
@@ -388,6 +454,10 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "ReleaseLock"
 		end,
 	}, { "ReleaseLock" })
+	--[=[
+		@state ReleaseLock
+		@description Handles the `ReleaseLock` state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("ReleaseLock", {
 		OnEnter = function(_, fsm)
@@ -404,10 +474,24 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.State = "Completed"
 		end,
 	}, { "Completed", "Failed" })
+	--[=[
+		@state Completed
+		@description Handles the `Completed` terminal state for `ProjectileAttackJob`.
+	]=]
 
 	self:AddState("Completed", function() end, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `ProjectileAttackJob`.
+	]=]
+
 	self:AddState("Failed", function() end, {})
 end
+--[=[
+	@description Implements `ProjectileAttackJob.OnCleanup`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProjectileAttackJob:OnCleanup()
 	cleanupProjectile(self)

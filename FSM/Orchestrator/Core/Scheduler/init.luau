@@ -1,8 +1,8 @@
 --!strict
--- @Name Scheduler
--- @Author ikrypto
--- @Date 2026-01-26
--- @Description Lightweight Task Scheduler with basic performance tracking.
+--[=[
+	@module Scheduler
+	@description Defines the `Scheduler` module and its exported API.
+]=]
 
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
@@ -68,15 +68,12 @@ end
 
 do 
 	Scheduler.__index = Scheduler
+	--[=[
+		@description Handles `Initialize` for `Scheduler`.
+		@param Util any -- `Util` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Initializes shared Scheduler settings and logging utilities.
-		Must be called before using the default singleton fallback in ResolveScheduler.
-		@param Util any -- Orchestrator utility table containing Settings and Logger
-		@return ()
-		@reads Initialized
-		@writes Scheduler.Settings, Scheduler.Logger, Scheduler.Strings, Initialized
-	]]
 	function Scheduler.Initialize(Util: any)
 		if Initialized then return end
 		Initialized = true
@@ -84,14 +81,12 @@ do
 		Scheduler.Logger = Util.Logger.new({Name = "Scheduler"})
 		Scheduler.Strings = Util.StaticStrings
 	end
+	--[=[
+		@description Implements `Scheduler.new`.
+		@param settings any? -- `settings` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Creates a new Scheduler instance.
-		@param settings any? -- Optional settings table overriding Scheduler.Initialize defaults
-		@return any -- Scheduler instance with isolated heaps, history, and performance facade
-		@reads Scheduler.Settings
-		@writes self.Tasks, self.History, self._heaps, self.PerformanceManager
-	]]
 	function Scheduler.new(settings: any?)
 		local self = setmetatable({
 			Tasks = {},
@@ -113,15 +108,12 @@ do
 		self.PerformanceManager = PerformanceManager.new(self)
 		return self
 	end
+	--[=[
+		@description Implements `Scheduler.Schedule`.
+		@param params any -- `params` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Schedules a task for future execution on a RunService event heap.
-		Overwriting an existing task name replaces the registry entry and relies on lazy heap cleanup.
-		@param params any -- Task descriptor containing TaskName, TaskAction, delay, priority, recurrence, and Event
-		@return Task? -- Pooled task record, or nil when params are invalid
-		@reads self.Tasks, self._heaps
-		@writes self.Tasks, self._heaps, self._taskCount
-	]]
 	function Scheduler:Schedule(params: any)
         if not params.TaskName or type(params.TaskAction) ~= "function" then return nil end
         
@@ -155,13 +147,12 @@ do
         
         return t
     end
+	--[=[
+		@description Implements `Scheduler.Clear`.
+		@param none nil -- This function does not accept explicit parameters.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Clears all scheduled tasks, heaps, history, and stats.
-		@return ()
-		@reads self.TaskStats
-		@writes self.Tasks, self._heaps, self.History, self.LastFrameStats, self.TaskStats, self._historyIndex, self._taskCount
-	]]
 	function Scheduler:Clear()
 		self.Tasks = {}
 		self._heaps = {}
@@ -171,17 +162,15 @@ do
 		self._historyIndex = 1
 		self._taskCount = 0
 	end
+	--[=[
+		@description Implements `Scheduler.AddToHistory`.
+		@param taskObj any -- `taskObj` input parameter.
+		@param status any -- `status` input parameter.
+		@param duration any -- `duration` input parameter.
+		@param err string? -- `err` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Adds an entry to History (best-effort; used by ServiceManager).
-		@param taskObj any -- Task record being summarized
-		@param status any -- Completion state such as Completed, Failed, or Cancelled
-		@param duration any -- Execution duration in seconds
-		@param err string? -- Optional error payload captured during execution
-		@return ()
-		@reads self._historyIndex
-		@writes self.History, self._historyIndex
-	]]
 	function Scheduler:AddToHistory(taskObj, status, duration, err: string?)
 		local entry = {
 			Name = taskObj.Name,
@@ -193,14 +182,12 @@ do
 		self.History[self._historyIndex] = entry
 		self._historyIndex = (self._historyIndex % 100) + 1
 	end
+	--[=[
+		@description Implements `Scheduler.Deschedule`.
+		@param name string -- `name` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Deschedules (cancels) a task by name.
-		@param name string -- Registered task name
-		@return ()
-		@reads self.Tasks, Scheduler.Logger
-		@writes self.Tasks, self._taskCount, self.History
-	]]
 	function Scheduler:Deschedule(name: string)
 		self = ResolveScheduler(self)
 		if self.Tasks[name] then
@@ -216,36 +203,31 @@ do
 			end
 		end
 	end
+	--[=[
+		@description Returns the data produced by `Scheduler.GetTask`.
+		@param name string -- `name` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Gets a task by name.
-		@param name string -- Registered task name
-		@return Task? -- Live scheduled task record, if present
-		@reads self.Tasks
-		@writes None
-	]]
 	function Scheduler:GetTask(name: string)
 		self = ResolveScheduler(self)
 		return self.Tasks[name]
 	end
+	--[=[
+		@description Returns the data produced by `Scheduler.GetTaskCount`.
+		@param none nil -- This function does not accept explicit parameters.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Returns the number of currently scheduled tasks.
-		@return number -- O(1) count of registry-backed tasks
-		@reads self._taskCount
-		@writes None
-	]]
 	function Scheduler:GetTaskCount()
 		return self._taskCount
 	end
+	--[=[
+		@description Implements `Scheduler.ExecuteTask`.
+		@param taskOrName string | Task -- `taskOrName` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Executes a task immediately by name or task object.
-		@param taskOrName string | Task -- Either a registered task name or a task record returned by Schedule
-		@return ()
-		@reads self.Tasks, self.Logger
-		@writes self._running, self.History, task performance counters (via _internalExecute)
-	]]
 	function Scheduler:ExecuteTask(taskOrName: string | Task)
 		self = ResolveScheduler(self)
 		local task: Task? = nil
@@ -264,13 +246,12 @@ do
 		end
 		self:_internalExecute(task)
 	end
+	--[=[
+		@description Returns the data produced by `Scheduler.GetSyncData`.
+		@param none nil -- This function does not accept explicit parameters.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Returns a sanitized snapshot for ServiceManager server sync.
-		@return any -- Serializable data excluding function values from task records
-		@reads self.Tasks, self.Logger, self.Settings, self.History, self.LastFrameStats, self.TaskStats
-		@writes None
-	]]
 	function Scheduler:GetSyncData()
 		self = ResolveScheduler(self)
 		local safeTasks = {}
@@ -293,26 +274,22 @@ do
 			TaskStats = self.TaskStats
 		}
 	end
+	--[=[
+		@description Implements `Scheduler.CheckAdmin`.
+		@param player Player -- `player` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Checks whether a player is authorized to use admin-only API.
-		@param player Player -- Caller requesting privileged scheduler operations
-		@return boolean -- True in Studio or when the player owns the experience
-		@reads RunService:IsStudio(), game.CreatorId
-		@writes None
-	]]
 	function Scheduler:CheckAdmin(player: Player)
 		if RunService:IsStudio() then return true end
 		return player.UserId == game.CreatorId
 	end
+	--[=[
+		@description Implements `Scheduler.ResetTask`.
+		@param name string -- `name` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Resets a task's performance counters.
-		@param name string -- Registered task name
-		@return ()
-		@reads self.Tasks, Scheduler.Logger
-		@writes task.RunCount, task.TotalRunTime, task.MaxRunTime, task.TotalMemory, task.MaxMemory
-	]]
 	function Scheduler:ResetTask(name: string)
 		self = ResolveScheduler(self)
 		local task = self.Tasks[name]
@@ -335,23 +312,21 @@ do
 			end
 		end
 	end
+	--[=[
+		@description Implements `Scheduler.GenerateKey`.
+		@param none nil -- This function does not accept explicit parameters.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Generates a GUID key string.
-		@return string -- GUID without braces for stable external identifiers
-		@reads HttpService
-		@writes None
-	]]
 	function Scheduler:GenerateKey()
 		return HttpService:GenerateGUID(false)
 	end
+	--[=[
+		@description Returns the data produced by `Scheduler.GetThreadPoolStats`.
+		@param none nil -- This function does not accept explicit parameters.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Returns aggregate coroutine-pool statistics used by the scheduler runtime.
-		@return { TotalThreads: number, FreeThreads: number, ActiveThreads: number, PeakThreads: number }
-		@reads totalThreads, freeThreads, activeThreads, peakThreads
-		@writes None
-	]]
 	function Scheduler:GetThreadPoolStats()
 		return {
 			TotalThreads = totalThreads,
@@ -360,14 +335,12 @@ do
 			PeakThreads = peakThreads,
 		}
 	end
+	--[=[
+		@description Implements `Scheduler._internalExecute`.
+		@param t any -- `t` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Internal execution wrapper with performance tracking and error capture.
-		@param t Task -- Task record to execute on a pooled coroutine
-		@return ()
-		@reads freeThreads, totalThreads, peakThreads, self.Tasks
-		@writes freeThreads, totalThreads, peakThreads, activeThreads, self._running, task runtime counters, self.History
-	]]
 	function Scheduler:_internalExecute(t)
 		local thread
 		if #freeThreads > 0 then
@@ -428,13 +401,12 @@ do
 			end
 		end, thread)
 	end
+	--[=[
+		@description Implements `Scheduler.PrunePool`.
+		@param none nil -- This function does not accept explicit parameters.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Reduces the task pool size when cached objects have grown well beyond the steady-state budget.
-		@return ()
-		@reads TaskPool._count, Scheduler.Logger
-		@writes TaskPool._storage, TaskPool._count
-	]]
 	function Scheduler:PrunePool()
     -- Only shrink if the pool is significantly large
 		if TaskPool._count > 100 then
@@ -448,14 +420,12 @@ do
 			end
 		end
 	end
+	--[=[
+		@description Implements `Scheduler.Step`.
+		@param eventName string? -- `eventName` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Executes due tasks for the given event name (frame-budgeted).
-		@param eventName string? -- RunService event bucket to process; defaults to Heartbeat
-		@return ()
-		@reads self._heaps, self.Tasks, self.Settings.FrameBudget, self._running
-		@writes heap order, self.LastFrameStats, task.NextRun, TaskPool storage (via lazy release)
-	]]
 	function Scheduler:Step(eventName: string?)
 		local event = eventName or "Heartbeat"
 		local heap = self._heaps[event]
@@ -525,15 +495,13 @@ do
 			Budget = budget
 		}
 	end
+	--[=[
+		@description Implements `Scheduler._heapPush`.
+		@param heap any -- `heap` input parameter.
+		@param item any -- `item` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Pushes an item into a min-heap sorted by NextRun.
-		@param heap { Task } -- Heap table for a specific RunService event bucket
-		@param item Task -- Task record to insert
-		@return ()
-		@reads item.NextRun
-		@writes heap
-	]]
 	function Scheduler:_heapPush(heap, item)
 		table_insert(heap, item)
 		local idx = #heap
@@ -545,14 +513,12 @@ do
 			else break end
 		end
 	end
+	--[=[
+		@description Implements `Scheduler._heapPop`.
+		@param heap any -- `heap` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Pops the earliest item from a min-heap sorted by NextRun.
-		@param heap { Task } -- Heap table for a specific RunService event bucket
-		@return Task? -- Earliest runnable task, or nil when the heap is empty
-		@reads heap
-		@writes heap
-		]]
 	function Scheduler:_heapPop(heap)
 		local size = #heap
 		if size == 0 then return nil end
@@ -577,13 +543,12 @@ do
 		end
 		return root
 	end
+	--[=[
+		@description Implements `Scheduler.Start`.
+		@param none nil -- This function does not accept explicit parameters.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Connects Scheduler:Step to supported RunService events.
-		@return ()
-		@reads self._connections, RunService event signals, RunService:IsClient()
-		@writes self._connections
-	]]
 	function Scheduler:Start()
 		if self._connections.Heartbeat then return end
 
@@ -617,13 +582,12 @@ do
 			Message = "Scheduler started."
 		})
 	end
+	--[=[
+		@description Implements `Scheduler.Stop`.
+		@param none nil -- This function does not accept explicit parameters.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
-	--[[
-		@description Disconnects all RunService bindings created by Scheduler:Start.
-		@return ()
-		@reads self._connections
-		@writes self._connections
-	]]
 	function Scheduler:Stop()
 		for state, conn in pairs(self._connections) do
 			if conn and typeof(conn) == "RBXScriptConnection" then

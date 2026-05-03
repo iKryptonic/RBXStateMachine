@@ -1,9 +1,8 @@
 --!strict
--- @Name ServiceManager/Subsystems/ConsoleModule.luau
--- @Author iKrypto
--- @Description Full interactive console / terminal subsystem with command registry,
--- history, autocomplete, and rich output formatting. Feature parity with legacy
--- ServiceManager Console page.
+--[=[
+	@module ConsoleModule
+	@description Defines the `ConsoleModule` module and its exported API.
+]=]
 
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -37,12 +36,12 @@ ConsoleModule.__index = ConsoleModule
 
 local MAX_OUTPUT_LINES = 500
 local MAX_HISTORY = 100
+--[=[
+	@description Implements `ConsoleModule.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Create the CONSOLE subsystem controller.
-	Initializes the terminal buffers, command registry, history state, and
-	autocomplete bookkeeping used by the interactive shell.
-]]
 function ConsoleModule.new(): any
 	local self = setmetatable({}, ConsoleModule)
 	self._outputBuffer = {} :: { OutputLine }
@@ -61,16 +60,12 @@ function ConsoleModule.new(): any
 	self:_RegisterBuiltinCommands()
 	return self
 end
+--[=[
+	@description Implements `ConsoleModule.FetchData`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- DATA
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Prime console state for display.
-	The console is event-driven, so this hook only seeds the initial welcome lines
-	when the output buffer is still empty.
-]]
 function ConsoleModule:FetchData(nexus: any)
 	-- Console doesn't poll data; it's event-driven.
 	-- Push a welcome message on first load if buffer is empty.
@@ -80,16 +75,20 @@ function ConsoleModule:FetchData(nexus: any)
 		self:_PushLine("SYSTEM", "", Theme.Colors.TextMuted)
 	end
 end
+--[=[
+	@description Implements `ConsoleModule.Render`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	CONSOLE rendering is produced by BuildRootLayer and its event handlers.
-]]
 function ConsoleModule:Render(nexus: any) end
-
--- ══════════════════════════════════════════════════════════════
--- OUTPUT BUFFER
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `ConsoleModule._PushLine`.
+	@param level string -- `level` input parameter.
+	@param text string -- `text` input parameter.
+	@param color Color3? -- `color` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ConsoleModule:_PushLine(level: string, text: string, color: Color3?)
 	local lineColor = color
@@ -121,16 +120,13 @@ function ConsoleModule:_PushLine(level: string, text: string, color: Color3?)
 		self._needsFullRender = true
 	end
 end
+--[=[
+	@description Implements `ConsoleModule.ExecuteCommand`.
+	@param rawInput string -- `rawInput` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- COMMAND EXECUTION
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Parse, execute, and echo a user-entered console command.
-	Writes both command input and handler output back into the scrolling terminal
-	buffer so the shell remains self-contained and replayable.
-]]
 function ConsoleModule:ExecuteCommand(rawInput: string, nexus: any)
 	if rawInput == "" then return end
 
@@ -177,10 +173,11 @@ function ConsoleModule:ExecuteCommand(rawInput: string, nexus: any)
 	-- Re-render output
 	self:_RenderOutput()
 end
-
--- ══════════════════════════════════════════════════════════════
--- BUILT-IN COMMANDS
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `ConsoleModule._RegisterBuiltinCommands`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ConsoleModule:_RegisterBuiltinCommands()
 	self:RegisterCommand({
@@ -544,10 +541,12 @@ function ConsoleModule:_RegisterBuiltinCommands()
 		end,
 	})
 end
+--[=[
+	@description Handles `RegisterCommand` for `ConsoleModule`.
+	@param def CommandDef -- `def` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Register a console command definition under its lowercase command name.
-]]
 function ConsoleModule:RegisterCommand(def: CommandDef)
 	self._registeredCommands[string.lower(def.Name)] = def
 end
@@ -641,14 +640,13 @@ local function scoreMatch(query: string, candidate: string): number
 	if qi > #q then return 100 end
 	return -1
 end
-
 --[=[
-	Compute completions for the current input. Returns a list of suggestions
-	with (text, hint) pairs for richer rendering.
-	@param input string — the full text in the input box
-	@param nexus any — current nexus context (for dynamic providers)
-	@return { { text: string, hint: string?, score: number } }
+	@description Implements `ConsoleModule._GetSmartCompletions`.
+	@param input string -- `input` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@return { { text: string, hint: string?, score: number } } -- Return value produced by the implementation, if any.
 ]=]
+
 function ConsoleModule:_GetSmartCompletions(input: string, nexus: any): { { text: string, hint: string?, score: number } }
 	-- Tokenize on whitespace; track whether input ends with space (next token starts)
 	local tokens = {}
@@ -704,6 +702,11 @@ function ConsoleModule:_GetSmartCompletions(input: string, nexus: any): { { text
 	table.sort(results, function(a, b) return a.score > b.score end)
 	return results
 end
+--[=[
+	@description Implements `ConsoleModule._GetCompletions`.
+	@param partial string -- `partial` input parameter.
+	@return { string } -- Return value produced by the implementation, if any.
+]=]
 
 function ConsoleModule:_GetCompletions(partial: string): { string }
 	-- Legacy API kept for compatibility — returns only command names matching prefix
@@ -718,13 +721,13 @@ function ConsoleModule:_GetCompletions(partial: string): { string }
 	table.sort(matches)
 	return matches
 end
-
 --[=[
-	Highlight the matching prefix or substring within a candidate using RichText.
-	@param candidate string
-	@param query string
-	@return string — RichText-formatted candidate with the match highlighted
+	@description Implements `ConsoleModule._HighlightMatch`.
+	@param candidate string -- `candidate` input parameter.
+	@param query string -- `query` input parameter.
+	@return string -- Return value produced by the implementation, if any.
 ]=]
+
 function ConsoleModule:_HighlightMatch(candidate: string, query: string): string
 	if query == "" then return candidate end
 	local lowerC = string.lower(candidate)
@@ -739,15 +742,13 @@ function ConsoleModule:_HighlightMatch(candidate: string, query: string): string
 		candidate:sub(endIdx + 1)
 	)
 end
+--[=[
+	@description Creates the result managed by `ConsoleModule.BuildRootLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- Z-AXIS LAYER BUILDERS
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Build or rebuild the CONSOLE root layer inside the supplied navigator frame.
-	Creates the terminal output region, input box, and in-place autocomplete UI.
-]]
 function ConsoleModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -1035,6 +1036,12 @@ function ConsoleModule:BuildRootLayer(frame: Frame, context: any)
 	-- Render existing output
 	self:_RenderOutput()
 end
+--[=[
+	@description Implements `ConsoleModule._UpdateAutocomplete`.
+	@param text string -- `text` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ConsoleModule:_UpdateAutocomplete(text: string, nexus: any)
 	local acFrame = self._autocompleteFrame
@@ -1156,6 +1163,11 @@ function ConsoleModule:_UpdateAutocomplete(text: string, nexus: any)
 		end)
 	end
 end
+--[=[
+	@description Implements `ConsoleModule._AcNavigate`.
+	@param direction number -- `direction` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ConsoleModule:_AcNavigate(direction: number)
 	local count = math.min(#self._acSuggestions, 6)
@@ -1174,6 +1186,12 @@ function ConsoleModule:_AcNavigate(direction: number)
 	self._acSelectedIndex = newIndex
 	self:_AcHighlight(newIndex, true)
 end
+--[=[
+	@description Implements `ConsoleModule._AcHighlight`.
+	@param index number -- `index` input parameter.
+	@param highlighted boolean -- `highlighted` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ConsoleModule:_AcHighlight(index: number, highlighted: boolean)
 	local btn = self._acButtons[index]
@@ -1187,6 +1205,11 @@ function ConsoleModule:_AcHighlight(index: number, highlighted: boolean)
 		btn.TextColor3 = Theme.Colors.TextSecondary
 	end
 end
+--[=[
+	@description Implements `ConsoleModule._RenderOutput`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ConsoleModule:_RenderOutput()
 	local scroll = self._scrollFrame
@@ -1236,10 +1259,12 @@ function ConsoleModule:_RenderOutput()
 		end
 	end)
 end
+--[=[
+	@description Implements `ConsoleModule.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Disconnect console input listeners and clear terminal state.
-]]
 function ConsoleModule:Destroy()
 	if self._inputConnection then
 		self._inputConnection:Disconnect()

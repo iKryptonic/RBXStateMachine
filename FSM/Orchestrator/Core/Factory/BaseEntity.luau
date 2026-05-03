@@ -50,16 +50,12 @@ BaseEntity.__tostring = function(self)
 end
 
 local Logger, Signal, _Settings, Initialized;
-
 --[=[
-	@description Initializes the BaseEntity module with shared utilities.
-	Must be called once before any instances are created.
-
-	@param Util table -- Orchestrator utility table containing Logger, Signal, and Settings
-	@return ()
-	@reads Initialized
-	@writes Module-level Logger, Signal, _Settings upvalues, Initialized
+	@description Handles `Initialize` for `BaseEntity`.
+	@param Util any -- `Util` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity.Initialize(Util)
 	if Initialized then return end
 	Initialized = true
@@ -69,22 +65,13 @@ function BaseEntity.Initialize(Util)
 
 	Logger:Log({ Level = "INFO", Message = "BaseEntity initialized" })
 end
-
 --[=[
-	@description Creates a new BaseEntity instance wrapped in a proxy table.
-	The proxy intercepts reads via __index (resolving cache → Data → Context → class → schema)
-	and writes via __newindex (validating against the Schema and staging to Pending).
-	This is the low-level constructor; prefer `Subclass.new()` from `BaseEntity.Extend()`.
-
-	@param params table
-		- Name: string -- Display name for logging
-		- OwnerId: string? -- Optional owner identifier
-		- Context: { [any]: any }? -- Initial context data
-	@param class any? -- Optional subclass table for method/definition lookup
-	@return any -- BaseEntity instance (proxy table)
-	@reads class.Definition.Schema, class.Definition.Mutable
-	@writes proxy.StateUpdated, proxy.Destroyed, proxy._privateProperties
+	@description Implements `BaseEntity.new`.
+	@param params { Name: string, OwnerId: string?, Context: { [any]: any }? } -- `params` input parameter.
+	@param class any? -- `class` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity.new(params: { Name: string, OwnerId: string?, Context: { [any]: any }? }, class: any?): any
 	local privateProperties = {
 		Name = params.Name,
@@ -206,22 +193,12 @@ function BaseEntity.new(params: { Name: string, OwnerId: string?, Context: { [an
 	setmetatable(proxy, mt)
 	return proxy
 end
-
 --[=[
-	@description Creates a BaseEntity subclass (class table) from a definition.
-	Returns a new class table with a `.new()` constructor that produces properly
-	initialized Entity instances. The subclass inherits all BaseEntity methods
-	and calls `GetContext()` automatically during construction.
-
-	@param extensionParams table
-		- Name: string -- Entity class name for logging and identification
-		- Schema: { [string]: PropertyDef }? -- Property schema definitions
-		- Mutable: boolean? -- Whether UpdateEntity is allowed (default false)
-		- Replication: { Enabled: boolean?, RateLimit: number? }? -- Optional replication config
-	@return any -- Subclass table with `.new(params)` constructor
-	@reads None
-	@writes None (pure factory)
+	@description Implements `BaseEntity.Extend`.
+	@param extensionParams { Name: string, Schema: { [string]: any }? } -- `extensionParams` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity.Extend(extensionParams: { Name: string, Schema: { [string]: any }? })
 	-- This is the Class Table (where methods like MyEntity:Method() will live)
 	local Subclass: any = {}
@@ -235,17 +212,12 @@ function BaseEntity.Extend(extensionParams: { Name: string, Schema: { [string]: 
 		return Subclass.Definition.Name or "UnnamedEntity"
 	end;
 	setmetatable(Subclass, subclassMetaTable)
-
 	--[=[
-		@description Creates a new instance of this subclass Entity.
-		Calls BaseEntity.new() internally, sets up Super references,
-		and invokes GetContext() to initialize default context values.
-
-		@param params table -- { Name: string, OwnerId: string?, [any]: any }
-		@return any -- BaseEntity instance (proxy table)
-		@reads params.InitialData, SubclassAny.GetContext
-		@writes subclassEntity._privateProperties.Data, .Version, .Context
+		@description Implements `SubclassAny.new`.
+		@param params any -- `params` input parameter.
+		@return any -- Return value produced by the implementation, if any.
 	]=]
+
 	function SubclassAny.new(params)
 		local subclassEntity = BaseEntity.new(params, SubclassAny);
 		SubclassAny.Super = BaseEntity
@@ -293,18 +265,12 @@ function BaseEntity.Extend(extensionParams: { Name: string, Schema: { [string]: 
 
 	return Subclass
 end
-
 --[=[
-	@description Records a log entry for this Entity instance.
-	Delegates to the instance-local Logger with the Entity's OwnerId as OperationId.
-
-	@param params table
-		- Level: string -- Log level ("DEBUG", "INFO", "WARN", "ERROR")
-		- Message: string -- Log message
-	@return ()
-	@reads self._privateProperties.OwnerId
-	@writes None (side-effect: log output)
+	@description Implements `BaseEntity.Log`.
+	@param params { Level: string, Message: string } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:Log(params: { Level: string, Message: string })
 	if not self._logger then
 		print(params.Message, params.Level)
@@ -316,56 +282,41 @@ function BaseEntity:Log(params: { Level: string, Message: string })
 		OperationId = self._privateProperties and self._privateProperties.OwnerId or ""
 	}
 end
-
 --[=[
-	@description Replaces the entity's schema definition at runtime.
-	Typically called during advanced initialization scenarios.
-
-	@param schema { [string]: PropertyDef } -- New schema to apply
-	@return ()
-	@reads None
-	@writes self._privateProperties.Schema
+	@description Implements `BaseEntity.DefineSchema`.
+	@param schema { [string]: any } -- `schema` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:DefineSchema(schema: { [string]: any })
 	self._privateProperties.Schema = schema
 end
-
 --[=[
-	@description Stores non-schema data used for internal logic.
-	Context values are accessible via the proxy's __index fallback chain.
-
-	@param key any -- Context key
-	@param value any -- Context value
-	@return ()
-	@reads None
-	@writes self._privateProperties.Context
+	@description Updates module state through `BaseEntity.SetContext`.
+	@param key any -- `key` input parameter.
+	@param value any -- `value` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:SetContext(key: any, value: any)
 	self._privateProperties.Context[key] = value
 end
-
 --[=[
-	@description Registers a disposable object for cleanup when the Entity is destroyed.
-	Accepts Instances, RBXScriptConnections, functions, or tables with a Destroy method.
-
-	@param object any -- The disposable resource to track
-	@return any -- The same object (for inline chaining)
-	@reads None
-	@writes self._privateProperties._cleanupTasks
+	@description Implements `BaseEntity.Manage`.
+	@param object any -- `object` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:Manage(object: any)
 	table.insert(self._privateProperties._cleanupTasks, object)
 	return object
 end
-
 --[=[
-	@description Serializes the entity's persistent data by iterating schema fields
-	with `Persist = true` and collecting their current values.
-
-	@return { [string]: any } -- Table of persistent key-value pairs
-	@reads self._privateProperties.Schema, self[key] (for each Persist field)
-	@writes None
+	@description Implements `BaseEntity.Serialize`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:Serialize()
 	local data = {}
 	local schema = self._privateProperties.Schema
@@ -381,16 +332,12 @@ function BaseEntity:Serialize()
 
 	return data
 end
-
 --[=[
-	@description Deserializes data into the entity by routing each key through
-	__newindex for schema validation. Only loads fields marked `Persist = true`.
-
-	@param data { [string]: any } -- Previously serialized data table
-	@return ()
-	@reads self._privateProperties.Schema
-	@writes self[key] (via __newindex → Pending)
+	@description Implements `BaseEntity.Deserialize`.
+	@param data { [string]: any } -- `data` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:Deserialize(data: { [string]: any })
 	if not data then return end
 
@@ -403,23 +350,12 @@ function BaseEntity:Deserialize(data: { [string]: any })
 		end
 	end
 end
-
 --[=[
-	@description Commits pending changes to the entity's authoritative Data table,
-	increments the Version, fires StateUpdated with the change set (including `_v`
-	version stamp), and invokes ApplyChanges for visual/physical updates.
-
-	Requires the entity to be:
-	  - Valid (not destroyed)
-	  - Mutable (Definition.Mutable == true)
-	  - Unlocked or caller holds the lock
-	  - Has at least one pending change
-
-	@param lockingCallerId string? -- Must match the lock holder if entity is locked
-	@return boolean -- True if changes were applied successfully
-	@reads self._privateProperties.Pending, .IsValid, .EntityLocked, .Mutable
-	@writes self._privateProperties.Data, .Pending, ._cache, .Version
+	@description Implements `BaseEntity.UpdateEntity`.
+	@param lockingCallerId string? -- `lockingCallerId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:UpdateEntity(lockingCallerId: string?)
 	local privateProperties = self._privateProperties
 	local fastFailReason = ""
@@ -536,16 +472,12 @@ function BaseEntity:UpdateEntity(lockingCallerId: string?)
 	end
 	return success
 end
-
 --[=[
-	@description Virtual method for applying visual/physical updates when entity
-	state changes. Subclasses must override to handle property-specific side effects.
-
-	@param changes { [string]: any } -- Map of changed property names to new values
-	@return ()
-	@reads None (subclass-defined)
-	@writes None (subclass-defined)
+	@description Implements `BaseEntity.ApplyChanges`.
+	@param changes { [string]: any } -- `changes` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:ApplyChanges(changes: { [string]: any })
 	self:Log
 	{ 
@@ -558,40 +490,30 @@ function BaseEntity:ApplyChanges(changes: { [string]: any })
 		Message = "Subclasses must implement 'ApplyChanges' to handle property updates." 
 	}
 end
-
 --[=[
-	@description Virtual cleanup hook called during entity destruction.
-	Subclasses should override to release custom resources.
-
-	@return ()
-	@reads None
-	@writes None (subclass-defined)
+	@description Implements `BaseEntity.Cleanup`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:Cleanup()
 	-- Override in subclasses if needed
 end
-
 --[=[
-	@description Retrieves the entity's full property schema definition.
-
-	@return { [string]: PropertyDef } -- Schema table
-	@reads self._privateProperties.Schema
-	@writes None
+	@description Returns the data produced by `BaseEntity.GetValidProperties`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:GetValidProperties()
 	return self._privateProperties.Schema
 end
-
 --[=[
-	@description Attempts to acquire an exclusive lock for the entity.
-	Only one caller can hold the lock at a time. While locked, only the holder
-	can call UpdateEntity.
-
-	@param callerId string -- Unique identifier for the lock requestor
-	@return boolean -- True if lock was acquired, false if already held
-	@reads self._privateProperties.EntityLocked
-	@writes self._privateProperties.EntityLocked
+	@description Implements `BaseEntity.AcquireLock`.
+	@param callerId string -- `callerId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:AcquireLock(callerId: string)
 	if not callerId then
 		self:Log
@@ -608,16 +530,12 @@ function BaseEntity:AcquireLock(callerId: string)
 	end
 	return false
 end
-
 --[=[
-	@description Releases the acquired entity lock. Only the current holder
-	can release the lock.
-
-	@param callerId string -- Must match the current lock holder
-	@return boolean -- True if lock was released, false if caller is not the owner
-	@reads self._privateProperties.EntityLocked
-	@writes self._privateProperties.EntityLocked
+	@description Implements `BaseEntity.ReleaseLock`.
+	@param callerId string -- `callerId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:ReleaseLock(callerId: string)
 	if self._privateProperties.EntityLocked then
 		if self._privateProperties.EntityLocked ~= callerId then
@@ -634,16 +552,12 @@ function BaseEntity:ReleaseLock(callerId: string)
 	end
 	return false
 end
-
 --[=[
-	@description Cleans up the entity, traverses the class hierarchy to collect
-	Cleanup hooks, disposes all managed resources, fires the Destroyed signal,
-	and invalidates the entity. The instance should not be used after this call.
-
-	@return ()
-	@reads self._privateProperties.IsValid, ._class hierarchy
-	@writes self._privateProperties.IsValid, ._cleanupTasks, signals
+	@description Implements `BaseEntity.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BaseEntity:Destroy()
 	local privateProperties = self._privateProperties
 	if not privateProperties.IsValid then return end

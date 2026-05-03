@@ -1,7 +1,8 @@
 --!strict
--- @Name ServiceManager/Theme.luau
--- @Author iKrypto
--- @Description Glass Engine design system tokens and utility constructors.
+--[=[
+	@module Theme
+	@description Defines the `Theme` module and its exported API.
+]=]
 
 local Theme = {}
 
@@ -140,15 +141,12 @@ Theme.SubsystemNames = {
 	CONSOLE   = "Console",
 	LOGS      = "Log Viewer",
 }
-
--- ══════════════════════════════════════════════════════════════
--- DEPTH STYLING (Z-axis layers get progressively brighter)
--- ══════════════════════════════════════════════════════════════
-
 --[=[
-	Return the glass surface color for a given drill-down depth.
-	Deeper layers are lifted slightly brighter so stacked panes remain readable.
+	@description Returns the data produced by `Theme.GetDepthBackground`.
+	@param depth number -- `depth` input parameter.
+	@return Color3 -- Return value produced by the implementation, if any.
 ]=]
+
 function Theme.GetDepthBackground(depth: number): Color3
 	local base = Theme.Colors.GlassPrimary
 	local lift = math.min(depth * 6, 30) / 255
@@ -158,23 +156,22 @@ function Theme.GetDepthBackground(depth: number): Color3
 		math.min(base.B + lift, 1)
 	)
 end
-
 --[=[
-	Return the glass transparency for a given drill-down depth.
+	@description Returns the data produced by `Theme.GetDepthTransparency`.
+	@param depth number -- `depth` input parameter.
+	@return number -- Return value produced by the implementation, if any.
 ]=]
+
 function Theme.GetDepthTransparency(depth: number): number
 	return math.max(0, Theme.Transparency.Glass - depth * 0.01)
 end
-
--- ══════════════════════════════════════════════════════════════
--- CONSTRUCTORS
--- ══════════════════════════════════════════════════════════════
-
 --[=[
-	Apply the core glass treatment to a frame and ensure its corner/stroke exist.
-	@param frame Frame
-	@param depth number? — optional Z-axis depth used to tint the surface
+	@description Implements `Theme.ApplyGlass`.
+	@param frame Frame -- `frame` input parameter.
+	@param depth number? -- `depth` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Theme.ApplyGlass(frame: Frame, depth: number?)
 	local d = depth or 0
 	frame.BackgroundColor3 = Theme.GetDepthBackground(d)
@@ -197,11 +194,12 @@ function Theme.ApplyGlass(frame: Frame, depth: number?)
 		stroke.Parent = frame
 	end
 end
-
 --[=[
-	Create a themed TextLabel with sensible defaults for the Glass UI system.
-	@param props { Text, Size, Position, AnchorPoint, Color, FontSize, FontFace, Alignment, Parent }
+	@description Creates the result managed by `Theme.CreateLabel`.
+	@param props { Text: string?, Size: UDim2?, Position: UDim2?, AnchorPoint: Vector2?, Color: Color3?, FontSize: number?, FontFace: Font?, Alignment: Enum.TextXAlignment?, Parent: Instance?, } -- `props` input parameter.
+	@return TextLabel -- Return value produced by the implementation, if any.
 ]=]
+
 function Theme.CreateLabel(props: {
 	Text: string?,
 	Size: UDim2?,
@@ -228,13 +226,14 @@ function Theme.CreateLabel(props: {
 	if props.Parent then label.Parent = props.Parent end
 	return label
 end
-
 --[=[
-	Create an auto-sized semantic badge using the supplied accent color.
-	@param text string
-	@param color Color3
-	@param parent Instance?
+	@description Creates the result managed by `Theme.CreateBadge`.
+	@param text string -- `text` input parameter.
+	@param color Color3 -- `color` input parameter.
+	@param parent Instance? -- `parent` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
 ]=]
+
 function Theme.CreateBadge(text: string, color: Color3, parent: Instance?): Frame
 	local badge = Instance.new("Frame")
 	badge.Size = UDim2.new(0, 0, 0, 18)
@@ -266,11 +265,12 @@ function Theme.CreateBadge(text: string, color: Color3, parent: Instance?): Fram
 	if parent then badge.Parent = parent end
 	return badge
 end
-
 --[=[
-	Create a compact icon/label button styled for sidebar and toolbar usage.
-	@param props { Icon, Label, Size, Color, Parent }
+	@description Creates the result managed by `Theme.CreateIconButton`.
+	@param props { Icon: string?, Label: string?, Size: UDim2?, Color: Color3?, Parent: Instance?, } -- `props` input parameter.
+	@return TextButton -- Return value produced by the implementation, if any.
 ]=]
+
 function Theme.CreateIconButton(props: {
 	Icon: string?,
 	Label: string?,
@@ -307,22 +307,14 @@ function Theme.CreateIconButton(props: {
 	if props.Parent then btn.Parent = props.Parent end
 	return btn
 end
-
--- ══════════════════════════════════════════════════════════════
--- IDEMPOTENT REBUILD HELPERS
--- ══════════════════════════════════════════════════════════════
-
 --[=[
-	Look up a child by name, or create it via the factory if missing.
-	Used by subsystem builders to make BuildRootLayer idempotent: the same
-	call can be invoked repeatedly without destroying and recreating elements.
-	@param parent Instance — the container
-	@param name string — the unique child name within parent
-	@param factory () -> Instance — creates the instance if it does not exist
-	@return Instance, boolean (created? — true if a new instance was made)
-	@reads parent.Children
-	@writes parent.Children
+	@description Returns the data produced by `Theme.GetOrCreateChild`.
+	@param parent Instance -- `parent` input parameter.
+	@param name string -- `name` input parameter.
+	@param factory () -> Instance -- `factory` input parameter.
+	@return (Instance, boolean) -- Return value produced by the implementation, if any.
 ]=]
+
 function Theme.GetOrCreateChild(parent: Instance, name: string, factory: () -> Instance): (Instance, boolean)
 	local existing = parent:FindFirstChild(name)
 	if existing then
@@ -333,15 +325,13 @@ function Theme.GetOrCreateChild(parent: Instance, name: string, factory: () -> I
 	created.Parent = parent
 	return created, true
 end
-
 --[=[
-	Clear all children of parent except those whose names appear in the keep set
-	or that are layout/style instances (UICorner/UIStroke/UIPadding/UIListLayout/UIGridLayout).
-	@param parent Instance
-	@param keep { [string]: true } — names to preserve
-	@reads parent.Children
-	@writes parent.Children
+	@description Implements `Theme.ClearExcept`.
+	@param parent Instance -- `parent` input parameter.
+	@param keep { [string]: true } -- `keep` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Theme.ClearExcept(parent: Instance, keep: { [string]: true })
 	for _, child in ipairs(parent:GetChildren()) do
 		if keep[child.Name] then continue end
@@ -350,16 +340,13 @@ function Theme.ClearExcept(parent: Instance, keep: { [string]: true })
 		child:Destroy()
 	end
 end
-
 --[=[
-	Apply a series of properties to an instance, only writing those that
-	differ from the current value. Avoids redundant property change events
-	in the common idempotent-render case.
-	@param inst Instance
-	@param props { [string]: any }
-	@reads inst.*
-	@writes inst.*
+	@description Implements `Theme.ApplyProps`.
+	@param inst Instance -- `inst` input parameter.
+	@param props { [string]: any } -- `props` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Theme.ApplyProps(inst: Instance, props: { [string]: any })
 	for k, v in pairs(props) do
 		local ok, current = pcall(function() return (inst :: any)[k] end)
@@ -441,29 +428,12 @@ export type RowStat = {
 	Align: Enum.TextXAlignment?, -- default Right
 	FontSize: number?,      -- default Caption
 }
-
 --[=[
-	Build a list-row with a status dot, name (left-anchored, flex-width)
-	and a right-anchored cluster of stat labels. Eliminates overlap by
-	using UIListLayout for the right cluster — labels never collide.
-
-	@param props {
-		Name: string,                   -- instance name
-		Size: UDim2?,                   -- default {1,0,0,36}
-		StatusColor: Color3?,           -- left dot color
-		StatusPulse: boolean?,          -- pulse the status dot
-		Title: string,                  -- main label text
-		TitleColor: Color3?,
-		Subtitle: string?,              -- sub-text under title
-		Stats: { RowStat },             -- right-anchored stats (rendered in order, right-to-left)
-		BackgroundColor: Color3?,
-		BackgroundTransparency: number?,
-		LayoutOrder: number?,
-		Parent: Instance?,
-		OnClick: (() -> ())?,           -- if set, attaches a click overlay
-	}
-	@return Frame — the row instance
+	@description Creates the result managed by `Theme.CreateRow`.
+	@param props { Name: string, Size: UDim2?, StatusColor: Color3?, StatusPulse: boolean?, Title: string, TitleColor: Color3?, Subtitle: string?, Stats: { RowStat }?, BackgroundColor: Color3?, BackgroundTransparency: number?, LayoutOrder: number?, Parent: Instance?, OnClick: (() -> ())?, } -- `props` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
 ]=]
+
 function Theme.CreateRow(props: {
 	Name: string,
 	Size: UDim2?,
@@ -610,12 +580,12 @@ function Theme.CreateRow(props: {
 
 	return row
 end
-
 --[=[
-	Test helper: invoke a row's OnClick handler. Returns true if the row had a
-	registered click handler. Used by interactivity tests to simulate user
-	clicks without firing real MouseButton1Click signals.
+	@description Implements `Theme.SimulateRowClick`.
+	@param row Frame -- `row` input parameter.
+	@return boolean -- Return value produced by the implementation, if any.
 ]=]
+
 function Theme.SimulateRowClick(row: Frame): boolean
 	if not Theme._clickHandlers then return false end
 	local handler = Theme._clickHandlers[row]

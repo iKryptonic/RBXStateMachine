@@ -1,7 +1,8 @@
 --!strict
--- @Name ServiceManager/Types.luau
--- @Author iKrypto
--- @Description Strict type definitions for the Nexus-Orchestrator Suite.
+--[=[
+	@module Types
+	@description Defines the `Types` module and its exported API.
+]=]
 
 export type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG"
 

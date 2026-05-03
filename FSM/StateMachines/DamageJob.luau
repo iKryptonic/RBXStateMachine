@@ -299,20 +299,18 @@ local function showDamageText(position: Vector3, damage: number)
 		end
 	end)
 end
-
 --[=[
-    @description Registers every DamageJob state, transition, and terminal no-op with the FSM base class.
-    @return nil -- Mutates the module definition by adding states.
+	@description Handles `RegisterStates` for `DamageJob`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function DamageJob:RegisterStates()
-	--[=[
-    @state Validate
-    @description Verifies the orchestrator, attacker entity id, attacker entity, attacker user id, and victim user id. It also normalizes the attack name and seeds the per-hit nonce context used by the dedupe stage.
-    @transitions Transitions to `CheckHitNonce` when all required attacker and victim inputs exist; otherwise transitions directly to `Failed`.
-    @failure Calls `fsm:Fail(...)` immediately when the orchestrator is missing, the attacker cannot be resolved, the attacker has no numeric `UserId`, or `VictimUserId` is absent.
-    @reads `fsm.AttackerCharEntityId`, `fsm.VictimUserId`, `fsm.AttackName`, attackerEntity.`UserId`.
-    @writes `fsm.Context.AttackName`, `fsm.Context._attackerEntity`, `fsm.Context._attackerUserId`, `fsm.Context._nonce`.
+--[=[
+	@state Validate
+	@description Handles the `Validate` state for `DamageJob`.
 ]=]
+
 self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -354,15 +352,11 @@ self:AddState("Validate", {
 			fsm.State = "CheckHitNonce"
 		end,
 	}, { "CheckHitNonce", "Failed" })
-
-	--[=[
-    @state CheckHitNonce
-    @description Cleans expired nonce entries, verifies the new nonce has not already been processed for this attacker, then stores the nonce with a short expiry window.
-    @transitions Transitions to `ResolveVictim` after storing a fresh nonce; transitions to `Failed` when nonce context is missing or duplicated.
-    @failure Fails with `Missing nonce context` if validation did not populate attacker data, and with `Duplicate hit nonce` if the same nonce is observed before expiry.
-    @reads `fsm.Context._attackerUserId`, `fsm.Context._nonce`, global `ProcessedNonces`.
-    @writes `ProcessedNonces[attackerUserId][nonce]` and any expired nonce entries removed during cache maintenance.
+--[=[
+	@state CheckHitNonce
+	@description Handles the `CheckHitNonce` state for `DamageJob`.
 ]=]
+
 self:AddState("CheckHitNonce", {
 		OnEnter = function(_, fsm)
 			cleanExpiredNonces()
@@ -383,15 +377,11 @@ self:AddState("CheckHitNonce", {
 			fsm.State = "ResolveVictim"
 		end,
 	}, { "ResolveVictim", "Failed" })
-
-	--[=[
-    @state ResolveVictim
-    @description Finds the victim entity by user id, validates that it still owns a living humanoid model, and caches the entity, humanoid, root part, and block status for downstream damage calculation.
-    @transitions Transitions to `ComputeDamage` when a live victim model is resolved; otherwise transitions to `Failed`.
-    @failure Fails if the orchestrator disappeared, the victim entity cannot be found, the model is missing, or the humanoid is dead or unavailable.
-    @reads `fsm.VictimUserId`, victimEntity.`Instance`, victimEntity.`IsBlocking`, victim humanoid health.
-    @writes `fsm.Context._victimEntity`, `_victimEntityId`, `_victimCharacter`, `_victimHumanoid`, `_victimRoot`, `_isVictimBlocking`.
+--[=[
+	@state ResolveVictim
+	@description Handles the `ResolveVictim` state for `DamageJob`.
 ]=]
+
 self:AddState("ResolveVictim", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -427,15 +417,11 @@ self:AddState("ResolveVictim", {
 			fsm.State = "ComputeDamage"
 		end,
 	}, { "ComputeDamage", "Failed" })
-
-	--[=[
-    @state ComputeDamage
-    @description Chooses base damage from the explicit override or the currently equipped weapon, applies block mitigation, attacker bonuses, victim reductions, and rounds the final value to a non-negative integer.
-    @transitions Transitions to `ApplyDamage` after computing a valid number; otherwise transitions to `Failed`.
-    @failure Fails when attacker context is missing before damage modules can be consulted.
-    @reads `fsm.BaseDamage`, `fsm.Context._attackerEntity`, `fsm.Context._isVictimBlocking`, `fsm.Context._victimEntity`, attacker and victim status effects, equipped weapon metadata.
-    @writes `fsm.Context._computedDamage`.
+--[=[
+	@state ComputeDamage
+	@description Handles the `ComputeDamage` state for `DamageJob`.
 ]=]
+
 self:AddState("ComputeDamage", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -455,15 +441,11 @@ self:AddState("ComputeDamage", {
 			fsm.State = "ApplyDamage"
 		end,
 	}, { "ApplyDamage", "Failed" })
-
-	--[=[
-    @state ApplyDamage
-    @description Applies the computed damage to the victim humanoid if still alive, mirrors the resulting health back onto the victim entity, and pushes the entity update.
-    @transitions Transitions to `EmitHitReact` after health has been applied; otherwise transitions to `Failed`.
-    @failure Fails when the cached humanoid or computed damage is missing.
-    @reads `fsm.Context._victimHumanoid`, `fsm.Context._victimEntity`, `fsm.Context._computedDamage`, victim humanoid `Health`.
-    @writes Victim humanoid health, victim entity.`Health`, and the replicated entity update side effect triggered by `victimEntity:UpdateEntity()`.
+--[=[
+	@state ApplyDamage
+	@description Handles the `ApplyDamage` state for `DamageJob`.
 ]=]
+
 self:AddState("ApplyDamage", {
 		OnEnter = function(_, fsm)
 			local victimHumanoid = fsm.Context._victimHumanoid
@@ -484,15 +466,11 @@ self:AddState("ApplyDamage", {
 			fsm.State = "EmitHitReact"
 		end,
 	}, { "EmitHitReact", "Failed" })
-
-	--[=[
-    @state EmitHitReact
-    @description Appends a `HitReact` intent to the victim entity so clients can play reaction feedback using the attacker id and computed damage payload.
-    @transitions Transitions to `EmitDamageText` when the intent is appended; otherwise transitions to `Failed`.
-    @failure Fails when either the victim entity or computed damage is missing from context.
-    @reads `fsm.Context._victimEntity`, `fsm.Context._computedDamage`, `fsm.AttackerCharEntityId`, `fsm.VictimUserId`.
-    @writes Victim entity intent queue via `IntentSchema.AppendIntent(...)`.
+--[=[
+	@state EmitHitReact
+	@description Handles the `EmitHitReact` state for `DamageJob`.
 ]=]
+
 self:AddState("EmitHitReact", {
 		OnEnter = function(_, fsm)
 			local IntentSchema = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(), "IntentSchema")
@@ -518,15 +496,11 @@ self:AddState("EmitHitReact", {
 			fsm.State = "EmitDamageText"
 		end,
 	}, { "EmitDamageText", "Failed" })
-
-	--[=[
-    @state EmitDamageText
-    @description Shows floating combat text above the victim root when root and damage data are available, then advances whether or not the cosmetic effect could run.
-    @transitions Always transitions to `FireEventBus`.
-    @failure This state does not hard-fail on missing cosmetic context; it simply skips the billboard spawn and continues.
-    @reads `fsm.Context._victimRoot`, `fsm.Context._computedDamage`.
-    @writes Temporary workspace UI instances created by `showDamageText(...)` when both values exist.
+--[=[
+	@state EmitDamageText
+	@description Handles the `EmitDamageText` state for `DamageJob`.
 ]=]
+
 self:AddState("EmitDamageText", {
 		OnEnter = function(_, fsm)
 			local root = fsm.Context._victimRoot
@@ -537,15 +511,11 @@ self:AddState("EmitDamageText", {
 			fsm.State = "FireEventBus"
 		end,
 	}, { "FireEventBus", "Failed" })
-
-	--[=[
-    @state FireEventBus
-    @description Registers the `Damage/Applied` event bus if necessary and publishes the damage payload for downstream systems such as analytics, quests, or achievements.
-    @transitions Transitions to `ApplyOnHitEffects` after the event payload is fired; otherwise transitions to `Failed`.
-    @failure Fails when the orchestrator, victim entity, or computed damage is missing before the event payload can be built.
-    @reads `fsm.Context._victimEntity`, `fsm.Context._computedDamage`, `fsm.Context.AttackName`, `fsm.Context._nonce`, `fsm.AttackerCharEntityId`, `fsm.VictimUserId`.
-    @writes Event bus registration side effects and the `Damage/Applied` payload emitted through `orchestrator.FireEventBus(...)`.
+--[=[
+	@state FireEventBus
+	@description Handles the `FireEventBus` state for `DamageJob`.
 ]=]
+
 self:AddState("FireEventBus", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -578,15 +548,11 @@ self:AddState("FireEventBus", {
 			fsm.State = "ApplyOnHitEffects"
 		end,
 	}, { "ApplyOnHitEffects", "Failed" })
-
-	--[=[
-    @state ApplyOnHitEffects
-    @description Looks up attacker passive talent effects and applies any configured on-hit buff to the resolved victim entity before finishing.
-    @transitions Always transitions to `Completed`; if prerequisites are missing, it skips effect application instead of failing.
-    @failure This state is best-effort. Missing orchestrator, player entity, or passive effect definitions simply prevent extra status effects from being applied.
-    @reads `fsm.Context._attackerEntity`, `fsm.Context._victimEntityId`, attacker.`PlayerEntityId`, passiveEffects.`BuffOnHit`.
-    @writes Victim status effects through `StatusEffectHelper.Apply(...)` when a passive on-hit effect is configured.
+--[=[
+	@state ApplyOnHitEffects
+	@description Handles the `ApplyOnHitEffects` state for `DamageJob`.
 ]=]
+
 self:AddState("ApplyOnHitEffects", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -607,31 +573,25 @@ self:AddState("ApplyOnHitEffects", {
 			fsm.State = "Completed"
 		end,
 	}, { "Completed", "Failed" })
+--[=[
+	@state Completed
+	@description Handles the `Completed` terminal state for `DamageJob`.
+]=]
 
-	--[=[
-    @state Completed
-    @description Terminal success state for the damage pipeline. No additional work runs here.
-    @transitions No outbound transitions; the job stops here.
-    @failure No rollback or cleanup occurs because all work has already committed successfully.
-    @reads No additional fields are read.
-    @writes No additional fields are written.
-]=]
 self:AddState("Completed", function() end, {})
-	--[=[
-    @state Failed
-    @description Terminal failure state reached when validation or combat application encounters an unrecoverable error.
-    @transitions No outbound transitions; the job stops here.
-    @failure The job preserves any already-written effects such as consumed hit nonces or partial logs, but no rollback logic runs beyond the immediate failure path.
-    @reads Failure reason supplied through prior `fsm:Fail(...)` calls.
-    @writes No additional fields are written by the state itself.
+--[=[
+	@state Failed
+	@description Handles the `Failed` terminal state for `DamageJob`.
 ]=]
+
 self:AddState("Failed", function() end, {})
 end
-
 --[=[
-    @description Runs post-shutdown cleanup for the job. This FSM intentionally leaves cleanup empty because all durable state is already committed or ephemeral.
-    @return nil -- No extra cleanup work is performed.
+	@description Implements `DamageJob.OnCleanup`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function DamageJob:OnCleanup() end
 
 return DamageJob

@@ -1,5 +1,9 @@
 --!strict
---[[
+--[=[
+	@module ActorPool
+	@description Defines the `ActorPool` module and its exported API.
+]=]
+
 	@Name ActorPool
 	@Author iKrypto
 	@Description Round-robin Actor worker pool that distributes pure-compute
@@ -24,14 +28,12 @@ type Pending = {
 	resolve: (Result) -> (),
 	createdAt: number,
 }
+--[=[
+	@description Implements `ActorPool.new`.
+	@param workers { Actor } -- `workers` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Creates a new ActorPool from the supplied worker Actors.
-	Each worker is bound to a "JobResult" message handler that resolves
-	the corresponding pending promise.
-	@param workers { Actor } -- Array of Actor instances to use as workers.
-	@return ActorPool -- The pool instance.
-]]
 function ActorPool.new(workers: { Actor })
     local self = setmetatable({}, ActorPool)
     self._workers = workers
@@ -57,24 +59,23 @@ function ActorPool.new(workers: { Actor })
 
     return self
 end
+--[=[
+	@description Implements `ActorPool._pickWorker`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return Actor -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Selects the next worker using round-robin scheduling.
-	@return Actor -- The chosen worker.
-]]
 function ActorPool:_pickWorker(): Actor
     assert(#self._workers > 0, "ActorPool has no workers")
     self._rr = (self._rr % #self._workers) + 1
     return self._workers[self._rr]
 end
+--[=[
+	@description Implements `ActorPool.Submit`.
+	@param job Job -- `job` input parameter.
+	@return Result -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Submits a job to the next available worker and blocks until
-	the result is received. The worker executes the named job function
-	in a parallel context and replies via "JobResult".
-	@param job Job -- { name: string, input: any } describing the work.
-	@return Result -- { ok: boolean, output: any?, error: string? }.
-]]
 function ActorPool:Submit(job: Job): Result
     self._nextId += 1
     local jobId = self._nextId

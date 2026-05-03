@@ -1,7 +1,8 @@
 --!strict
--- @Name Core/NetworkManager.luau
--- @Author iKrypto
--- @Description Handles network communications (Remotes) for the Orchestrator.
+--[=[
+	@module NetworkManager
+	@description Defines the `NetworkManager` module and its exported API.
+]=]
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -144,26 +145,22 @@ local function DisconnectTrackedConnections()
 		NetworkManager._connections[i] = nil
 	end
 end
+--[=[
+	@description Implements `NetworkManager.Log`.
+	@param params { Level: string, Message: string, OperationId: string } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Writes a log entry through the module-level logger.
-	@param params { Level: string, Message: string, OperationId: string } -- Structured log payload
-	@return ()
-	@reads NetworkManager.Logger
-	@writes None (side-effect: log output/history)
-]]
 function NetworkManager.Log(params: { Level: string, Message: string, OperationId: string })
 	ValidateRequest()
 	NetworkManager.Logger:Log(params)
 end
+--[=[
+	@description Handles `Initialize` for `NetworkManager`.
+	@param Util any -- `Util` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Initializes remotes, event-bus infrastructure, and context-specific listeners.
-	@param Util any -- Orchestrator utility table containing Logger, Signal, and Settings.StaticStrings
-	@return ()
-	@reads Initialized, RunService:IsServer()
-	@writes NetworkManager.Logger, remotes, EventBusRegistered, Signal, Initialized
-]]
 function NetworkManager.Initialize(Util)
 	if Initialized then return end
 	Initialized = true
@@ -185,16 +182,14 @@ function NetworkManager.Initialize(Util)
 	end
 	NetworkManager.Log({ Level = "INFO", Message = "NetworkManager initialized" })
 end
+--[=[
+	@description Handles `RegisterServerRequest` for `NetworkManager`.
+	@param name string -- `name` input parameter.
+	@param handler (Player, ...any) -> any -- `handler` input parameter.
+	@param isAsync boolean? -- `isAsync` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Registers a server request callback.
-	@param name string -- Request name supplied by clients via ServerRequest/ServerRequestAsync
-	@param handler function -- Callback invoked with (player, ...args)
-	@param isAsync boolean? -- When true, stores the handler in the fire-and-forget request table
-	@return ()
-	@reads None
-	@writes NetworkManager.ServerRequestCallbacksSync, NetworkManager.ServerRequestCallbacksAsync
-]]
 function NetworkManager.RegisterServerRequest(name: string, handler: (Player, ...any) -> any, isAsync: boolean?)
 	ValidateRequest("Server")
 	if isAsync then
@@ -204,16 +199,14 @@ function NetworkManager.RegisterServerRequest(name: string, handler: (Player, ..
 	end
 	NetworkManager.Log({ Level = "INFO", Message = "Registered server request callback for " .. name })
 end
+--[=[
+	@description Handles `RegisterEntityCommand` for `NetworkManager`.
+	@param entityId string -- `entityId` input parameter.
+	@param command string -- `command` input parameter.
+	@param handler (Player, ...any) -> () -- `handler` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Registers an entity command callback.
-	@param entityId string -- Entity identifier used to namespace callbacks
-	@param command string -- Command name routed from EntityCommandEvent
-	@param handler function -- Callback invoked with (player, ...args)
-	@return ()
-	@reads NetworkManager.EntityCommandCallbacks
-	@writes NetworkManager.EntityCommandCallbacks
-]]
 function NetworkManager.RegisterEntityCommand(entityId: string, command: string, handler: (Player, ...any) -> ())
 	ValidateRequest()
 	if not NetworkManager.EntityCommandCallbacks[entityId] then
@@ -222,14 +215,12 @@ function NetworkManager.RegisterEntityCommand(entityId: string, command: string,
 	NetworkManager.EntityCommandCallbacks[entityId][command] = handler
 	NetworkManager.Log({ Level = "INFO", Message = "Registered entity command callback for " .. entityId .. ": " .. command })
 end
+--[=[
+	@description Implements `NetworkManager.UnregisterEntityCommands`.
+	@param entityId string -- `entityId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Unregisters entity command callbacks for a specific entity.
-	@param entityId string -- Entity identifier whose command table should be discarded
-	@return ()
-	@reads None
-	@writes NetworkManager.EntityCommandCallbacks
-]]
 function NetworkManager.UnregisterEntityCommands(entityId: string)
 	ValidateRequest("Server")
 	NetworkManager.EntityCommandCallbacks[entityId] = nil
@@ -278,16 +269,14 @@ local function trackRemoteCall(remoteName: string, direction: string, packedArgs
 		table.remove(stats.RecentCalls, 1)
 	end
 end
+--[=[
+	@description Implements `NetworkManager.ServerCommandEntity`.
+	@param entityId string -- `entityId` input parameter.
+	@param command string -- `command` input parameter.
+	@param ... any -- `...` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Sends a command to an entity on the server.
-	@param entityId string -- Target entity identifier
-	@param command string -- Command name resolved on the server
-	@param ... any -- Command payload forwarded to EntityCommandEvent
-	@return ()
-	@reads NetworkManager.EntityCommandEvent
-	@writes NetworkManager._remoteStats
-]]
 function NetworkManager.ServerCommandEntity(entityId: string, command: string, ...: any)
 	ValidateRequest("Client")
 	local packed = table.pack(...)
@@ -296,16 +285,14 @@ function NetworkManager.ServerCommandEntity(entityId: string, command: string, .
 		NetworkManager.EntityCommandEvent:FireServer(entityId, command, table.unpack(packed, 1, packed.n))
 	end	
 end
+--[=[
+	@description Implements `NetworkManager.BroadcastEntityCommand`.
+	@param entityId string -- `entityId` input parameter.
+	@param command string -- `command` input parameter.
+	@param ... any -- `...` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Broadcasts an entity command to all clients.
-	@param entityId string -- Target entity identifier
-	@param command string -- Command name clients should handle
-	@param ... any -- Payload forwarded to all clients
-	@return ()
-	@reads NetworkManager.EntityCommandEvent
-	@writes NetworkManager._remoteStats
-]]
 function NetworkManager.BroadcastEntityCommand(entityId: string, command: string, ...: any)
 	ValidateRequest("Server")
 	local packed = table.pack(...)
@@ -314,15 +301,13 @@ function NetworkManager.BroadcastEntityCommand(entityId: string, command: string
 		NetworkManager.EntityCommandEvent:FireAllClients(entityId, command, table.unpack(packed, 1, packed.n))
 	end
 end
+--[=[
+	@description Implements `NetworkManager.BroadcastEntityUpdate`.
+	@param entityId string -- `entityId` input parameter.
+	@param changes { [string]: any } -- `changes` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Sends an entity update to all clients.
-	@param entityId string -- Target entity identifier
-	@param changes table -- Replicated property delta payload
-	@return ()
-	@reads NetworkManager.EntityUpdateEvent
-	@writes NetworkManager._remoteStats
-]]
 function NetworkManager.BroadcastEntityUpdate(entityId: string, changes: { [string]: any })
 	ValidateRequest("Server")
 	if NetworkManager.EntityUpdateEvent then
@@ -330,15 +315,13 @@ function NetworkManager.BroadcastEntityUpdate(entityId: string, changes: { [stri
 		NetworkManager.EntityUpdateEvent:FireAllClients(entityId, changes)
 	end
 end
+--[=[
+	@description Implements `NetworkManager.ServerRequest`.
+	@param requestName string -- `requestName` input parameter.
+	@param ... any -- `...` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Makes a server request (Synchronous).
-	@param requestName string -- Registered server request name
-	@param ... any -- Payload forwarded through the RemoteFunction
-	@return any -- Value returned by the server handler, or nil when the remote is unavailable
-	@reads NetworkManager.OrchestratorFunction
-	@writes NetworkManager._remoteStats
-]]
 function NetworkManager.ServerRequest(requestName: string, ...: any)
 	ValidateRequest("Client")
 	local packed = table.pack(...)
@@ -348,15 +331,13 @@ function NetworkManager.ServerRequest(requestName: string, ...: any)
 	end
 	return nil
 end
+--[=[
+	@description Implements `NetworkManager.ServerRequestAsync`.
+	@param requestName string -- `requestName` input parameter.
+	@param ... any -- `...` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Makes a server request (Asynchronous).
-	@param requestName string -- Registered server request name
-	@param ... any -- Payload forwarded through the RemoteEvent
-	@return ()
-	@reads NetworkManager.OrchestratorEvent
-	@writes NetworkManager._remoteStats
-]]
 function NetworkManager.ServerRequestAsync(requestName: string, ...: any)
 	ValidateRequest("Client")
 	local packed = table.pack(...)
@@ -365,14 +346,12 @@ function NetworkManager.ServerRequestAsync(requestName: string, ...: any)
 		NetworkManager.OrchestratorEvent:FireServer("AppRequestAsync", requestName, table.unpack(packed, 1, packed.n))
 	end
 end
+--[=[
+	@description Handles `RegisterEventBus` for `NetworkManager`.
+	@param name string -- `name` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[ 
-	@description Registers an event bus.
-	@param name string -- Logical bus name shared by publishers and subscribers
-	@return any -- Signal instance representing the named bus
-	@reads NetworkManager.EventBuses, NetworkManager.EventBusRegistered
-	@writes NetworkManager.EventBuses
-]]
 function NetworkManager.RegisterEventBus(name: string)
 	ValidateRequest()
 	if not NetworkManager.EventBuses[name] then 
@@ -382,14 +361,12 @@ function NetworkManager.RegisterEventBus(name: string)
 	end
 	return NetworkManager.EventBuses[name]
 end
+--[=[
+	@description Implements `NetworkManager.UnregisterEventBus`.
+	@param name string -- `name` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[ 
-	@description Unregisters an event bus.
-	@param name string -- Logical bus name to destroy and remove
-	@return ()
-	@reads NetworkManager.EventBuses
-	@writes NetworkManager.EventBuses
-]]
 function NetworkManager.UnregisterEventBus(name: string) 
 	ValidateRequest()
 	local bus = NetworkManager.EventBuses[name]
@@ -397,27 +374,23 @@ function NetworkManager.UnregisterEventBus(name: string)
 	NetworkManager.EventBuses[name] = nil 
 	NetworkManager.Log({ Level = "INFO", Message = "Unregistered event bus " .. name })
 end
+--[=[
+	@description Returns the data produced by `NetworkManager.GetEventBus`.
+	@param name string -- `name` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Gets an event bus.
-	@param name string -- Logical bus name
-	@return any -- Signal instance for the bus, or nil when not registered
-	@reads NetworkManager.EventBuses
-	@writes None
-]] 
 function NetworkManager.GetEventBus(name: string) 
 	ValidateRequest()
 	return NetworkManager.EventBuses[name] 
 end
+--[=[
+	@description Implements `NetworkManager.FireEventBus`.
+	@param name string -- `name` input parameter.
+	@param ... any -- `...` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Fires an event bus.
-	@param name string -- Logical bus name
-	@param ... any -- Payload forwarded to Signal listeners
-	@return ()
-	@reads NetworkManager.EventBuses, NetworkManager._busStats
-	@writes NetworkManager._busStats
-]] 
 function NetworkManager.FireEventBus(name: string, ...) 
 	ValidateRequest()
 	if NetworkManager.EventBuses[name] then
@@ -454,15 +427,13 @@ function NetworkManager.FireEventBus(name: string, ...)
 		NetworkManager.EventBuses[name]:Fire(...) 
 	end 
 end
+--[=[
+	@description Implements `NetworkManager.AwaitEventBus`.
+	@param name string -- `name` input parameter.
+	@param timeout number? -- `timeout` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Awaits an event bus.
-	@param name string -- Logical bus name
-	@param timeout number? -- Optional timeout in seconds before returning nil
-	@return any -- Signal instance for the bus, or nil when the timeout elapses
-	@reads NetworkManager.EventBuses
-	@writes None
-]] 
 function NetworkManager.AwaitEventBus(name: string, timeout: number?)
 	ValidateRequest()
 	local start = os.clock()
@@ -474,8 +445,12 @@ function NetworkManager.AwaitEventBus(name: string, timeout: number?)
 	end
 	return NetworkManager.EventBuses[name]
 end
+--[=[
+	@description Implements `NetworkManager._RegisterServerListeners`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- private
 function NetworkManager._RegisterServerListeners()
 	ValidateRequest("Server")
 	DisconnectTrackedConnections()
@@ -552,6 +527,11 @@ function NetworkManager._RegisterServerListeners()
 	end
 	NetworkManager.Log({ Level = "INFO", Message = "Registered server listeners" })
 end
+--[=[
+	@description Implements `NetworkManager._RegisterClientListeners`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkManager._RegisterClientListeners()
 	DisconnectTrackedConnections()

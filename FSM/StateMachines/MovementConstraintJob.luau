@@ -1,6 +1,8 @@
 --!strict
--- @Name MovementConstraintJob
--- @Description FSM state machine module.
+--[=[
+	@module MovementConstraintJob
+	@description Defines the `MovementConstraintJob` state machine module and its exported API.
+]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
@@ -14,8 +16,18 @@ local MovementConstraintJob = {
 	terminalStates = { "Completed", "Failed" },
 	initialState = "Validate",
 }
+--[=[
+	@description Handles `RegisterStates` for `MovementConstraintJob`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MovementConstraintJob:RegisterStates()
+	--[=[
+		@state Validate
+		@description Handles the `Validate` state for `MovementConstraintJob`.
+	]=]
+
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			if type(fsm.CharacterEntityId) ~= "string" or fsm.CharacterEntityId == "" then
@@ -37,6 +49,10 @@ function MovementConstraintJob:RegisterStates()
 			fsm.State = "SnapshotPrior"
 		end,
 	}, { "SnapshotPrior", "Failed" })
+	--[=[
+		@state SnapshotPrior
+		@description Handles the `SnapshotPrior` state for `MovementConstraintJob`.
+	]=]
 
 	self:AddState("SnapshotPrior", {
 		OnEnter = function(_, fsm)
@@ -49,6 +65,10 @@ function MovementConstraintJob:RegisterStates()
 			fsm.State = "ApplyPatch"
 		end,
 	}, { "ApplyPatch", "Failed" })
+	--[=[
+		@state ApplyPatch
+		@description Handles the `ApplyPatch` state for `MovementConstraintJob`.
+	]=]
 
 	self:AddState("ApplyPatch", {
 		OnEnter = function(_, fsm)
@@ -75,12 +95,20 @@ function MovementConstraintJob:RegisterStates()
 			fsm.State = "WaitDuration"
 		end,
 	}, { "WaitDuration", "Failed" })
+	--[=[
+		@state WaitDuration
+		@description Handles the `WaitDuration` state for `MovementConstraintJob`.
+	]=]
 
 	self:AddState("WaitDuration", {
 		OnEnter = function(_, fsm)
 			StateTransitionHelpers.scheduleTransitionCompat(fsm, fsm.Duration, "RevertPatch", "WaitDuration")
 		end,
 	}, { "RevertPatch", "Failed" })
+	--[=[
+		@state RevertPatch
+		@description Handles the `RevertPatch` state for `MovementConstraintJob`.
+	]=]
 
 	self:AddState("RevertPatch", {
 		OnEnter = function(_, fsm)
@@ -101,6 +129,11 @@ function MovementConstraintJob:RegisterStates()
 		end,
 	}, { "Completed", "Failed" })
 end
+--[=[
+	@description Implements `MovementConstraintJob.OnCleanup`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MovementConstraintJob:OnCleanup()
 	if not self._patchApplied then

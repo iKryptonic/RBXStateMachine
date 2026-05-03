@@ -1,6 +1,8 @@
 --!strict
--- @Name ToggleWeaponJob
--- @Description FSM state machine module.
+--[=[
+	@module ToggleWeaponJob
+	@description Defines the `ToggleWeaponJob` state machine module and its exported API.
+]=]
 
 local HttpService = game:GetService("HttpService")
 
@@ -67,8 +69,18 @@ local function beginChildJob(
 
 	subJob:Start({ State = initialState })
 end
+--[=[
+	@description Handles `RegisterStates` for `ToggleWeaponJob`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ToggleWeaponJob:RegisterStates()
+	--[=[
+		@state Validate
+		@description Handles the `Validate` state for `ToggleWeaponJob`.
+	]=]
+
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			if type(fsm.CharacterEntityId) ~= "string" or fsm.CharacterEntityId == "" then
@@ -104,6 +116,10 @@ function ToggleWeaponJob:RegisterStates()
 			fsm.State = "ResolveCurrentState"
 		end,
 	}, { "ResolveCurrentState", "Failed" })
+	--[=[
+		@state ResolveCurrentState
+		@description Handles the `ResolveCurrentState` state for `ToggleWeaponJob`.
+	]=]
 
 	self:AddState("ResolveCurrentState", {
 		OnEnter = function(_, fsm)
@@ -141,6 +157,10 @@ function ToggleWeaponJob:RegisterStates()
 			fsm.State = "ChooseBranch"
 		end,
 	}, { "ChooseBranch", "Failed" })
+	--[=[
+		@state ChooseBranch
+		@description Handles the `ChooseBranch` state for `ToggleWeaponJob`.
+	]=]
 
 	self:AddState("ChooseBranch", {
 		OnEnter = function(_, fsm)
@@ -165,6 +185,10 @@ function ToggleWeaponJob:RegisterStates()
 			fsm.State = "RunEquip"
 		end,
 	}, { "RunEquip", "RunUnEquip", "Failed" })
+	--[=[
+		@state RunEquip
+		@description Handles the `RunEquip` state for `ToggleWeaponJob`.
+	]=]
 
 	self:AddState("RunEquip", {
 		OnEnter = function(_, fsm)
@@ -176,6 +200,10 @@ function ToggleWeaponJob:RegisterStates()
 			}, "Sub-equip")
 		end,
 	}, { "Completed", "Failed" })
+	--[=[
+		@state RunUnEquip
+		@description Handles the `RunUnEquip` state for `ToggleWeaponJob`.
+	]=]
 
 	self:AddState("RunUnEquip", {
 		OnEnter = function(_, fsm)

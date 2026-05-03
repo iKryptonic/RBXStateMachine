@@ -1,9 +1,8 @@
 --!strict
--- @Name ServiceManager/GlassGUI.luau
--- @Author iKrypto
--- @Description Programmatic Glass Engine ScreenGui builder.
--- Creates the entire UI shell: sidebar icon rail, breadcrumb bar, body container,
--- bottom status bar, and insight notification area. No serialized GUI dependency.
+--[=[
+	@module GlassGUI
+	@description Defines the `GlassGUI` module and its exported API.
+]=]
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -31,16 +30,12 @@ local function ClampWindowPosition(position: UDim2, anchorPoint: Vector2, absolu
 		math.floor(clampedY - viewport.Y * position.Y.Scale)
 	)
 end
+--[=[
+	@description Implements `GlassGUI.new`.
+	@param playerGui PlayerGui -- `playerGui` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- CONSTRUCTOR
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Create the GlassGUI controller around a PlayerGui.
-	Stores window state, callback hooks, and lazily populated instance references
-	until Build materializes the visual shell.
-]]
 function GlassGUI.new(playerGui: PlayerGui): any
 	local self = setmetatable({}, GlassGUI)
 	self._playerGui = playerGui
@@ -69,16 +64,12 @@ function GlassGUI.new(playerGui: PlayerGui): any
 	self._visible = false
 	return self
 end
+--[=[
+	@description Creates the result managed by `GlassGUI.Build`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return ScreenGui -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- BUILD FULL GUI
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Create and attach the full ServiceManager ScreenGui shell.
-	Builds the window chrome, sidebar, breadcrumb bar, body host, status bar, and
-	insight toast, then returns the finished ScreenGui instance.
-]]
 function GlassGUI:Build(): ScreenGui
 	-- Root ScreenGui
 	local sg = Instance.new("ScreenGui")
@@ -140,10 +131,11 @@ main.AnchorPoint = Vector2.new(0.5, 0.5)
 
 	return sg
 end
-
--- ══════════════════════════════════════════════════════════════
--- TITLE BAR (top 32px)
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `GlassGUI._BuildTitleBar`.
+	@param parent Frame -- `parent` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function GlassGUI:_BuildTitleBar(parent: Frame)
 	local bar = Instance.new("Frame")
@@ -269,10 +261,11 @@ function GlassGUI:_BuildTitleBar(parent: Frame)
 		end)
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- SIDEBAR (left 48px icon rail)
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `GlassGUI._BuildSidebar`.
+	@param parent Frame -- `parent` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function GlassGUI:_BuildSidebar(parent: Frame)
 	local sidebar = Instance.new("Frame")
@@ -414,10 +407,11 @@ function GlassGUI:_BuildSidebar(parent: Frame)
 		self._sidebarButtons[sub.Id] = btn
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- BREADCRUMB BAR (horizontal bar below title, right of sidebar)
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `GlassGUI._BuildBreadcrumbBar`.
+	@param parent Frame -- `parent` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function GlassGUI:_BuildBreadcrumbBar(parent: Frame)
 	local bar = Instance.new("Frame")
@@ -492,12 +486,13 @@ function GlassGUI:_BuildBreadcrumbBar(parent: Frame)
 		if self._onBackClick then self._onBackClick() end
 	end)
 end
+--[=[
+	@description Implements `GlassGUI.UpdateBreadcrumbs`.
+	@param crumbs { { Id: string, Label: string, Depth: number } } -- `crumbs` input parameter.
+	@param onCrumbClick ((id: string) -> ())? -- `onCrumbClick` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Rebuild the breadcrumb bar from the navigator's current crumb trail.
-	Intermediate crumbs become clickable when a handler is supplied, while the
-	first crumb retains subsystem coloring for orientation.
-]]
 function GlassGUI:UpdateBreadcrumbs(crumbs: { { Id: string, Label: string, Depth: number } }, onCrumbClick: ((id: string) -> ())?)
 	local bar = self._breadcrumbBar
 	if not bar then return end
@@ -564,10 +559,11 @@ function GlassGUI:UpdateBreadcrumbs(crumbs: { { Id: string, Label: string, Depth
 		end
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- BODY CONTAINER (main content area)
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `GlassGUI._BuildBodyContainer`.
+	@param parent Frame -- `parent` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function GlassGUI:_BuildBodyContainer(parent: Frame)
 	local body = Instance.new("Frame")
@@ -594,18 +590,21 @@ function GlassGUI:_BuildBodyContainer(parent: Frame)
 	host.ZIndex = 6
 	host.Parent = body
 end
+--[=[
+	@description Returns the data produced by `GlassGUI.GetBodyContainer`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return Frame? -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Return the LayerHost frame used by ZAxisNavigator for subsystem content.
-]]
 function GlassGUI:GetBodyContainer(): Frame?
 	if not self._bodyContainer then return nil end
 	return self._bodyContainer:FindFirstChild("LayerHost") :: Frame?
 end
-
--- ══════════════════════════════════════════════════════════════
--- STATUS BAR (bottom 24px)
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `GlassGUI._BuildStatusBar`.
+	@param parent Frame -- `parent` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function GlassGUI:_BuildStatusBar(parent: Frame)
 	local bar = Instance.new("Frame")
@@ -688,11 +687,12 @@ function GlassGUI:_BuildStatusBar(parent: Frame)
 	perfPad.PaddingRight = UDim.new(0, 8)
 	perfPad.Parent = perfLabel
 end
+--[=[
+	@description Implements `GlassGUI.UpdateStatusBar`.
+	@param props { Connected: boolean?, Mode: string?, InsightCount: number?, FPS: number?, } -- `props` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Apply a partial status snapshot to the bottom status bar widgets.
-	Callers can update connection state, insight count, and FPS independently.
-]]
 function GlassGUI:UpdateStatusBar(props: {
 	Connected: boolean?,
 	Mode: string?,
@@ -731,10 +731,11 @@ function GlassGUI:UpdateStatusBar(props: {
 		end
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- INSIGHT TOAST (bottom-right overlay notification)
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `GlassGUI._BuildInsightToast`.
+	@param parent Frame -- `parent` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function GlassGUI:_BuildInsightToast(parent: Frame)
 	local toast = Instance.new("Frame")
@@ -788,11 +789,15 @@ function GlassGUI:_BuildInsightToast(parent: Frame)
 	descLabel.ZIndex = 51
 	descLabel.TextWrapped = true
 end
+--[=[
+	@description Implements `GlassGUI.ShowInsightToast`.
+	@param title string -- `title` input parameter.
+	@param description string -- `description` input parameter.
+	@param severity string? -- `severity` input parameter.
+	@param duration number? -- `duration` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Show a temporary insight notification in the bottom-right overlay.
-	Severity controls the accent color, while duration determines auto-dismiss.
-]]
 function GlassGUI:ShowInsightToast(title: string, description: string, severity: string?, duration: number?)
 	local toast = self._insightToast
 	if not toast then return end
@@ -837,15 +842,13 @@ function GlassGUI:ShowInsightToast(title: string, description: string, severity:
 		end
 	end)
 end
+--[=[
+	@description Implements `GlassGUI.SelectSubsystem`.
+	@param id string -- `id` input parameter.
+	@param suppressCallback boolean? -- `suppressCallback` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- SIDEBAR SELECTION
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Update sidebar selection visuals and optionally notify the orchestrator about
-	a subsystem change.
-]]
 function GlassGUI:SelectSubsystem(id: string, suppressCallback: boolean?)
 	local prev = self._activeSubsystem
 	self._activeSubsystem = id
@@ -887,15 +890,12 @@ function GlassGUI:SelectSubsystem(id: string, suppressCallback: boolean?)
 		self._onSubsystemSelected(id)
 	end
 end
+--[=[
+	@description Implements `GlassGUI.Show`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- WINDOW CONTROLS
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Show the window, using a reduced first-show path because Roblox will not tween
-	freshly enabled ScreenGuis reliably on the same frame.
-]]
 function GlassGUI:Show()
 	if not self._screenGui then return end
 	local wasEnabled = self._screenGui.Enabled
@@ -920,10 +920,12 @@ function GlassGUI:Show()
 		end
 	end
 end
+--[=[
+	@description Implements `GlassGUI.Hide`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Animate the window closed and disable the ScreenGui when the collapse completes.
-]]
 function GlassGUI:Hide()
 	if not self._screenGui then return end
 	local main = self._mainFrame
@@ -941,19 +943,21 @@ function GlassGUI:Hide()
 		end)
 	end
 end
+--[=[
+	@description Returns whether `GlassGUI` is visible.
+	@param none nil -- This function does not accept explicit parameters.
+	@return boolean -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Return whether the GUI is currently marked visible.
-]]
 function GlassGUI:IsVisible(): boolean
 	return self._visible
 end
+--[=[
+	@description Implements `GlassGUI.ToggleMinimize`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Toggle between minimized and expanded window states.
-	Preserves the user's last resized dimensions so restore returns to the same
-	working layout.
-]]
 function GlassGUI:ToggleMinimize()
 	self._minimized = not self._minimized
 	local main = self._mainFrame
@@ -980,10 +984,11 @@ function GlassGUI:ToggleMinimize()
 		self._onMinimizeToggle(self._minimized)
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- DRAGGING
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `GlassGUI._SetupDragging`.
+	@param main Frame -- `main` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function GlassGUI:_SetupDragging(main: Frame)
 	local titleBar = main:FindFirstChild("TitleBar") :: Frame?
@@ -1034,10 +1039,11 @@ function GlassGUI:_SetupDragging(main: Frame)
 		end
 	end))
 end
-
--- ══════════════════════════════════════════════════════════════
--- RESIZING (bottom-right corner grip)
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `GlassGUI._SetupResizing`.
+	@param main Frame -- `main` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function GlassGUI:_SetupResizing(main: Frame)
 	local MIN_WIDTH = 600
@@ -1103,44 +1109,66 @@ function GlassGUI:_SetupResizing(main: Frame)
 		end
 	end))
 end
+--[=[
+	@description Implements `GlassGUI.OnSubsystemSelected`.
+	@param callback (name: string) -> () -- `callback` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- CALLBACKS
--- ══════════════════════════════════════════════════════════════
-
--- Register a callback fired when the active subsystem changes.
 function GlassGUI:OnSubsystemSelected(callback: (name: string) -> ())
 	self._onSubsystemSelected = callback
 end
+--[=[
+	@description Implements `GlassGUI.OnMinimizeToggle`.
+	@param callback (minimized: boolean) -> () -- `callback` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Register a callback fired after minimize state changes.
 function GlassGUI:OnMinimizeToggle(callback: (minimized: boolean) -> ())
 	self._onMinimizeToggle = callback
 end
+--[=[
+	@description Implements `GlassGUI.OnClose`.
+	@param callback () -> () -- `callback` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Register a callback fired when the close button is pressed.
 function GlassGUI:OnClose(callback: () -> ())
 	self._onClose = callback
 end
+--[=[
+	@description Implements `GlassGUI.OnContextToggle`.
+	@param callback (mode: string) -> () -- `callback` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Register a callback fired when the client/server pill is toggled.
 function GlassGUI:OnContextToggle(callback: (mode: string) -> ())
 	self._onContextToggle = callback
 end
+--[=[
+	@description Implements `GlassGUI.OnBackClick`.
+	@param callback () -> () -- `callback` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Register a callback fired when the breadcrumb back button is pressed.
 function GlassGUI:OnBackClick(callback: () -> ())
 	self._onBackClick = callback
 end
+--[=[
+	@description Implements `GlassGUI.OnSubsystemReselected`.
+	@param callback (name: string) -> () -- `callback` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Register a callback fired when the current subsystem is clicked again.
 function GlassGUI:OnSubsystemReselected(callback: (name: string) -> ())
 	self._onSubsystemReselected = callback
 end
+--[=[
+	@description Updates module state through `GlassGUI.SetContextMode`.
+	@param mode string -- `mode` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Update the client/server mode pill to reflect the orchestrator's active mode.
-]]
 function GlassGUI:SetContextMode(mode: string)
 	self._contextMode = mode
 	local pill = self._contextPill
@@ -1161,14 +1189,12 @@ function GlassGUI:SetContextMode(mode: string)
 		TweenService:Create(stroke, Theme.Tween.Fast, { Color = color }):Play()
 	end
 end
+--[=[
+	@description Implements `GlassGUI.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- CLEANUP
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Disconnect all retained GUI event handlers and destroy the ScreenGui shell.
-]]
 function GlassGUI:Destroy()
 	-- Release all stored connections (drag, resize, hover, button clicks).
 	-- Without this, UserInputService callbacks survive the ScreenGui's destroy

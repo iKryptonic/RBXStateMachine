@@ -256,14 +256,12 @@ InputMode = { Type = "string", Replicate = false, Persist = false },
 Instance = { Type = "any", Replicate = false, Persist = false },
 },
 }
-
 --[=[
-    @within CharacterEntity
-    @param params { [any]: any }
-    @return { [string]: any }
-    @description Builds a fresh runtime state table for a spawned character entity.
-    These defaults are intentionally non-persistent and are re-applied on every spawn.
+	@description Returns the data produced by `CharacterEntity.GetContext`.
+	@param params { [any]: any } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function CharacterEntity:GetContext(params: { [any]: any })
 local context = params.Context or params
 local userId = context.UserId or 0
@@ -303,13 +301,12 @@ SprintIntent = false,
 InputMode = "Combat",
 }
 end
-
 --[=[
-    @within CharacterEntity
-    @param changes { [string]: any }
-    @description Applies client-side visual/runtime consequences of replicated field changes.
-    RecentActions feed the render router, equip changes update visuals, and MoveSpeedCap updates the humanoid.
+	@description Implements `CharacterEntity.ApplyChanges`.
+	@param changes { [string]: any } -- `changes` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function CharacterEntity:ApplyChanges(changes: { [string]: any })
 if not RunService:IsClient() then
 return

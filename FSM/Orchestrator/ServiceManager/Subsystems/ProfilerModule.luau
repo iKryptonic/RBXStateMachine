@@ -1,25 +1,8 @@
 --!strict
--- @Name ServiceManager/Subsystems/ProfilerModule.luau
--- @Author iKrypto
--- @Description Aggregated profiler subsystem for the ServiceManager dashboard.
--- Provides a single "PROFILER" tab that surfaces hot-path timing data from the
--- Scheduler, FSM heartbeat, and network call tracking — answering the question
--- "what's eating my frame budget?" without requiring the user to dig through
--- individual TASKS/FSM/NETWORK tabs.
---
--- Layout:
---   ┌────────────────────────────────────────────────────┐
---   │ FRAME BUDGET BAR  [━━━━━━━░░░░░░░]  1.2ms / 16.6ms │
---   ├────────────────────────────────────────────────────┤
---   │ ▸ HOT TASKS (top N by avg time)                    │
---   │   Name | AvgMs | MaxMs | ×Runs | MemKB | Status   │
---   ├────────────────────────────────────────────────────┤
---   │ ▸ HOT FSMs (top N by avg update time)              │
---   │   Id | State | AvgMs | MaxMs | ×Updates | MemΔ    │
---   ├────────────────────────────────────────────────────┤
---   │ ▸ DIAGNOSTICS (collapsed by default)               │
---   │   Thread pool | Network traffic | GC stats          │
---   └────────────────────────────────────────────────────┘
+--[=[
+	@module ProfilerModule
+	@description Defines the `ProfilerModule` module and its exported API.
+]=]
 
 local Theme = require(script.Parent.Parent.Theme)
 
@@ -27,12 +10,12 @@ local ProfilerModule = {}
 ProfilerModule.__index = ProfilerModule
 
 local MAX_HOT_ITEMS = 10
+--[=[
+	@description Implements `ProfilerModule.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Create the PROFILER subsystem controller.
-	Owns the aggregated task/FSM/network snapshots and frame-budget state that
-	feed the cross-cutting performance dashboard.
-]]
 function ProfilerModule.new(): any
 	local self = setmetatable({}, ProfilerModule)
 	self._taskPerf = {} :: { [string]: any }
@@ -48,16 +31,12 @@ function ProfilerModule.new(): any
 	self._showInstanceMemory = true
 	return self
 end
+--[=[
+	@description Implements `ProfilerModule.FetchData`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- DATA FETCH
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Refresh the profiler snapshot for the active context.
-	Merges scheduler, FSM, GC, thread-pool, and network telemetry into a single
-	view so the PROFILER tab can rank the hottest work at a glance.
-]]
 function ProfilerModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
 	if not orchestrator then return end
@@ -79,12 +58,23 @@ function ProfilerModule:FetchData(nexus: any)
 		nexus.Store:Set("profiler.fsmCount", self:_CountTable(self._fsmPerf))
 	end)
 end
+--[=[
+	@description Implements `ProfilerModule._CountTable`.
+	@param t { [any]: any } -- `t` input parameter.
+	@return number -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_CountTable(t: { [any]: any }): number
 	local n = 0
 	for _ in pairs(t) do n += 1 end
 	return n
 end
+--[=[
+	@description Implements `ProfilerModule._FetchClient`.
+	@param orchestrator any -- `orchestrator` input parameter.
+	@param nexus any? -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_FetchClient(orchestrator: any, nexus: any?)
 	-- Tasks
@@ -173,6 +163,11 @@ function ProfilerModule:_FetchClient(orchestrator: any, nexus: any?)
 	-- Instance memory (client-side)
 	self:_FetchInstanceMemoryLocal()
 end
+--[=[
+	@description Implements `ProfilerModule._FetchServer`.
+	@param serverData any? -- `serverData` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_FetchServer(serverData: any?)
 	self._taskPerf = {}
@@ -263,6 +258,11 @@ function ProfilerModule:_FetchServer(serverData: any?)
 		self._instanceMemory = serverData.InstanceMemory
 	end
 end
+--[=[
+	@description Implements `ProfilerModule._FetchNetworkClient`.
+	@param nm any? -- `nm` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_FetchNetworkClient(nm: any?)
 	self._networkTraffic = {}
@@ -285,6 +285,11 @@ function ProfilerModule:_FetchNetworkClient(nm: any?)
 	addStats(nm._invokeStats)
 	table.sort(self._networkTraffic, function(a, b) return a.Count > b.Count end)
 end
+--[=[
+	@description Implements `ProfilerModule._FetchInstanceMemoryLocal`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_FetchInstanceMemoryLocal()
 	local instMem: { [string]: any } = { Services = {}, TopOffenders = {}, TotalDescendants = 0 }
@@ -355,16 +360,18 @@ function ProfilerModule:_FetchInstanceMemoryLocal()
 	end
 	self._instanceMemory = instMem
 end
+--[=[
+	@description Implements `ProfilerModule.Render`.
+	@param _nexus any -- `_nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	PROFILER rendering is produced by BuildRootLayer and its section builders.
-]]
 function ProfilerModule:Render(_nexus: any) end
-
--- ══════════════════════════════════════════════════════════════
--- SORTING
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `ProfilerModule._GetSortedTasks`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return { any } -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_GetSortedTasks(): { any }
 	local result = {}
@@ -383,6 +390,11 @@ function ProfilerModule:_GetSortedTasks(): { any }
 	end)
 	return result
 end
+--[=[
+	@description Implements `ProfilerModule._GetSortedFSMs`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return { any } -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_GetSortedFSMs(): { any }
 	local result = {}
@@ -401,16 +413,13 @@ function ProfilerModule:_GetSortedFSMs(): { any }
 	end)
 	return result
 end
+--[=[
+	@description Creates the result managed by `ProfilerModule.BuildRootLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- ROOT LAYER
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Build or rebuild the PROFILER root layer inside the supplied navigator frame.
-	Lays out the frame-budget bar, hot-task table, hot-FSM table, and optional
-	diagnostics section from the current aggregated snapshot.
-]]
 function ProfilerModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -452,10 +461,12 @@ function ProfilerModule:BuildRootLayer(frame: Frame, context: any)
 	-- ── DIAGNOSTICS (collapsed) ───────────────────────────────
 	self:_BuildDiagnosticsSection(contentFrame, nexus, nextOrder())
 end
-
--- ══════════════════════════════════════════════════════════════
--- FRAME BUDGET BAR
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `ProfilerModule._BuildBudgetBar`.
+	@param parent Frame -- `parent` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildBudgetBar(parent: Frame, layoutOrder: number)
 	local fb = self._frameBudget
@@ -533,10 +544,13 @@ function ProfilerModule:_BuildBudgetBar(parent: Frame, layoutOrder: number)
 		Parent = container,
 	})
 end
-
--- ══════════════════════════════════════════════════════════════
--- HOT TASKS TABLE
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `ProfilerModule._BuildHotTasksSection`.
+	@param parent Frame -- `parent` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildHotTasksSection(parent: Frame, nexus: any, layoutOrder: number)
 	local sorted = self:_GetSortedTasks()
@@ -588,10 +602,13 @@ function ProfilerModule:_BuildHotTasksSection(parent: Frame, nexus: any, layoutO
 		}).LayoutOrder = layoutOrder * 100 + 2
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- HOT FSMs TABLE
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `ProfilerModule._BuildHotFSMsSection`.
+	@param parent Frame -- `parent` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOrder: number)
 	local sorted = self:_GetSortedFSMs()
@@ -647,10 +664,13 @@ function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOr
 		}).LayoutOrder = layoutOrder * 100 + 2
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- INSTANCE MEMORY (Roblox engine memory — meshes, textures, GUI)
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `ProfilerModule._BuildInstanceMemorySection`.
+	@param parent Frame -- `parent` input parameter.
+	@param _nexus any -- `_nexus` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildInstanceMemorySection(parent: Frame, _nexus: any, layoutOrder: number)
 	local im = self._instanceMemory
@@ -868,10 +888,13 @@ function ProfilerModule:_BuildInstanceMemorySection(parent: Frame, _nexus: any, 
 		end
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- DIAGNOSTICS (collapsed by default)
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `ProfilerModule._BuildDiagnosticsSection`.
+	@param parent Frame -- `parent` input parameter.
+	@param _nexus any -- `_nexus` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildDiagnosticsSection(parent: Frame, _nexus: any, layoutOrder: number)
 	local btn = Instance.new("TextButton")
@@ -984,10 +1007,14 @@ function ProfilerModule:_BuildDiagnosticsSection(parent: Frame, _nexus: any, lay
 		}).LayoutOrder = layoutOrder * 100 + 4
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- SHARED TABLE RENDERING
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `ProfilerModule._BuildTableHeader`.
+	@param parent Frame -- `parent` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@param columns { string } -- `columns` input parameter.
+	@param widths { number } -- `widths` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildTableHeader(parent: Frame, layoutOrder: number, columns: { string }, widths: { number })
 	local row = Instance.new("Frame")
@@ -1013,6 +1040,13 @@ function ProfilerModule:_BuildTableHeader(parent: Frame, layoutOrder: number, co
 		xOff += w
 	end
 end
+--[=[
+	@description Implements `ProfilerModule._BuildTableRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@param cells { { Text: string, Width: number, Color: Color3 } } -- `cells` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildTableRow(parent: Frame, layoutOrder: number, cells: { { Text: string, Width: number, Color: Color3 } })
 	local row = Instance.new("Frame")
@@ -1040,14 +1074,12 @@ function ProfilerModule:_BuildTableRow(parent: Frame, layoutOrder: number, cells
 		xOff += w
 	end
 end
+--[=[
+	@description Implements `ProfilerModule.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- DESTROY
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Clear all cached profiler aggregates.
-]]
 function ProfilerModule:Destroy()
 	table.clear(self._taskPerf)
 	table.clear(self._fsmPerf)

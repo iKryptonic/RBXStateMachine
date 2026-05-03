@@ -1,8 +1,8 @@
 --!strict
--- @Name ServiceManager/AnimationController.luau
--- @Author iKrypto
--- @Description FSM-driven staggered animation system. Every interaction triggers
--- responsive, queued animations giving the UI an "alive" feel.
+--[=[
+	@module AnimationController
+	@description Defines the `AnimationController` module and its exported API.
+]=]
 
 local TweenService = game:GetService("TweenService")
 
@@ -31,6 +31,11 @@ type PulseEntry = {
 	Tween: Tween?,
 	Active: boolean,
 }
+--[=[
+	@description Implements `AnimationController.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function AnimationController.new(): any
 	local self = setmetatable({}, AnimationController)
@@ -41,8 +46,16 @@ function AnimationController.new(): any
 	self._nextId = 0
 	return self
 end
+--[=[
+	@description Implements `AnimationController.Animate`.
+	@param target Instance -- `target` input parameter.
+	@param properties { [string]: any } -- `properties` input parameter.
+	@param tweenInfo TweenInfo? -- `tweenInfo` input parameter.
+	@param delay number? -- `delay` input parameter.
+	@param onComplete (() -> ())? -- `onComplete` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Queue a single animated property change
 function AnimationController:Animate(target: Instance, properties: { [string]: any }, tweenInfo: TweenInfo?, delay: number?, onComplete: (() -> ())?)
 	self._nextId += 1
 	local id = "anim_" .. tostring(self._nextId)
@@ -61,8 +74,15 @@ function AnimationController:Animate(target: Instance, properties: { [string]: a
 	table.insert(self._queue, entry)
 	return id
 end
+--[=[
+	@description Implements `AnimationController.StaggerIn`.
+	@param items { Instance } -- `items` input parameter.
+	@param propertyFrom { [string]: any } -- `propertyFrom` input parameter.
+	@param propertyTo { [string]: any } -- `propertyTo` input parameter.
+	@param tweenInfo TweenInfo? -- `tweenInfo` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Staggered list animation: animate N items with incremental delays
 function AnimationController:StaggerIn(items: { Instance }, propertyFrom: { [string]: any }, propertyTo: { [string]: any }, tweenInfo: TweenInfo?)
 	local ti = tweenInfo or Theme.Tween.Fast
 	for i, item in ipairs(items) do
@@ -74,8 +94,16 @@ function AnimationController:StaggerIn(items: { Instance }, propertyFrom: { [str
 		self:Animate(item, propertyTo, ti, (i - 1) * self._staggerDelay)
 	end
 end
+--[=[
+	@description Implements `AnimationController.StartPulse`.
+	@param id string -- `id` input parameter.
+	@param target Instance -- `target` input parameter.
+	@param property string -- `property` input parameter.
+	@param pulseValue any -- `pulseValue` input parameter.
+	@param tweenInfo TweenInfo? -- `tweenInfo` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Pulse effect: continuous glow/dim cycle on an element
 function AnimationController:StartPulse(id: string, target: Instance, property: string, pulseValue: any, tweenInfo: TweenInfo?)
 	-- Stop existing pulse if any
 	self:StopPulse(id)
@@ -96,6 +124,11 @@ function AnimationController:StartPulse(id: string, target: Instance, property: 
 		Active = true,
 	}
 end
+--[=[
+	@description Implements `AnimationController.StopPulse`.
+	@param id string -- `id` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function AnimationController:StopPulse(id: string)
 	local pulse = self._pulses[id]
@@ -111,8 +144,14 @@ function AnimationController:StopPulse(id: string)
 	pulse.Active = false
 	self._pulses[id] = nil
 end
+--[=[
+	@description Implements `AnimationController.ExpandIn`.
+	@param frame Frame -- `frame` input parameter.
+	@param fromScale number? -- `fromScale` input parameter.
+	@param duration number? -- `duration` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Expand-in animation for sub-panes
 function AnimationController:ExpandIn(frame: Frame, fromScale: number?, duration: number?)
 	local scale = fromScale or 0.92
 	local dur = duration or 0.3
@@ -141,8 +180,13 @@ function AnimationController:ExpandIn(frame: Frame, fromScale: number?, duration
 		end)
 	end
 end
+--[=[
+	@description Implements `AnimationController.CollapseOut`.
+	@param frame Frame -- `frame` input parameter.
+	@param onDone (() -> ())? -- `onDone` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Collapse-out animation
 function AnimationController:CollapseOut(frame: Frame, onDone: (() -> ())?)
 	local ti = Theme.Tween.Collapse
 	local content = frame:FindFirstChild("Content") :: Frame?
@@ -162,8 +206,13 @@ function AnimationController:CollapseOut(frame: Frame, onDone: (() -> ())?)
 		if onDone then onDone() end
 	end)
 end
+--[=[
+	@description Implements `AnimationController.HoverGlow`.
+	@param button GuiButton -- `button` input parameter.
+	@param glowColor Color3? -- `glowColor` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Hover glow effect
 function AnimationController:HoverGlow(button: GuiButton, glowColor: Color3?)
 	local color = glowColor or Theme.Colors.Accent
 	local origBG = button.BackgroundColor3
@@ -183,8 +232,12 @@ function AnimationController:HoverGlow(button: GuiButton, glowColor: Color3?)
 		}):Play()
 	end)
 end
+--[=[
+	@description Implements `AnimationController.Tick`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Process the animation queue (called each tick)
 function AnimationController:Tick()
 	local i = 1
 	while i <= #self._queue do
@@ -223,8 +276,12 @@ function AnimationController:Tick()
 		i += 1
 	end
 end
+--[=[
+	@description Implements `AnimationController.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Cleanup all
 function AnimationController:Destroy()
 	for _, entry in ipairs(self._queue) do
 		if entry.Tween then entry.Tween:Cancel() end

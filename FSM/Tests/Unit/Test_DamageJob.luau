@@ -1,7 +1,8 @@
 --!nocheck
--- @Name Test_DamageJob
--- @Author iKrypto
--- @Description Unit tests for DamageCalculator integration and DamageJob validation flow.
+--[=[
+	@module Test_DamageJob
+	@description Defines the `Test_DamageJob` state machine module and its exported API.
+]=]
 
 local ServerStorage = game:GetService("ServerStorage")
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)
@@ -79,6 +80,11 @@ local function captureStates(job)
 	job:RegisterStates()
 	return states
 end
+--[=[
+	@description Implements `Test_DamageJob.Run`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Test_DamageJob.Run()
 	local tester = TestBase.new("DamageJob")
@@ -161,6 +167,12 @@ function Test_DamageJob.Run()
 				State = nil,
 				Failure = nil,
 			}
+			--[=[
+				@description Implements `fsm.Fail`.
+				@param reason any -- `reason` input parameter.
+				@return any -- Return value produced by the implementation, if any.
+			]=]
+
 			function fsm:Fail(reason)
 				self.Failure = reason
 			end

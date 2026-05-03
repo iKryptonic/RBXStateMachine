@@ -235,14 +235,12 @@ Revision = { Type = "number", Replicate = true, Persist = false },
 DataVersion = { Type = "number", Replicate = false, Persist = true },
 },
 }
-
 --[=[
-    @within PlayerEntity
-    @param params { [any]: any }
-    @return { [string]: any }
-    @description Builds a fully populated entity context from loader input, save data, or a Player instance.
-    This is the authoritative source of new-save defaults for persistent player data.
+	@description Returns the data produced by `PlayerEntity.GetContext`.
+	@param params { [any]: any } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function PlayerEntity:GetContext(params: { [any]: any })
 local context = params.Context or params
 local userId = context.UserId
@@ -281,12 +279,12 @@ Revision = 0,
 DataVersion = context.DataVersion or 1,
 }
 end
-
 --[=[
-    @within PlayerEntity
-    @param _changes { [string]: any }
-    @description PlayerEntity is data-only and does not perform client-side visual reconciliation when fields change.
+	@description Implements `PlayerEntity.ApplyChanges`.
+	@param _changes { [string]: any } -- `_changes` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function PlayerEntity:ApplyChanges(_changes: { [string]: any })
 -- PlayerEntity is pure data — no visual rendering
 end

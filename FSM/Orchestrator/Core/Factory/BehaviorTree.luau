@@ -24,16 +24,12 @@ BehaviorTree.BehaviorTreeStatus = {
 }
 
 local Logger, Initialized;
-
 --[=[
-	@description Initializes the BehaviorTree module with shared utilities.
-	Must be called once before any BT nodes are constructed.
-
-	@param Util table -- Orchestrator utility table containing Logger, Signal, and Settings
-	@return ()
-	@reads Initialized
-	@writes Module-level Logger upvalues, Initialized
+	@description Handles `Initialize` for `BehaviorTree`.
+	@param Util any -- `Util` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function BehaviorTree.Initialize(Util)
 	if Initialized then return end
 	Initialized = true
@@ -56,17 +52,12 @@ local function normalizeStatus(status: any): string
 	end
 	return BehaviorTree.BehaviorTreeStatus.Failure
 end
-
 --[=[
-	@description Composite node that runs children in order until one does NOT
-	return Failure. Returns the first non-Failure status, or Failure if all fail.
-	("OR" logic)
-
-	@param children { (context: any) -> string } -- Array of child node functions
-	@return (context: any) -> string -- Composite node function
-	@reads None
-	@writes None
+	@description Implements `BehaviorTree.Selector`.
+	@param children { (context: any) -> string } -- `children` input parameter.
+	@return (context: any) -> string -- Return value produced by the implementation, if any.
 ]=]
+
 function BehaviorTree.Selector(children: { (context: any) -> string }): (context: any) -> string
 	ValidateRequest()
 	return function(context)
@@ -79,17 +70,12 @@ function BehaviorTree.Selector(children: { (context: any) -> string }): (context
 		return BehaviorTree.BehaviorTreeStatus.Failure
 	end
 end
-
 --[=[
-	@description Composite node that runs children in order until one does NOT
-	return Success. Returns the first non-Success status, or Success if all pass.
-	("AND" logic)
-
-	@param children { (context: any) -> string } -- Array of child node functions
-	@return (context: any) -> string -- Composite node function
-	@reads None
-	@writes None
+	@description Implements `BehaviorTree.Sequence`.
+	@param children { (context: any) -> string } -- `children` input parameter.
+	@return (context: any) -> string -- Return value produced by the implementation, if any.
 ]=]
+
 function BehaviorTree.Sequence(children: { (context: any) -> string }): (context: any) -> string
 	ValidateRequest()
 	return function(context)
@@ -102,16 +88,12 @@ function BehaviorTree.Sequence(children: { (context: any) -> string }): (context
 		return BehaviorTree.BehaviorTreeStatus.Success
 	end
 end
-
 --[=[
-	@description Decorator that inverts the child's result: Success becomes
-	Failure and vice versa. Running is passed through unchanged.
-
-	@param child (context: any) -> string -- Child node function
-	@return (context: any) -> string -- Decorated node function
-	@reads None
-	@writes None
+	@description Implements `BehaviorTree.Inverter`.
+	@param child (context: any) -> string -- `child` input parameter.
+	@return (context: any) -> string -- Return value produced by the implementation, if any.
 ]=]
+
 function BehaviorTree.Inverter(child: (context: any) -> string): (context: any) -> string
 	ValidateRequest()
 	return function(context)
@@ -124,16 +106,12 @@ function BehaviorTree.Inverter(child: (context: any) -> string): (context: any) 
 		return status
 	end
 end
-
 --[=[
-	@description Decorator that converts any final result to Success.
-	Running is passed through unchanged to allow tick-based progress.
-
-	@param child (context: any) -> string -- Child node function
-	@return (context: any) -> string -- Decorated node function
-	@reads None
-	@writes None
+	@description Implements `BehaviorTree.Succeeder`.
+	@param child (context: any) -> string -- `child` input parameter.
+	@return (context: any) -> string -- Return value produced by the implementation, if any.
 ]=]
+
 function BehaviorTree.Succeeder(child: (context: any) -> string): (context: any) -> string
 	ValidateRequest()
 	return function(context)
@@ -144,16 +122,12 @@ function BehaviorTree.Succeeder(child: (context: any) -> string): (context: any)
 		return BehaviorTree.BehaviorTreeStatus.Success
 	end
 end
-
 --[=[
-	@description Utility leaf node that sets the FSM's State property if it
-	differs from the target, then returns Success.
-
-	@param stateName string -- Target state name to assign to `fsm.State`
-	@return (fsm: any) -> string -- Leaf node function
-	@reads fsm.State
-	@writes fsm.State
+	@description Updates module state through `BehaviorTree.SetState`.
+	@param stateName string -- `stateName` input parameter.
+	@return (fsm: any) -> string -- Return value produced by the implementation, if any.
 ]=]
+
 function BehaviorTree.SetState(stateName: string): (fsm: any) -> string
 	ValidateRequest()
 	return function(fsm)
@@ -163,16 +137,12 @@ function BehaviorTree.SetState(stateName: string): (fsm: any) -> string
 		return BehaviorTree.BehaviorTreeStatus.Success
 	end
 end
-
 --[=[
-	@description Utility leaf node that evaluates a boolean predicate.
-	Returns Success if the predicate returns true, Failure otherwise.
-
-	@param predicate (context: any) -> boolean -- Condition to evaluate
-	@return (context: any) -> string -- Leaf node function
-	@reads None (predicate-defined)
-	@writes None
+	@description Implements `BehaviorTree.Condition`.
+	@param predicate (context: any) -> boolean -- `predicate` input parameter.
+	@return (context: any) -> string -- Return value produced by the implementation, if any.
 ]=]
+
 function BehaviorTree.Condition(predicate: (context: any) -> boolean): (context: any) -> string
 	ValidateRequest()
 	return function(context)

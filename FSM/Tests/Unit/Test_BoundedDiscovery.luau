@@ -1,7 +1,8 @@
 --!nocheck
--- @Name Test_BoundedDiscovery
--- @Author iKrypto
--- @Description Unit tests for bounded discovery loops with resolution and timeout behavior.
+--[=[
+	@module Test_BoundedDiscovery
+	@description Defines the `Test_BoundedDiscovery` module and its exported API.
+]=]
 
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)
 
@@ -23,6 +24,11 @@ local function boundedDiscover(container: Instance, childName: string, intervalS
 	end
 	return nil, os.clock() - startedAt
 end
+--[=[
+	@description Implements `Test_BoundedDiscovery.Run`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Test_BoundedDiscovery.Run()
 	local tester = TestBase.new("BoundedDiscovery")

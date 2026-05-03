@@ -1,5 +1,9 @@
 --!strict
---[[
+--[=[
+	@module Jobs
+	@description Defines the `Jobs` module and its exported API.
+]=]
+
 	@Name ActorWorker
 	@Author iKrypto
 	@Description Worker script running inside an Actor. Receives jobs via

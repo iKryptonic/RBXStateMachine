@@ -417,20 +417,18 @@ local function processTimelineEntry(fsm: any, entry: { any })
 		}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 	end
 end
-
 --[=[
-    @description Registers every AttackJob state, rollback edge, and terminal handler with the FSM base class.
-    @return nil -- Mutates the module definition by adding states.
+	@description Handles `RegisterStates` for `AttackJob`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function AttackJob:RegisterStates()
-	--[=[
-    @state Validate
-    @description Verifies the orchestrator, attacker character and player entities, living humanoid root, crowd-control restrictions, and currently equipped weapon before caching all reusable combat context.
-    @transitions Transitions to `AcquireCombatLock` after all attack prerequisites are resolved; otherwise transitions to `RollbackConstraints` through `transitionToFailure(...)`.
-    @failure Stores `_failureReason` and routes into rollback when the orchestrator, entities, living humanoid, or weapon context is missing, or when the character is stunned or knocked.
-    @reads `fsm.CharacterEntityId`, `fsm.PlayerEntityId`, `fsm.ComboSlot`, characterEntity.`IsStunned`, `IsKnocked`, `EquippedRight`, `EquippedLeft`, playerEntity.`WeaponEqp`.
-    @writes `fsm.Context._characterEntity`, `_character`, `_humanoid`, `_root`, `_playerEntity`, `_weaponId`, `_comboSlot`.
+--[=[
+	@state Validate
+	@description Handles the `Validate` state for `AttackJob`.
 ]=]
+
 self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -504,15 +502,11 @@ self:AddState("Validate", {
 			fsm.State = "AcquireCombatLock"
 		end,
 	}, { "AcquireCombatLock", "RollbackConstraints" })
-
-	--[=[
-    @state AcquireCombatLock
-    @description Acquires the character entity lock and commits the replicated `CombatLock` flag so no competing combat action can start during this attack.
-    @transitions Transitions to `ResolveAttackDef` after both the entity lock and `CombatLock` field are applied; otherwise transitions to `RollbackConstraints`.
-    @failure On failure it releases any partial entity lock, stores `_failureReason`, and routes to rollback.
-    @reads `fsm.Context._characterEntity`, `fsm.Id`.
-    @writes Character entity lock ownership, characterEntity.`CombatLock`, `fsm.Context._entityLockHeld`, `fsm.Context._combatLockApplied`.
+--[=[
+	@state AcquireCombatLock
+	@description Handles the `AcquireCombatLock` state for `AttackJob`.
 ]=]
+
 self:AddState("AcquireCombatLock", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
@@ -539,15 +533,11 @@ self:AddState("AcquireCombatLock", {
 			fsm.State = "ResolveAttackDef"
 		end,
 	}, { "ResolveAttackDef", "RollbackConstraints" })
-
-	--[=[
-    @state ResolveAttackDef
-    @description Loads weapon combo metadata, resolves sequential combo pointers when required, computes the full timeline length, and caches the concrete combo that will be played.
-    @transitions Transitions to `ApplyMovementConstraints` when combo data is valid; otherwise transitions to `RollbackConstraints`.
-    @failure Stores `_failureReason` and rolls back if weapon metadata is missing, the combo slot does not exist, sequential selection fails, or the resolved timeline has no positive length.
-    @reads `fsm.Context._characterEntity`, `_weaponId`, `_comboSlot`, weapon item data, combo definitions.
-    @writes `fsm.Context._itemData`, `_comboDef`, `_selectedCombo`, `_comboPointer`, `_comboTotalFrames`, `_attackName`, combo pointer context on the character entity.
+--[=[
+	@state ResolveAttackDef
+	@description Handles the `ResolveAttackDef` state for `AttackJob`.
 ]=]
+
 self:AddState("ResolveAttackDef", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
@@ -600,15 +590,11 @@ self:AddState("ResolveAttackDef", {
 			fsm.State = "ApplyMovementConstraints"
 		end,
 	}, { "ApplyMovementConstraints", "RollbackConstraints" })
-
-	--[=[
-    @state ApplyMovementConstraints
-    @description Snapshots the character's current movement-related fields, applies the combo-specific movement patch or the default hard-lock constraints, and replicates the change.
-    @transitions Transitions to `EmitWindupIntent` after the entity update succeeds; otherwise transitions to `RollbackConstraints`.
-    @failure If `UpdateEntity(fsm.Id)` fails, `_failureReason` is stored and the rollback state restores the prior movement fields.
-    @reads `fsm.Context._characterEntity`, `fsm.Context._selectedCombo`, default movement constants, characterEntity.`CanMove`, `MoveSpeedCap`, `MouseLocked`.
-    @writes `fsm.Context._priorConstraints`, `fsm.Context._constraintsApplied`, characterEntity.`CanMove`, `MoveSpeedCap`, `MouseLocked`.
+--[=[
+	@state ApplyMovementConstraints
+	@description Handles the `ApplyMovementConstraints` state for `AttackJob`.
 ]=]
+
 self:AddState("ApplyMovementConstraints", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
@@ -648,15 +634,11 @@ self:AddState("ApplyMovementConstraints", {
 			fsm.State = "EmitWindupIntent"
 		end,
 	}, { "EmitWindupIntent", "RollbackConstraints" })
-
-	--[=[
-    @state EmitWindupIntent
-    @description Appends the optional windup intent declared by the selected combo so clients can play anticipation feedback before timeline execution starts.
-    @transitions Always transitions to `PlayTimeline`.
-    @failure Missing or malformed windup intent definitions are ignored rather than failing the attack.
-    @reads `fsm.Context._characterEntity`, `fsm.Context._selectedCombo`, `fsm.CharacterEntityId`, `fsm.Id`.
-    @writes Character entity intent queue when `WindupIntent` resolves to a valid payload.
+--[=[
+	@state EmitWindupIntent
+	@description Handles the `EmitWindupIntent` state for `AttackJob`.
 ]=]
+
 self:AddState("EmitWindupIntent", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
@@ -673,15 +655,11 @@ self:AddState("EmitWindupIntent", {
 			fsm.State = "PlayTimeline"
 		end,
 	}, { "PlayTimeline", "RollbackConstraints" })
-
-	--[=[
-    @state PlayTimeline
-    @description Initializes per-run timeline bookkeeping on entry, then advances the combo frame-by-frame on heartbeat, firing each timeline entry once and spawning child damage jobs or intents as frames are reached.
-    @transitions Transitions to `EmitRecoveryIntent` once the current frame reaches `_comboTotalFrames`; transitions to `RollbackConstraints` if the attacker dies, combo data disappears, or a timeline entry errors.
-    @failure Any pcall failure from `processTimelineEntry(...)` stores `_failureReason` and routes to rollback. The state also aborts if the humanoid dies mid-animation.
-    @reads `fsm.Context._humanoid`, `_selectedCombo`, `_timelineElapsed`, `_timelineFrame`, `_timelineFired`, `_comboTotalFrames`, `_root`, `_characterEntity`.
-    @writes `fsm.Context._timelineElapsed`, `_timelineFrame`, `_timelineFired`, `_hitDebounces`; child intents and `DamageJob` instances created by timeline helpers.
+--[=[
+	@state PlayTimeline
+	@description Handles the `PlayTimeline` state for `AttackJob`.
 ]=]
+
 self:AddState("PlayTimeline", {
 		OnEnter = function(_, fsm)
 			fsm.Context._timelineElapsed = 0
@@ -735,15 +713,11 @@ self:AddState("PlayTimeline", {
 			end
 		end,
 	}, { "EmitRecoveryIntent", "RollbackConstraints" })
-
-	--[=[
-    @state EmitRecoveryIntent
-    @description Appends the optional recovery intent declared by the selected combo so clients can play exit feedback before control is restored.
-    @transitions Always transitions to `RollbackConstraints`.
-    @failure Missing or malformed recovery intent definitions are ignored rather than failing after a successful timeline.
-    @reads `fsm.Context._characterEntity`, `fsm.Context._selectedCombo`, `fsm.CharacterEntityId`, `fsm.Id`.
-    @writes Character entity intent queue when `RecoveryIntent` resolves to a valid payload.
+--[=[
+	@state EmitRecoveryIntent
+	@description Handles the `EmitRecoveryIntent` state for `AttackJob`.
 ]=]
+
 self:AddState("EmitRecoveryIntent", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
@@ -760,15 +734,11 @@ self:AddState("EmitRecoveryIntent", {
 			fsm.State = "RollbackConstraints"
 		end,
 	}, { "RollbackConstraints" })
-
-	--[=[
-    @state RollbackConstraints
-    @description Restores the character's pre-attack movement fields when constraints were applied, logs a warning if the rollback update reports no pending changes, and then advances to lock release.
-    @transitions Always transitions to `ReleaseCombatLock`.
-    @failure Rollback is best-effort. Missing character context simply skips the restore, while any stored `_failureReason` is preserved for the later `Failed` transition.
-    @reads `fsm.Context._characterEntity`, `_constraintsApplied`, `_priorConstraints`, `fsm.Id`.
-    @writes Character entity.`CanMove`, `MoveSpeedCap`, `MouseLocked`, `fsm.Context._constraintsApplied`.
+--[=[
+	@state RollbackConstraints
+	@description Handles the `RollbackConstraints` state for `AttackJob`.
 ]=]
+
 self:AddState("RollbackConstraints", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
@@ -785,15 +755,11 @@ self:AddState("RollbackConstraints", {
 			fsm.State = "ReleaseCombatLock"
 		end,
 	}, { "ReleaseCombatLock" })
-
-	--[=[
-    @state ReleaseCombatLock
-    @description Clears the replicated `CombatLock` flag, releases the underlying entity lock, and chooses the terminal state based on whether `_failureReason` was set earlier.
-    @transitions Transitions to `Completed` when no failure reason exists, otherwise transitions to `Failed`.
-    @failure Even on failure, cleanup still releases both lock layers before the terminal state is selected.
-    @reads `fsm.Context._characterEntity`, `_combatLockApplied`, `_entityLockHeld`, `_failureReason`, `fsm.Id`.
-    @writes Character entity.`CombatLock`, entity lock ownership, `fsm.Context._combatLockApplied`, `fsm.Context._entityLockHeld`.
+--[=[
+	@state ReleaseCombatLock
+	@description Handles the `ReleaseCombatLock` state for `AttackJob`.
 ]=]
+
 self:AddState("ReleaseCombatLock", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
@@ -815,24 +781,17 @@ self:AddState("ReleaseCombatLock", {
 			end
 		end,
 	}, { "Completed", "Failed" })
+--[=[
+	@state Completed
+	@description Handles the `Completed` terminal state for `AttackJob`.
+]=]
 
-	--[=[
-    @state Completed
-    @description Terminal success state for the attack pipeline. No additional work runs here.
-    @transitions No outbound transitions; the job stops here.
-    @failure No failure path remains because rollback and lock release already completed.
-    @reads No additional fields are read.
-    @writes No additional fields are written.
-]=]
 self:AddState("Completed", function() end, {})
-	--[=[
-    @state Failed
-    @description Terminal failure state that logs the stored `_failureReason` after rollback and lock release have finished.
-    @transitions No outbound transitions; the job stops here.
-    @failure By the time this state runs, movement constraints and combat locks have already been cleaned up by the rollback path.
-    @reads `fsm.Context._failureReason`.
-    @writes No additional FSM data beyond the emitted error log.
+--[=[
+	@state Failed
+	@description Handles the `Failed` terminal state for `AttackJob`.
 ]=]
+
 self:AddState("Failed", function(fsm)
 		if typeof(fsm.Context._failureReason) == "string" then
 			fsm:Log({
@@ -842,11 +801,12 @@ self:AddState("Failed", function(fsm)
 		end
 	end, {})
 end
-
 --[=[
-    @description Runs post-shutdown cleanup for the attack job. Cleanup is intentionally empty because rollback and lock release are handled as explicit FSM states.
-    @return nil -- No extra cleanup work is performed.
+	@description Implements `AttackJob.OnCleanup`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function AttackJob:OnCleanup() end
 
 return AttackJob

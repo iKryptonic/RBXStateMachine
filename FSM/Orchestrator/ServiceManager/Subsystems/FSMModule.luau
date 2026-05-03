@@ -1,9 +1,8 @@
 --!strict
--- @Name ServiceManager/Subsystems/FSMModule.luau
--- @Author iKrypto
--- @Description Enhanced FSM subsystem with active/failed/archived sections, cancel/retry
--- actions, per-FSM performance metrics, state graph visualization, transition history,
--- stall detection, and detailed drill-down layers.
+--[=[
+	@module FSMModule
+	@description Defines the `FSMModule` module and its exported API.
+]=]
 
 local Theme = require(script.Parent.Parent.Theme)
 local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
@@ -12,12 +11,12 @@ local FSMModule = {}
 FSMModule.__index = FSMModule
 
 local SORT_MODES = { "Recent", "Name", "State", "Transitions", "Errors" }
+--[=[
+	@description Implements `FSMModule.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Create the FSM subsystem controller.
-	Tracks live, failed, completed, and archived machines plus client-side shadow
-	state used to keep the inspector populated during local observation.
-]]
 function FSMModule.new(): any
 	local self = setmetatable({}, FSMModule)
 	self._fsmCache = {} :: { [string]: any }
@@ -35,6 +34,11 @@ function FSMModule.new(): any
 	self._collapsedGroups = {} :: { [string]: boolean }
 	return self
 end
+--[=[
+	@description Implements `FSMModule._EnsureClientShadow`.
+	@param orchestrator any -- `orchestrator` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_EnsureClientShadow(orchestrator: any)
 	if self._clientShadowConnected then return end
@@ -63,11 +67,12 @@ function FSMModule:_EnsureClientShadow(orchestrator: any)
 		end
 	end)
 end
+--[=[
+	@description Implements `FSMModule.FetchData`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Refresh the FSM snapshot for the currently selected context and publish the
-	latest active / failed / completed collections into the subsystem caches.
-]]
 function FSMModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
 	if not orchestrator then return end
@@ -165,6 +170,12 @@ function FSMModule:FetchData(nexus: any)
 		nexus.Store:Set("fsm.completed", self._completedFSMs)
 	end)
 end
+--[=[
+	@description Implements `FSMModule._ExtractFSMData`.
+	@param id string -- `id` input parameter.
+	@param fsm any -- `fsm` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_ExtractFSMData(id: string, fsm: any): any
 	local currentState = "unknown"
@@ -242,6 +253,12 @@ function FSMModule:_ExtractFSMData(id: string, fsm: any): any
 		Name = if type(fsm) == "table" then (fsm.Name or id) else id,
 	}
 end
+--[=[
+	@description Implements `FSMModule._MatchesSearch`.
+	@param id string -- `id` input parameter.
+	@param data any -- `data` input parameter.
+	@return boolean -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_MatchesSearch(id: string, data: any): boolean
 	if self._searchText == "" then return true end
@@ -262,22 +279,29 @@ function FSMModule:_MatchesSearch(id: string, data: any): boolean
 
 	return false
 end
+--[=[
+	@description Implements `FSMModule._GetRecentTimestamp`.
+	@param data any -- `data` input parameter.
+	@return number -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_GetRecentTimestamp(data: any): number
 	local createdAt = tonumber(data.CreatedAt) or 0
 	local lastTransition = tonumber(data.LastTransition) or 0
 	return math.max(createdAt, lastTransition)
 end
+--[=[
+	@description Implements `FSMModule.Render`.
+	@param _nexus any -- `_nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	FSM UI is rendered through BuildRootLayer and drill-down builders.
-]]
 function FSMModule:Render(_nexus: any) end
-
--- ══════════════════════════════════════════════════════════════
--- SORTING / FILTERING
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `FSMModule._GetSortedFiltered`.
+	@param source { [string]: any } -- `source` input parameter.
+	@return { { Id: string, Data: any } } -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_GetSortedFiltered(source: { [string]: any }): { { Id: string, Data: any } }
 	local result = {}
@@ -303,6 +327,11 @@ function FSMModule:_GetSortedFiltered(source: { [string]: any }): { { Id: string
 	end)
 	return result
 end
+--[=[
+	@description Implements `FSMModule._GetGroupedFSMs`.
+	@param source { [string]: any } -- `source` input parameter.
+	@return { any } -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_GetGroupedFSMs(source: { [string]: any }): { any }
 	local groupsByName = {}
@@ -338,6 +367,11 @@ function FSMModule:_GetGroupedFSMs(source: { [string]: any }): { any }
 
 	return orderedGroups
 end
+--[=[
+	@description Implements `FSMModule._FormatGroupSummary`.
+	@param group any -- `group` input parameter.
+	@return string -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_FormatGroupSummary(group: any): string
 	local summary = {}
@@ -347,6 +381,15 @@ function FSMModule:_FormatGroupSummary(group: any): string
 	if #summary == 0 then return "No FSMs" end
 	return table.concat(summary, ", ")
 end
+--[=[
+	@description Implements `FSMModule._BuildFSMGroupHeader`.
+	@param parent Frame -- `parent` input parameter.
+	@param group any -- `group` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param order number -- `order` input parameter.
+	@param onToggle (() -> ())? -- `onToggle` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_BuildFSMGroupHeader(parent: Frame, group: any, nexus: any, order: number, onToggle: (() -> ())?): Frame
 	local isCollapsed = self._collapsedGroups[group.ClassName] == true
@@ -390,6 +433,16 @@ function FSMModule:_BuildFSMGroupHeader(parent: Frame, group: any, nexus: any, o
 
 	return row
 end
+--[=[
+	@description Implements `FSMModule._BuildGroupedFSMRows`.
+	@param parent Frame -- `parent` input parameter.
+	@param groups { any } -- `groups` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param baseOrder number -- `baseOrder` input parameter.
+	@param itemsToAnimate { Instance } -- `itemsToAnimate` input parameter.
+	@param onToggle (() -> ())? -- `onToggle` input parameter.
+	@return number -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_BuildGroupedFSMRows(parent: Frame, groups: { any }, nexus: any, baseOrder: number, itemsToAnimate: { Instance }, onToggle: (() -> ())?): number
 	local order = baseOrder
@@ -409,16 +462,13 @@ function FSMModule:_BuildGroupedFSMRows(parent: Frame, groups: { any }, nexus: a
 
 	return order
 end
+--[=[
+	@description Creates the result managed by `FSMModule.BuildRootLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- ROOT LAYER
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Build or rebuild the FSM overview layer inside the navigator host frame.
-	Seeds the summary strip, filters, and top-level machine rows that drill into
-	history, graph, and step-detail layers.
-]]
 function FSMModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -514,6 +564,11 @@ function FSMModule:BuildRootLayer(frame: Frame, context: any)
 		)
 	end
 end
+--[=[
+	@description Implements `FSMModule._BuildSummaryStrip`.
+	@param parent Frame -- `parent` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_BuildSummaryStrip(parent: Frame)
 	local strip = Instance.new("Frame")
@@ -582,6 +637,12 @@ function FSMModule:_BuildSummaryStrip(parent: Frame)
 		})
 	end
 end
+--[=[
+	@description Implements `FSMModule._BuildToolbar`.
+	@param parent Frame -- `parent` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_BuildToolbar(parent: Frame, nexus: any)
 	local toolbar = Instance.new("Frame")
@@ -757,10 +818,15 @@ function FSMModule:_BuildToolbar(parent: Frame, nexus: any)
 		if nexus then nexus._lastDataRefresh = 0 end
 	end)
 end
-
--- ══════════════════════════════════════════════════════════════
--- FSM ROW
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `FSMModule._BuildFSMRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param id string -- `id` input parameter.
+	@param fsmData any -- `fsmData` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param order number -- `order` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_BuildFSMRow(parent: Frame, id: string, fsmData: any, nexus: any, order: number): Frame
 	local statusColor = if fsmData.Status == "failed" then Theme.Colors.Danger
@@ -858,10 +924,12 @@ function FSMModule:_BuildFSMRow(parent: Frame, id: string, fsmData: any, nexus: 
 
 	return row
 end
-
--- ══════════════════════════════════════════════════════════════
--- FSM DETAIL LAYER
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `FSMModule._BuildFSMDetailLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_BuildFSMDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -1102,18 +1170,13 @@ function FSMModule:_BuildFSMDetailLayer(frame: Frame, context: any)
 		end
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- STATE GRAPH VISUALIZER
--- ══════════════════════════════════════════════════════════════
-
 --[=[
-	Choose a layout strategy based on node count and return positions
-	in normalized [0,1] coordinates.
-	@param states { string }
-	@param currentState string?
-	@return { [string]: { X: number, Y: number } }
+	@description Implements `FSMModule._ComputeNodeLayout`.
+	@param states { string } -- `states` input parameter.
+	@param currentState string? -- `currentState` input parameter.
+	@return { [string]: { X: number, Y: number } } -- Return value produced by the implementation, if any.
 ]=]
+
 function FSMModule:_ComputeNodeLayout(states: { string }, currentState: string?): { [string]: { X: number, Y: number } }
 	local positions = {}
 	local n = #states
@@ -1181,6 +1244,12 @@ function FSMModule:_ComputeNodeLayout(states: { string }, currentState: string?)
 	end
 	return positions
 end
+--[=[
+	@description Implements `FSMModule._BuildGraphLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_BuildGraphLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -1878,20 +1947,18 @@ function FSMModule:_BuildGraphLayer(frame: Frame, context: any)
 	-- Graph container size already accounts for the history panel via
 	-- `1, -TOP_OFFSET - PANEL_HEIGHT - 8` so no resize needed here.
 end
-
 --[=[
-	Build the right-side "step details" panel showing what happened at the
-	currently-selected transition step. Renders Time, WaitSpan, Args, and a
-	sanitized Context snapshot. Read-only, scrollable.
-
-	@param parent Frame -- contentFrame
-	@param entry { From, To, Time, Args, WaitSpan, ContextSnapshot, TransitionId }
-	@param stepIdx number
-	@param totalSteps number
-	@param topOffset number -- y pixel offset of the panel
-	@param panelW number -- pixel width
-	@param bottomReserve number -- pixels reserved at bottom for the history panel
+	@description Implements `FSMModule._BuildStepDetailPanel`.
+	@param parent Frame -- `parent` input parameter.
+	@param entry any -- `entry` input parameter.
+	@param stepIdx number -- `stepIdx` input parameter.
+	@param totalSteps number -- `totalSteps` input parameter.
+	@param topOffset number -- `topOffset` input parameter.
+	@param panelW number -- `panelW` input parameter.
+	@param bottomReserve number -- `bottomReserve` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function FSMModule:_BuildStepDetailPanel(parent: Frame, entry: any, stepIdx: number, totalSteps: number, topOffset: number, panelW: number, bottomReserve: number)
 	local panel = Instance.new("Frame")
 	panel.Name = "StepDetailPanel"
@@ -1992,24 +2059,17 @@ function FSMModule:_BuildStepDetailPanel(parent: Frame, entry: any, stepIdx: num
 		end
 	end
 end
-
 --[=[
-	Render a single Context-snapshot key/value row. Table values become
-	click-to-expand buttons that insert nested rows inline. Supports
-	arbitrary depth via shift-on-expand: when expanding, all rows after this
-	one get their LayoutOrder incremented by the number of inserted rows.
-	Collapsing destroys the captured subtree (including transitively-expanded
-	descendants) and shifts back.
-
-	@param parent Instance — the ScrollingFrame all rows are siblings in
-	@param key string — display key
-	@param value any — sanitized value (scalar or recursive table)
-	@param depth number — current nesting depth, controls indent
-	@param layoutOrder number — initial LayoutOrder; expansion shifts later rows
-	@param parentSubtree { Instance }? — when present, this row registers itself
-	                                     into the parent's subtree so collapsing
-	                                     the ancestor cleans up grandchildren too.
+	@description Implements `FSMModule._BuildContextEntryRow`.
+	@param parent Instance -- `parent` input parameter.
+	@param key string -- `key` input parameter.
+	@param value any -- `value` input parameter.
+	@param depth number -- `depth` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@param ancestorSubtrees { { Instance } }? -- `ancestorSubtrees` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function FSMModule:_BuildContextEntryRow(parent: Instance, key: string, value: any, depth: number, layoutOrder: number, ancestorSubtrees: { { Instance } }?)
 	local indent = depth * 14
 	local row = Instance.new("Frame")
@@ -2143,18 +2203,18 @@ function FSMModule:_BuildContextEntryRow(parent: Instance, key: string, value: a
 		})
 	end
 end
-
 --[=[
-	Draw a directed edge with an arrowhead from `fp` to `tp`.
-	Edge thickness scales with frequency (`count` relative to `maxCount`).
-	@param parent Frame
-	@param fp { X, Y } normalized position of source node
-	@param tp { X, Y } normalized position of target node
-	@param count number transition count
-	@param maxCount number max transition count across all edges
-	@param isHighlighted boolean? -- highlight in warning color (active step)
-	@param labelMinCount number? -- minimum count to show ×N label (de-clutter)
+	@description Implements `FSMModule._DrawDirectedEdge`.
+	@param parent Frame -- `parent` input parameter.
+	@param fp { X: number, Y: number } -- `fp` input parameter.
+	@param tp { X: number, Y: number } -- `tp` input parameter.
+	@param count number -- `count` input parameter.
+	@param maxCount number -- `maxCount` input parameter.
+	@param isHighlighted boolean? -- `isHighlighted` input parameter.
+	@param labelMinCount number? -- `labelMinCount` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function FSMModule:_DrawDirectedEdge(parent: Frame, fp: { X: number, Y: number }, tp: { X: number, Y: number }, count: number, maxCount: number, isHighlighted: boolean?, labelMinCount: number?)
 	-- Compute geometry in normalized coords
 	local dx = tp.X - fp.X
@@ -2250,15 +2310,16 @@ function FSMModule:_DrawDirectedEdge(parent: Frame, fp: { X: number, Y: number }
 		Instance.new("UICorner", freqLbl).CornerRadius = UDim.new(0, Theme.Radius.Xs)
 	end
 end
-
 --[=[
-	Draw a self-loop arc above the node with a count badge.
-	@param parent Frame
-	@param pos { X, Y } normalized node position
-	@param count number transition count
-	@param maxCount number
-	@param isHighlighted boolean? -- highlight the loop in warning color
+	@description Implements `FSMModule._DrawSelfLoop`.
+	@param parent Frame -- `parent` input parameter.
+	@param pos { X: number, Y: number } -- `pos` input parameter.
+	@param count number -- `count` input parameter.
+	@param maxCount number -- `maxCount` input parameter.
+	@param isHighlighted boolean? -- `isHighlighted` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function FSMModule:_DrawSelfLoop(parent: Frame, pos: { X: number, Y: number }, count: number, maxCount: number, isHighlighted: boolean?)
 	local ringColor = if isHighlighted then Theme.Colors.Warning else Theme.Colors.Accent
 	local ring = Instance.new("Frame")
@@ -2313,10 +2374,15 @@ function FSMModule:_DrawSelfLoop(parent: Frame, pos: { X: number, Y: number }, c
 		bc.Parent = badge
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- HELPERS
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `FSMModule._BuildPropRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param key string -- `key` input parameter.
+	@param value string -- `value` input parameter.
+	@param color Color3 -- `color` input parameter.
+	@param order number -- `order` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function FSMModule:_BuildPropRow(parent: Frame, key: string, value: string, color: Color3, order: number)
 	local propRow = Instance.new("Frame")
@@ -2336,10 +2402,12 @@ function FSMModule:_BuildPropRow(parent: Frame, key: string, value: string, colo
 	Theme.CreateLabel({ Text = key, Size = UDim2.new(0.45, 0, 1, 0), Color = Theme.Colors.TextSecondary, FontSize = Theme.TextSize.Caption, Parent = propRow })
 	Theme.CreateLabel({ Text = value, Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.48, 0, 0, 0), Color = color, FontSize = Theme.TextSize.Body, FontFace = Theme.Font.Mono, Alignment = Enum.TextXAlignment.Right, Parent = propRow })
 end
+--[=[
+	@description Implements `FSMModule.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Release autocomplete resources and clear all cached FSM snapshots.
-]]
 function FSMModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end
 	table.clear(self._fsmCache)

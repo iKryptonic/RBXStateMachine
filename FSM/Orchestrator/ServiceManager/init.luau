@@ -1,10 +1,8 @@
 --!strict
--- @Name ServiceManager/init.luau
--- @Author iKrypto
--- @Description Main entry point for the Nexus-Orchestrator Suite.
--- Wires all components: GlassGUI, ReactiveStore, ZAxisNavigator, AnimationController,
--- AnalyticsEngine, ServiceBrain, and all 6 subsystem modules. Handles client/server context,
--- server polling via ConnectionFSM, and scheduler integration.
+--[=[
+	@module ServiceManager
+	@description Defines the `ServiceManager` module and its exported API.
+]=]
 
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -54,17 +52,12 @@ local _logs: { { Level: string, Message: string, Timestamp: number } } = {}
 local _fpsAccum: number = 0
 local _fpsFrames: number = 0
 local _lastFPS: number = 60
+--[=[
+	@description Handles `Initialize` for `ServiceManager`.
+	@param Orchestrator any -- `Orchestrator` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- PUBLIC API
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Initialize the Nexus-Orchestrator Suite.
-	Must be called from the client after the Orchestrator has been set up.
-	
-	@param Orchestrator any — The main Orchestrator module (shared.fsm backed)
-]]
 function ServiceManager.Initialize(Orchestrator: any)
 	if _initialized then return end
 	_initialized = true
@@ -334,10 +327,12 @@ function ServiceManager.Initialize(Orchestrator: any)
 
 	_Log("INFO", "ServiceManager initialized")
 end
+--[=[
+	@description Implements `ServiceManager.Show`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Show the ServiceManager GUI window.
-]]
 function ServiceManager.Show()
 	if _gui then
 		_gui:Show()
@@ -347,17 +342,21 @@ function ServiceManager.Show()
 		end
 	end
 end
+--[=[
+	@description Implements `ServiceManager.Hide`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Hide the ServiceManager GUI window.
-]]
 function ServiceManager.Hide()
 	if _gui then _gui:Hide() end
 end
+--[=[
+	@description Implements `ServiceManager.Toggle`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Toggle GUI visibility.
-]]
 function ServiceManager.Toggle()
 	if _gui then
 		if _gui:IsVisible() then
@@ -367,11 +366,12 @@ function ServiceManager.Toggle()
 		end
 	end
 end
+--[=[
+	@description Implements `ServiceManager.SwitchSubsystem`.
+	@param name string -- `name` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Switch to a different subsystem panel.
-	@param name string — One of: "TASKS", "FSM", "ENTITY", "NETWORK", "DATASTORE", "INSIGHTS"
-]]
 function ServiceManager.SwitchSubsystem(name: string)
 	if not _subsystemModules[name] then return end
 	_activeSubsystem = name
@@ -396,11 +396,12 @@ function ServiceManager.SwitchSubsystem(name: string)
 	-- Force immediate data refresh
 	_lastDataRefresh = 0
 end
+--[=[
+	@description Updates module state through `ServiceManager.SetContextMode`.
+	@param mode string -- `mode` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Switch between client and server context modes.
-	@param mode string — "client" or "server"
-]]
 function ServiceManager.SetContextMode(mode: string)
 	if mode ~= "client" and mode ~= "server" then return end
 	if mode == _contextMode then return end -- noop on same-mode click
@@ -481,17 +482,21 @@ function ServiceManager.SetContextMode(mode: string)
 
 	_Log("INFO", "Context mode switched to: " .. mode)
 end
+--[=[
+	@description Returns the data produced by `ServiceManager.GetStore`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Get the ReactiveStore for external subscriptions.
-]]
 function ServiceManager.GetStore(): any
 	return _store
 end
+--[=[
+	@description Implements `ServiceManager.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Destroy the entire ServiceManager, cleaning up all resources.
-]]
 function ServiceManager.Destroy()
 	if _serverPollConnection then
 		_serverPollConnection:Disconnect()
@@ -606,10 +611,11 @@ function _TickBrain()
 		end
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- PRIVATE: CLIENT CONTEXT SYNC
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `ServiceManager._SyncClientContext`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ServiceManager:_SyncClientContext()
 	-- Client mode: data comes directly from the Orchestrator module
@@ -749,17 +755,12 @@ end
 
 -- Now that _Log is defined, set it on the module table
 ServiceManager._Log = _Log
+--[=[
+	@description Handles `RegisterServerHandlers` for `ServiceManager`.
+	@param Orchestrator any -- `Orchestrator` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- SERVER-SIDE: Snapshot handler registration
--- ══════════════════════════════════════════════════════════════
-
---[[
-	RegisterServerHandlers should be called from the server boot script
-	to enable server-context polling from the client.
-	
-	@param Orchestrator any — The main Orchestrator module
-]]
 function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 	if not RunService:IsServer() then return end
 

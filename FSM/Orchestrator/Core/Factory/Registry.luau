@@ -13,15 +13,12 @@ local Registry = {
 }
 
 local Initialized = false
-
 --[=[
-	@description Initializes the Registry module with shared utilities.
-	Creates the Logger instance and registration signals.
-
-	@param Util table -- Orchestrator utility table containing Logger and Signal
-	@return ()
-	@writes Registry.Logger, Registry.EntityRegistered, Registry.StateMachineRegistered
+	@description Handles `Initialize` for `Registry`.
+	@param Util any -- `Util` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Registry.Initialize(Util)
 	if Initialized then return end
 	Initialized = true
@@ -38,31 +35,25 @@ local function ValidateRequest()
 	assert(Initialized, "Registry not initialized")
 	assert(type(Registry.Logger) == "table", "Logger not initialized")
 end
-
 --[=[
-	@description Registers an entity by ID. Fires the EntityRegistered signal.
-
-	@param id string -- Unique entity identifier
-	@param entity any -- Entity instance to register
-	@return ()
-	@reads None
-	@writes Registry.Entities[id]
+	@description Handles `RegisterEntity` for `Registry`.
+	@param id string -- `id` input parameter.
+	@param entity any -- `entity` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Registry.RegisterEntity(id: string, entity: any)
 	ValidateRequest()
 	Registry.Entities[id] = entity
 	Registry.Logger:Log({ Level = "INFO", Message = "Entity registered: " .. id })
 	Registry.EntityRegistered:Fire(id, entity)
 end
-
 --[=[
-	@description Unregisters an entity by ID, removing it from the active registry.
-
-	@param id string -- Entity identifier to remove
-	@return ()
-	@reads None
-	@writes Registry.Entities[id]
+	@description Implements `Registry.UnregisterEntity`.
+	@param id string -- `id` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Registry.UnregisterEntity(id: string)
 	ValidateRequest()
 	local entity = Registry.Entities[id]
@@ -72,58 +63,46 @@ function Registry.UnregisterEntity(id: string)
 		Registry.EntityUnregistered:Fire(id, entity)
 	end
 end
-
 --[=[
-	@description Retrieves an entity by ID from the active registry.
-
-	@param id string -- Entity identifier
-	@return any? -- The entity instance, or nil if not found
-	@reads Registry.Entities
-	@writes None
+	@description Returns the data produced by `Registry.GetEntity`.
+	@param id string -- `id` input parameter.
+	@return any? -- Return value produced by the implementation, if any.
 ]=]
+
 function Registry.GetEntity(id: string): any?
 	ValidateRequest()
 	return Registry.Entities[id]
 end
-
 --[=[
-	@description Registers a state machine by ID. Fires the StateMachineRegistered signal.
-
-	@param id string -- Unique state machine identifier
-	@param stateMachine any -- StateMachine instance to register
-	@return ()
-	@reads None
-	@writes Registry.StateMachines[id]
+	@description Handles `RegisterStateMachine` for `Registry`.
+	@param id string -- `id` input parameter.
+	@param stateMachine any -- `stateMachine` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Registry.RegisterStateMachine(id: string, stateMachine: any)
 	ValidateRequest()
 	Registry.StateMachines[id] = stateMachine
 	Registry.Logger:Log({ Level = "INFO", Message = "State Machine registered: " .. id })
 	Registry.StateMachineRegistered:Fire(id, stateMachine)
 end
-
 --[=[
-	@description Unregisters a state machine by ID.
-
-	@param id string -- State machine identifier to remove
-	@return ()
-	@reads None
-	@writes Registry.StateMachines[id]
+	@description Implements `Registry.UnregisterStateMachine`.
+	@param id string -- `id` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Registry.UnregisterStateMachine(id: string)
 	ValidateRequest()
 	Registry.StateMachines[id] = nil
 	Registry.Logger:Log({ Level = "INFO", Message = "State Machine unregistered: " .. id })
 end
-
 --[=[
-	@description Retrieves a state machine by ID from the active registry.
-
-	@param id string -- State machine identifier
-	@return any? -- The state machine instance, or nil if not found
-	@reads Registry.StateMachines
-	@writes None
+	@description Returns the data produced by `Registry.GetStateMachine`.
+	@param id string -- `id` input parameter.
+	@return any? -- Return value produced by the implementation, if any.
 ]=]
+
 function Registry.GetStateMachine(id: string): any?
 	ValidateRequest()
 	return Registry.StateMachines[id]
@@ -141,6 +120,12 @@ end
 	@writes Registry.EntityPools[className]
 ]=]
 local MAX_POOL_SIZE = 64
+--[=[
+	@description Implements `Registry.PoolEntity`.
+	@param className string -- `className` input parameter.
+	@param entity any -- `entity` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Registry.PoolEntity(className: string, entity: any)
 	ValidateRequest()
@@ -153,16 +138,12 @@ function Registry.PoolEntity(className: string, entity: any)
 	table.insert(Registry.EntityPools[className], entity)
 	Registry.Logger:Log({ Level = "DEBUG", Message = "Entity pooled: " .. className })
 end
-
 --[=[
-	@description Retrieves and removes an entity from the pool by class name.
-	Returns nil if the pool is empty.
-
-	@param className string -- Entity class name
-	@return any? -- A pooled entity instance, or nil
-	@reads Registry.EntityPools[className]
-	@writes Registry.EntityPools[className] (removes last element)
+	@description Returns the data produced by `Registry.GetPooledEntity`.
+	@param className string -- `className` input parameter.
+	@return any? -- Return value produced by the implementation, if any.
 ]=]
+
 function Registry.GetPooledEntity(className: string): any?
 	ValidateRequest()
 	local pool = Registry.EntityPools[className]
@@ -173,40 +154,32 @@ function Registry.GetPooledEntity(className: string): any?
 	Registry.Logger:Log({ Level = "DEBUG", Message = "Entity not found in pool: " .. className })
 	return nil
 end
-
 --[=[
-	@description Returns all active entities as a shared table.
-	Do not mutate the returned table.
-
-	@return { [string]: any } -- Map of entity ID → entity instance
-	@reads Registry.Entities
-	@writes None
+	@description Returns the data produced by `Registry.GetAllEntities`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Registry.GetAllEntities()
 	ValidateRequest()
 	return table.clone(Registry.Entities)
 end
-
 --[=[
-	@description Returns all active state machines as a shared table.
-	Do not mutate the returned table.
-
-	@return { [string]: any } -- Map of state machine ID → instance
-	@reads Registry.StateMachines
-	@writes None
+	@description Returns the data produced by `Registry.GetAllStateMachines`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Registry.GetAllStateMachines()	
 	ValidateRequest()
 	return table.clone(Registry.StateMachines)
 end
-
 --[=[
-	@description Cleans up registry signals and resets state.
-
-	@return ()
-	@reads Registry.EntityRegistered, Registry.EntityUnregistered, Registry.StateMachineRegistered
-	@writes Initialized
+	@description Implements `Registry.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function Registry.Destroy()
 	if Registry.EntityRegistered then Registry.EntityRegistered:Destroy() end
 	if Registry.EntityUnregistered then Registry.EntityUnregistered:Destroy() end

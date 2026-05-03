@@ -1,9 +1,8 @@
 --!strict
--- @Name ServiceManager/SearchAutocomplete.luau
--- @Author iKrypto
--- @Description Reusable autocomplete dropdown for search TextBox inputs.
--- Supports Up/Down arrow navigation, Enter/Right arrow selection, and mouse click.
--- Attach to any TextBox with a suggestion provider function.
+--[=[
+	@module SearchAutocomplete
+	@description Defines the `SearchAutocomplete` module and its exported API.
+]=]
 
 local UserInputService = game:GetService("UserInputService")
 
@@ -17,19 +16,12 @@ export type OnSelectCallback = (selected: string) -> ()
 
 local MAX_VISIBLE = 6
 local ROW_HEIGHT = 24
+--[=[
+	@description Implements `SearchAutocomplete.new`.
+	@param config { TextBox: TextBox, ParentFrame: GuiObject, GetSuggestions: SuggestionProvider, OnSelect: OnSelectCallback, AnchorPosition: UDim2?, DropDirection: string?, } -- `config` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Create a new autocomplete controller attached to a TextBox.
-
-	@param config {
-		TextBox: TextBox — the search input to attach to
-		ParentFrame: Frame — the frame to parent the dropdown into (usually contentFrame)
-		GetSuggestions: (text: string) -> { string } — returns filtered matches
-		OnSelect: (selected: string) -> () — called when a suggestion is chosen
-		AnchorPosition: UDim2? — optional override for dropdown position
-		DropDirection: "up" | "down"? — default "down"
-	}
-]]
 function SearchAutocomplete.new(config: {
 	TextBox: TextBox,
 	ParentFrame: GuiObject,
@@ -90,6 +82,11 @@ function SearchAutocomplete.new(config: {
 
 	return self
 end
+--[=[
+	@description Implements `SearchAutocomplete._PositionDropdown`.
+	@param anchorOverride UDim2? -- `anchorOverride` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function SearchAutocomplete:_PositionDropdown(anchorOverride: UDim2?)
 	if anchorOverride then
@@ -121,6 +118,11 @@ function SearchAutocomplete:_PositionDropdown(anchorOverride: UDim2?)
 		)
 	end
 end
+--[=[
+	@description Implements `SearchAutocomplete._Connect`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function SearchAutocomplete:_Connect()
 	-- Text change → update suggestions
@@ -158,6 +160,11 @@ function SearchAutocomplete:_Connect()
 		end
 	end))
 end
+--[=[
+	@description Implements `SearchAutocomplete._Navigate`.
+	@param direction number -- `direction` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function SearchAutocomplete:_Navigate(direction: number)
 	local count = #self._currentSuggestions
@@ -176,6 +183,12 @@ function SearchAutocomplete:_Navigate(direction: number)
 	self:_HighlightRow(oldIndex, false)
 	self:_HighlightRow(newIndex, true)
 end
+--[=[
+	@description Implements `SearchAutocomplete._HighlightRow`.
+	@param index number -- `index` input parameter.
+	@param highlighted boolean -- `highlighted` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function SearchAutocomplete:_HighlightRow(index: number, highlighted: boolean)
 	local btn = self._suggestionButtons[index]
@@ -189,6 +202,11 @@ function SearchAutocomplete:_HighlightRow(index: number, highlighted: boolean)
 		btn.TextColor3 = Theme.Colors.TextSecondary
 	end
 end
+--[=[
+	@description Implements `SearchAutocomplete._SelectCurrent`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function SearchAutocomplete:_SelectCurrent()
 	local suggestion = self._currentSuggestions[self._selectedIndex]
@@ -202,6 +220,11 @@ function SearchAutocomplete:_SelectCurrent()
 		self._onSelect(suggestion)
 	end
 end
+--[=[
+	@description Implements `SearchAutocomplete._UpdateSuggestions`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function SearchAutocomplete:_UpdateSuggestions()
 	local text = self._textBox.Text
@@ -223,6 +246,11 @@ function SearchAutocomplete:_UpdateSuggestions()
 	self:_RenderDropdown()
 	self:_Show()
 end
+--[=[
+	@description Implements `SearchAutocomplete._RenderDropdown`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function SearchAutocomplete:_RenderDropdown()
 	-- Clear old buttons
@@ -291,21 +319,33 @@ function SearchAutocomplete:_RenderDropdown()
 		self._suggestionButtons[i] = btn
 	end
 end
+--[=[
+	@description Implements `SearchAutocomplete._Show`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function SearchAutocomplete:_Show()
 	self._dropdown.Visible = true
 	self._visible = true
 end
+--[=[
+	@description Implements `SearchAutocomplete._Hide`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function SearchAutocomplete:_Hide()
 	self._dropdown.Visible = false
 	self._visible = false
 	self._selectedIndex = 0
 end
+--[=[
+	@description Implements `SearchAutocomplete.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Disconnect textbox/dropdown listeners and destroy the autocomplete popup.
-]]
 function SearchAutocomplete:Destroy()
 	for _, conn in ipairs(self._connections) do
 		conn:Disconnect()

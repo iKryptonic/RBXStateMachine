@@ -18,16 +18,10 @@ local PersistenceManager = {
     _settings = nil :: any,
 	_core = nil :: any
 }
-
 --[=[
-	@description Initializes the PersistenceManager module with shared utilities.
-	Only runs on the server. Initializes the EntityPersistence sub-module.
-	The controller is lazy-loaded on first use to avoid dependency cycles.
-
-	@param Util table -- Orchestrator utility table
-	@return ()
-	@reads RunService:IsServer()
-	@writes PersistenceManager._core, ._settings, ._logger
+	@description Handles `Initialize` for `PersistenceManager`.
+	@param Util any -- `Util` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function PersistenceManager.Initialize(Util)
@@ -79,18 +73,13 @@ local function ValidateRequest()
     assert(RunService:IsServer(), "PersistenceManager can only be used on the server")
     assert(PersistenceManager._settings.DataStore.PersistenceEnabled, "Persistence is disabled")
 end
-
 --[=[
-	@description Loads persistent state into an entity by key.
-	Marks the entity as persistent in its context and delegates to
-	the EntityPersistence controller's Load method.
-
-	@param entity any -- Entity instance to load state into
-	@param key string -- DataStore key to load from
-	@return ()
-	@reads entity._privateProperties.Context
-	@writes entity context (_PersistenceKey, _IsPersistent)
+	@description Implements `PersistenceManager.LoadState`.
+	@param entity any -- `entity` input parameter.
+	@param key string -- `key` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function PersistenceManager.LoadState(entity: any, key: string)
     ValidateRequest()
 	
@@ -110,17 +99,12 @@ function PersistenceManager.LoadState(entity: any, key: string)
         PersistenceManager._logger:Log({ Level = "ERROR", Message = string.format("Failed to load state for key '%s': %s", key, tostring(err)) })
     end
 end
-
 --[=[
-	@description Saves the current state of a persistent entity.
-	Only proceeds if the entity has been marked as persistent
-	(via `_IsPersistent` context flag set during LoadState).
-
-	@param entity any -- Entity instance to save
-	@return ()
-	@reads entity._privateProperties.Context (_IsPersistent, _PersistenceKey)
-	@writes DataStore (via controller:Save)
+	@description Implements `PersistenceManager.SaveState`.
+	@param entity any -- `entity` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function PersistenceManager.SaveState(entity: any)
     ValidateRequest()
 

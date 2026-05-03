@@ -1,9 +1,8 @@
 --!strict
--- @Name ServiceManager/Subsystems/DataStoreModule.luau
--- @Author iKrypto
--- @Description Enhanced DATASTORE subsystem with detailed store properties (LastSync,
--- PendingOps, RateLimit, Config), operations log, store status indicators, cached keys
--- display, field inspector with type/value badges, version tracking, and search.
+--[=[
+	@module DataStoreModule
+	@description Defines the `DataStoreModule` module and its exported API.
+]=]
 
 local Theme = require(script.Parent.Parent.Theme)
 local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
@@ -12,12 +11,12 @@ local DataStoreModule = {}
 DataStoreModule.__index = DataStoreModule
 
 local SORT_MODES = { "Name", "Keys", "Ops", "LastSync" }
+--[=[
+	@description Implements `DataStoreModule.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Create the DATASTORE subsystem controller.
-	Tracks the normalized store cache plus filter and selection state for the root
-	list and per-store inspector layers.
-]]
 function DataStoreModule.new(): any
 	local self = setmetatable({}, DataStoreModule)
 	self._storeCache = {} :: { [string]: any }
@@ -26,11 +25,12 @@ function DataStoreModule.new(): any
 	self._selectedStore = nil :: string?
 	return self
 end
+--[=[
+	@description Implements `DataStoreModule.FetchData`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Refresh datastore snapshots for the active context and normalize whatever
-	backing persistence surface is available into the module cache.
-]]
 function DataStoreModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
 	if not orchestrator then return end
@@ -104,6 +104,12 @@ function DataStoreModule:FetchData(nexus: any)
 		nexus.Store:Set("datastore.list", self._storeCache)
 	end)
 end
+--[=[
+	@description Implements `DataStoreModule._ExtractStoreData`.
+	@param name string -- `name` input parameter.
+	@param store any -- `store` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function DataStoreModule:_ExtractStoreData(name: string, store: any): any
 	if type(store) ~= "table" then
@@ -178,16 +184,18 @@ function DataStoreModule:_ExtractStoreData(name: string, store: any): any
 		OperationsLog = store.OperationsLog or store._operationsLog or {},
 	}
 end
+--[=[
+	@description Implements `DataStoreModule.Render`.
+	@param _nexus any -- `_nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	DATASTORE rendering is performed by BuildRootLayer and detail-layer builders.
-]]
 function DataStoreModule:Render(_nexus: any) end
-
--- ══════════════════════════════════════════════════════════════
--- SORTING / FILTERING
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `DataStoreModule._GetSorted`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return { { Name: string, Data: any } } -- Return value produced by the implementation, if any.
+]=]
 
 function DataStoreModule:_GetSorted(): { { Name: string, Data: any } }
 	local result = {}
@@ -213,16 +221,13 @@ function DataStoreModule:_GetSorted(): { { Name: string, Data: any } }
 	end)
 	return result
 end
+--[=[
+	@description Creates the result managed by `DataStoreModule.BuildRootLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- ROOT LAYER
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Build or rebuild the DATASTORE root layer inside the supplied navigator frame.
-	Creates the summary strip, search/sort controls, and store rows that drill
-	into key/value, config, and operations-log details.
-]]
 function DataStoreModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -275,6 +280,11 @@ function DataStoreModule:BuildRootLayer(frame: Frame, context: any)
 		)
 	end
 end
+--[=[
+	@description Implements `DataStoreModule._BuildSummaryStrip`.
+	@param parent Frame -- `parent` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function DataStoreModule:_BuildSummaryStrip(parent: Frame)
 	local strip = Instance.new("Frame")
@@ -342,6 +352,12 @@ function DataStoreModule:_BuildSummaryStrip(parent: Frame)
 		})
 	end
 end
+--[=[
+	@description Implements `DataStoreModule._BuildToolbar`.
+	@param parent Frame -- `parent` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function DataStoreModule:_BuildToolbar(parent: Frame, nexus: any)
 	local toolbar = Instance.new("Frame")
@@ -442,10 +458,15 @@ function DataStoreModule:_BuildToolbar(parent: Frame, nexus: any)
 		if nexus then nexus._lastDataRefresh = 0 end
 	end)
 end
-
--- ══════════════════════════════════════════════════════════════
--- STORE ROW
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `DataStoreModule._BuildStoreRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param name string -- `name` input parameter.
+	@param storeData any -- `storeData` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param order number -- `order` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
+]=]
 
 function DataStoreModule:_BuildStoreRow(parent: Frame, name: string, storeData: any, nexus: any, order: number): Frame
 	local statusColor = if storeData.Status == "syncing" then Theme.Colors.Warning
@@ -514,10 +535,12 @@ function DataStoreModule:_BuildStoreRow(parent: Frame, name: string, storeData: 
 
 	return row
 end
-
--- ══════════════════════════════════════════════════════════════
--- STORE DETAIL LAYER
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `DataStoreModule._BuildStoreDetailLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -761,10 +784,11 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 		end
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- HELPERS
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `DataStoreModule._Stringify`.
+	@param value any -- `value` input parameter.
+	@return string -- Return value produced by the implementation, if any.
+]=]
 
 function DataStoreModule:_Stringify(value: any): string
 	local t = type(value)
@@ -778,6 +802,11 @@ function DataStoreModule:_Stringify(value: any): string
 	elseif t == "nil" then return "nil"
 	else return tostring(value) end
 end
+--[=[
+	@description Implements `DataStoreModule._TypeColor`.
+	@param value any -- `value` input parameter.
+	@return Color3 -- Return value produced by the implementation, if any.
+]=]
 
 function DataStoreModule:_TypeColor(value: any): Color3
 	local t = type(value)
@@ -787,6 +816,15 @@ function DataStoreModule:_TypeColor(value: any): Color3
 	elseif t == "table" then return Theme.Colors.Purple
 	else return Theme.Colors.TextMuted end
 end
+--[=[
+	@description Implements `DataStoreModule._BuildPropRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param key string -- `key` input parameter.
+	@param value string -- `value` input parameter.
+	@param color Color3 -- `color` input parameter.
+	@param order number -- `order` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function DataStoreModule:_BuildPropRow(parent: Frame, key: string, value: string, color: Color3, order: number)
 	local propRow = Instance.new("Frame")
@@ -806,10 +844,12 @@ function DataStoreModule:_BuildPropRow(parent: Frame, key: string, value: string
 	Theme.CreateLabel({ Text = key, Size = UDim2.new(0.45, 0, 1, 0), Color = Theme.Colors.TextSecondary, FontSize = Theme.TextSize.Caption, Parent = propRow })
 	Theme.CreateLabel({ Text = value, Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.48, 0, 0, 0), Color = color, FontSize = Theme.TextSize.Body, FontFace = Theme.Font.Mono, Alignment = Enum.TextXAlignment.Right, Parent = propRow })
 end
+--[=[
+	@description Implements `DataStoreModule.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Release autocomplete resources and clear cached store data.
-]]
 function DataStoreModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end
 	table.clear(self._storeCache)

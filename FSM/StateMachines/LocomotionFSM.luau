@@ -1,8 +1,8 @@
 --!strict
--- @Name LocomotionFSM
--- @Author iKrypto
--- @Description Client-side FSM that derives locomotion state from physics.
---   Writes LocomotionState to CharacterEntity for ServiceManager observability.
+--[=[
+	@module LocomotionFSM
+	@description Defines the `LocomotionFSM` state machine module and its exported API.
+]=]
 
 local LocomotionFSM = {
 	Name = "LocomotionFSM",
@@ -57,8 +57,18 @@ local function writeState(fsm: any, state: string)
 		charEntity.LocomotionState = state
 	end
 end
+--[=[
+	@description Handles `RegisterStates` for `LocomotionFSM`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LocomotionFSM:RegisterStates()
+	--[=[
+		@state Idle
+		@description Handles the `Idle` state for `LocomotionFSM`.
+	]=]
+
 	self:AddState("Idle", {
 		OnEnter = function(_, fsm)
 			writeState(fsm, "Idle")
@@ -87,6 +97,10 @@ function LocomotionFSM:RegisterStates()
 			},
 		},
 	}, { "Walking", "Running", "Airborne" })
+	--[=[
+		@state Walking
+		@description Handles the `Walking` state for `LocomotionFSM`.
+	]=]
 
 	self:AddState("Walking", {
 		OnEnter = function(_, fsm)
@@ -116,6 +130,10 @@ function LocomotionFSM:RegisterStates()
 			},
 		},
 	}, { "Idle", "Running", "Airborne" })
+	--[=[
+		@state Running
+		@description Handles the `Running` state for `LocomotionFSM`.
+	]=]
 
 	self:AddState("Running", {
 		OnEnter = function(_, fsm)
@@ -149,6 +167,10 @@ function LocomotionFSM:RegisterStates()
 			},
 		},
 	}, { "Idle", "Walking", "Airborne" })
+	--[=[
+		@state Airborne
+		@description Handles the `Airborne` state for `LocomotionFSM`.
+	]=]
 
 	self:AddState("Airborne", {
 		OnEnter = function(_, fsm)
@@ -184,8 +206,17 @@ function LocomotionFSM:RegisterStates()
 			},
 		},
 	}, { "Idle", "Walking", "Running" })
+	--[=[
+		@state Completed
+		@description Handles the `Completed` terminal state for `LocomotionFSM`.
+	]=]
 
 	self:AddState("Completed", function() end, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `LocomotionFSM`.
+	]=]
+
 	self:AddState("Failed", function() end, {})
 end
 

@@ -1,11 +1,8 @@
 --!strict
--- @Name ServiceManager/AnalyticsEngine.luau
--- @Author iKrypto
--- @Description Additive insight engine. Doesn't just show data — it detects bottlenecks,
--- dependency loops, state stalls, and anomalies across all subsystems.
---
--- Rules use a multi-emit signature: (nexus, emit) -> () so they can surface
--- multiple insights per cycle (e.g. one per stalled FSM, not just the first).
+--[=[
+	@module AnalyticsEngine
+	@description Defines the `AnalyticsEngine` module and its exported API.
+]=]
 
 local AnalyticsEngine = {}
 AnalyticsEngine.__index = AnalyticsEngine
@@ -29,6 +26,11 @@ export type Insight = {
 }
 
 export type RuleFn = (nexus: any, emit: (Insight) -> ()) -> ()
+--[=[
+	@description Implements `AnalyticsEngine.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function AnalyticsEngine.new(): any
 	local self = setmetatable({}, AnalyticsEngine)
@@ -44,19 +46,21 @@ function AnalyticsEngine.new(): any
 	self:_RegisterBuiltinRules()
 	return self
 end
+--[=[
+	@description Returns whether `AnalyticsEngine` has pending work.
+	@param none nil -- This function does not accept explicit parameters.
+	@return boolean -- Return value produced by the implementation, if any.
+]=]
 
 function AnalyticsEngine:HasPendingWork(): boolean
 	return os.clock() - self._lastCycle >= self._cycleInterval
 end
-
 --[=[
-	Run all rules against the given nexus, collecting emitted insights.
-	Updates existing insights (preserves dismissed/snoozed state, increments
-	repeat count) and prunes resolved insights older than 10s.
-	@param nexus any
-	@reads _rules, _insights
-	@writes _insights, _history, _lastCycle
+	@description Implements `AnalyticsEngine.RunCycle`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function AnalyticsEngine:RunCycle(nexus: any)
 	self._lastCycle = os.clock()
 	local newInsights = {} :: { Insight }
@@ -115,13 +119,12 @@ function AnalyticsEngine:RunCycle(nexus: any)
 		end
 	end
 end
-
 --[=[
-	Return all undismissed insights, sorted by severity then RepeatCount.
-	Snoozed insights are excluded.
-	@return { Insight }
-	@reads _insights
+	@description Returns the data produced by `AnalyticsEngine.GetActiveInsights`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return { Insight } -- Return value produced by the implementation, if any.
 ]=]
+
 function AnalyticsEngine:GetActiveInsights(): { Insight }
 	local result = {}
 	for _, insight in pairs(self._insights) do
@@ -142,14 +145,29 @@ function AnalyticsEngine:GetActiveInsights(): { Insight }
 	end)
 	return result
 end
+--[=[
+	@description Returns the data produced by `AnalyticsEngine.GetHistory`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return { Insight } -- Return value produced by the implementation, if any.
+]=]
 
 function AnalyticsEngine:GetHistory(): { Insight }
 	return self._history
 end
+--[=[
+	@description Returns the data produced by `AnalyticsEngine.GetInsight`.
+	@param id string -- `id` input parameter.
+	@return Insight? -- Return value produced by the implementation, if any.
+]=]
 
 function AnalyticsEngine:GetInsight(id: string): Insight?
 	return self._insights[id]
 end
+--[=[
+	@description Implements `AnalyticsEngine.DismissInsight`.
+	@param id string -- `id` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function AnalyticsEngine:DismissInsight(id: string)
 	local insight = self._insights[id]
@@ -157,13 +175,13 @@ function AnalyticsEngine:DismissInsight(id: string)
 		insight.Dismissed = true
 	end
 end
-
 --[=[
-	Snooze an insight for the given number of seconds. The insight remains
-	in the registry but is filtered from active lists until the snooze expires.
-	@param id string
-	@param seconds number (default 60)
+	@description Implements `AnalyticsEngine.SnoozeInsight`.
+	@param id string -- `id` input parameter.
+	@param seconds number? -- `seconds` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function AnalyticsEngine:SnoozeInsight(id: string, seconds: number?)
 	local insight = self._insights[id]
 	if insight then
@@ -171,27 +189,50 @@ function AnalyticsEngine:SnoozeInsight(id: string, seconds: number?)
 		insight.SnoozedUntil = os.clock() + (seconds or 60)
 	end
 end
+--[=[
+	@description Implements `AnalyticsEngine.ResolveInsight`.
+	@param id string -- `id` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function AnalyticsEngine:ResolveInsight(id: string)
 	-- Resolution removes from active and history (user marked it done)
 	self._insights[id] = nil
 end
+--[=[
+	@description Implements `AnalyticsEngine.AddRule`.
+	@param rule RuleFn -- `rule` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function AnalyticsEngine:AddRule(rule: RuleFn)
 	table.insert(self._rules, rule)
 end
+--[=[
+	@description Returns the data produced by `AnalyticsEngine.GetRuleCount`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return number -- Return value produced by the implementation, if any.
+]=]
 
 function AnalyticsEngine:GetRuleCount(): number
 	return #self._rules
 end
+--[=[
+	@description Implements `AnalyticsEngine.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function AnalyticsEngine:Destroy()
 	table.clear(self._insights)
 	table.clear(self._rules)
 	table.clear(self._history)
 end
-
--- ═══════════════════ PRIVATE: BUILTIN RULES ═══════════════════
+--[=[
+	@description Implements `AnalyticsEngine._CreateInsight`.
+	@param params { Id: string, Severity: "CRITICAL" | "WARNING" | "INFO" | "SUGGESTION", Subsystem: string, Title: string, Description: string, Metric: number?, Threshold: number?, RelatedIds: { string }?, ActionableHints: { { Label: string, Command: string? } }?, } -- `params` input parameter.
+	@return Insight -- Return value produced by the implementation, if any.
+]=]
 
 function AnalyticsEngine:_CreateInsight(params: {
 	Id: string,
@@ -218,6 +259,11 @@ function AnalyticsEngine:_CreateInsight(params: {
 		ActionableHints = params.ActionableHints,
 	}
 end
+--[=[
+	@description Implements `AnalyticsEngine._RegisterBuiltinRules`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function AnalyticsEngine:_RegisterBuiltinRules()
 	-- Rule 1: FSM State Stall Detection (multi-emit: one per stalled FSM)

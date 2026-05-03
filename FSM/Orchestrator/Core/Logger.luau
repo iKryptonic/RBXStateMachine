@@ -1,7 +1,8 @@
 --!strict
--- @Name Logger
--- @Author iKrypto
--- @Description Standardized logging utility with history and rich text support.
+--[=[
+	@module Logger
+	@description Defines the `Logger` module and its exported API.
+]=]
 
 local Logger = {}
 Logger.__index = Logger
@@ -22,14 +23,12 @@ local MAX_LOG_HISTORY = 50
 local MAX_SUMMARY_HISTORY = 200 -- compressed summaries for long-term analysis
 
 local Initialized, Settings = false, nil
---[[
-	@description Initializes the Logger module with shared settings.
-	Must be called before creating logger instances that rely on level gating.
-	@param Util table -- Orchestrator utility table containing Settings.Logger
-	@return ()
-	@reads Initialized
-	@writes Settings, Initialized
-]]
+--[=[
+	@description Handles `Initialize` for `Logger`.
+	@param Util any -- `Util` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
+
 function Logger.Initialize(Util)
 	if Initialized then return end
 	Initialized = true
@@ -42,14 +41,12 @@ local function ValidateRequest()
 	assert(type(Settings.DebuggingEnabled) == "boolean", "Logger not initialized")
 	assert(type(Settings.MinimumLoggingLevel) == "number", "Logger not initialized")
 end
+--[=[
+	@description Implements `Logger.new`.
+	@param params { Name: string? } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Creates a new Logger instance.
-	@param params { Name: string? } -- Optional source label; inferred from caller when omitted
-	@return Logger -- Logger instance with independent history buffer
-	@reads params.Name, debug.info
-	@writes self.Source, self.History
-]]
 function Logger.new(params: { Name: string? })
 	local self = setmetatable({}, Logger)
 	local sourceName = params and params.Name
@@ -65,14 +62,12 @@ function Logger.new(params: { Name: string? })
 	self.History = {} :: {LogEntry}
 	return self
 end
+--[=[
+	@description Implements `Logger.Log`.
+	@param params { Level: string, Message: string, OperationId: string?, Data: any? } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Logs a message with the specified level.
-	@param params { Level: string, Message: string, OperationId: string?, Data: any? } -- Structured log payload
-	@return ()
-	@reads Settings.DebuggingEnabled, Settings.MinimumLoggingLevel, self.Source
-	@writes self.History
-]]
 function Logger:Log(params: { Level: string, Message: string, OperationId: string?, Data: any? })
 	ValidateRequest()
 
@@ -148,24 +143,21 @@ function Logger:Log(params: { Level: string, Message: string, OperationId: strin
 		print(finalMsg)
 	end
 end
+--[=[
+	@description Updates module state through `Logger.SetMinimumLoggingLevel`.
+	@param level number -- `level` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Sets the minimum logging level.
-	@param level number -- Threshold where 1=ERROR, 2=WARN, 3=INFO, 4=DEBUG
-	@return ()
-	@reads None
-	@writes Settings.MinimumLoggingLevel
-]]
 function Logger:SetMinimumLoggingLevel(level: number)
 	Settings.MinimumLoggingLevel = level
 end
+--[=[
+	@description Returns the data produced by `Logger.GetHistory`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	@description Returns the log history.
-	@return {LogEntry} -- Shared history buffer in insertion order
-	@reads self.History
-	@writes None
-]]
 function Logger:GetHistory()
 	return self.History
 end

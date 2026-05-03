@@ -1,8 +1,8 @@
 --!strict
--- @Name JumpFSM
--- @Author iKrypto
--- @Description Client-side FSM managing double jump lifecycle.
---   States: Grounded → InAir → ValidateFlip → DeductFlipStamina → PlayFlipSound → TriggerFlipAnimation → ApplyUpwardForce → RotateCharacter → Flipping → PlayLandSound → TriggerLandAnimation → Cooldown → Grounded
+--[=[
+	@module JumpFSM
+	@description Defines the `JumpFSM` state machine module and its exported API.
+]=]
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -84,8 +84,18 @@ local function getCharacterEntity(fsm: any): any?
 	end
 	return orchestrator.GetEntity(fsm.CharacterEntityId)
 end
+--[=[
+	@description Handles `RegisterStates` for `JumpFSM`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function JumpFSM:RegisterStates()
+	--[=[
+		@state Grounded
+		@description Handles the `Grounded` state for `JumpFSM`.
+	]=]
+
 	self:AddState("Grounded", {
 		OnEnter = function(_, fsm)
 			fsm.Context._flipRequested = false
@@ -106,6 +116,10 @@ function JumpFSM:RegisterStates()
 			},
 		},
 	}, { "InAir" })
+	--[=[
+		@state InAir
+		@description Handles the `InAir` state for `JumpFSM`.
+	]=]
 
 	self:AddState("InAir", {
 		OnEnter = function(_, fsm)
@@ -130,6 +144,10 @@ function JumpFSM:RegisterStates()
 			},
 		},
 	}, { "ValidateFlip", "Grounded" })
+	--[=[
+		@state ValidateFlip
+		@description Handles the `ValidateFlip` state for `JumpFSM`.
+	]=]
 
 	self:AddState("ValidateFlip", {
 		OnEnter = function(_, fsm)
@@ -144,6 +162,10 @@ function JumpFSM:RegisterStates()
 			fsm.State = "DeductFlipStamina"
 		end,
 	}, { "DeductFlipStamina", "Grounded" })
+	--[=[
+		@state DeductFlipStamina
+		@description Handles the `DeductFlipStamina` state for `JumpFSM`.
+	]=]
 
 	self:AddState("DeductFlipStamina", {
 		OnEnter = function(_, fsm)
@@ -166,6 +188,10 @@ function JumpFSM:RegisterStates()
 			fsm.State = "PlayFlipSound"
 		end,
 	}, { "PlayFlipSound", "InAir" })
+	--[=[
+		@state PlayFlipSound
+		@description Handles the `PlayFlipSound` state for `JumpFSM`.
+	]=]
 
 	self:AddState("PlayFlipSound", {
 		OnEnter = function(_, fsm)
@@ -181,6 +207,10 @@ function JumpFSM:RegisterStates()
 			fsm.State = "TriggerFlipAnimation"
 		end,
 	}, { "TriggerFlipAnimation" })
+	--[=[
+		@state TriggerFlipAnimation
+		@description Handles the `TriggerFlipAnimation` state for `JumpFSM`.
+	]=]
 
 	self:AddState("TriggerFlipAnimation", {
 		OnEnter = function(_, fsm)
@@ -193,6 +223,10 @@ function JumpFSM:RegisterStates()
 			fsm.State = "ApplyUpwardForce"
 		end,
 	}, { "ApplyUpwardForce" })
+	--[=[
+		@state ApplyUpwardForce
+		@description Handles the `ApplyUpwardForce` state for `JumpFSM`.
+	]=]
 
 	self:AddState("ApplyUpwardForce", {
 		OnEnter = function(_, fsm)
@@ -211,6 +245,10 @@ function JumpFSM:RegisterStates()
 			fsm.State = "RotateCharacter"
 		end,
 	}, { "RotateCharacter", "Grounded" })
+	--[=[
+		@state RotateCharacter
+		@description Handles the `RotateCharacter` state for `JumpFSM`.
+	]=]
 
 	self:AddState("RotateCharacter", {
 		OnEnter = function(_, fsm)
@@ -235,6 +273,10 @@ function JumpFSM:RegisterStates()
 			fsm.State = "Flipping"
 		end,
 	}, { "Flipping" })
+	--[=[
+		@state Flipping
+		@description Handles the `Flipping` state for `JumpFSM`.
+	]=]
 
 	self:AddState("Flipping", {
 		OnEnter = function(_, fsm)
@@ -255,6 +297,10 @@ function JumpFSM:RegisterStates()
 		Timeout = FLIP_TIMEOUT,
 		OnTimeout = "Cooldown",
 	}, { "PlayLandSound", "Cooldown" })
+	--[=[
+		@state PlayLandSound
+		@description Handles the `PlayLandSound` state for `JumpFSM`.
+	]=]
 
 	self:AddState("PlayLandSound", {
 		OnEnter = function(_, fsm)
@@ -271,6 +317,10 @@ function JumpFSM:RegisterStates()
 			fsm.State = "TriggerLandAnimation"
 		end,
 	}, { "TriggerLandAnimation" })
+	--[=[
+		@state TriggerLandAnimation
+		@description Handles the `TriggerLandAnimation` state for `JumpFSM`.
+	]=]
 
 	self:AddState("TriggerLandAnimation", {
 		OnEnter = function(_, fsm)
@@ -281,16 +331,34 @@ function JumpFSM:RegisterStates()
 			fsm.State = "Cooldown"
 		end,
 	}, { "Cooldown" })
+	--[=[
+		@state Cooldown
+		@description Handles the `Cooldown` state for `JumpFSM`.
+	]=]
 
 	self:AddState("Cooldown", {
 		OnEnter = function(_, fsm)
 			fsm:ScheduleTransition(COOLDOWN_DURATION, "Grounded")
 		end,
 	}, { "Grounded" })
+	--[=[
+		@state Completed
+		@description Handles the `Completed` terminal state for `JumpFSM`.
+	]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `JumpFSM`.
+	]=]
+
 	self:AddState("Failed", function(_fsm) end, {})
 end
+--[=[
+	@description Implements `JumpFSM.TryDoubleJump`.
+	@param fsm any -- `fsm` input parameter.
+	@return boolean -- Return value produced by the implementation, if any.
+]=]
 
 function JumpFSM.TryDoubleJump(fsm: any): boolean
 	if fsm.State ~= "InAir" then

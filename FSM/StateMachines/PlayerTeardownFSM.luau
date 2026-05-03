@@ -1,7 +1,8 @@
 --!strict
--- @Name PlayerTeardownFSM
--- @Author Copilot
--- @Description Server-side teardown FSM for observable player cleanup.
+--[=[
+	@module PlayerTeardownFSM
+	@description Defines the `PlayerTeardownFSM` state machine module and its exported API.
+]=]
 
 local PlayerTeardownFSM = {
 	Name = "PlayerTeardownFSM",
@@ -113,8 +114,18 @@ local function flushPersistentEntity(orchestrator: any, entity: any)
 
 	return false
 end
+--[=[
+	@description Handles `RegisterStates` for `PlayerTeardownFSM`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function PlayerTeardownFSM:RegisterStates()
+	--[=[
+		@state CancelSMs
+		@description Handles the `CancelSMs` state for `PlayerTeardownFSM`.
+	]=]
+
 	self:AddState("CancelSMs", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -150,6 +161,10 @@ function PlayerTeardownFSM:RegisterStates()
 			fsm.State = "FlushEntities"
 		end,
 	}, { "FlushEntities", "Failed" })
+	--[=[
+		@state FlushEntities
+		@description Handles the `FlushEntities` state for `PlayerTeardownFSM`.
+	]=]
 
 	self:AddState("FlushEntities", {
 		OnEnter = function(_, fsm)
@@ -177,6 +192,10 @@ function PlayerTeardownFSM:RegisterStates()
 			fsm.State = "DeleteEntities"
 		end,
 	}, { "DeleteEntities", "Failed" })
+	--[=[
+		@state DeleteEntities
+		@description Handles the `DeleteEntities` state for `PlayerTeardownFSM`.
+	]=]
 
 	self:AddState("DeleteEntities", {
 		OnEnter = function(_, fsm)
@@ -204,6 +223,10 @@ function PlayerTeardownFSM:RegisterStates()
 			fsm.State = "Completed"
 		end,
 	}, { "Completed", "Failed" })
+	--[=[
+		@state Completed
+		@description Handles the `Completed` terminal state for `PlayerTeardownFSM`.
+	]=]
 
 	self:AddState("Completed", {
 		OnEnter = function(_, fsm)
@@ -213,6 +236,10 @@ function PlayerTeardownFSM:RegisterStates()
 			})
 		end,
 	}, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `PlayerTeardownFSM`.
+	]=]
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm, reason)

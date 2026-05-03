@@ -1,6 +1,8 @@
 --!strict
--- @Name StatusEffectFSM
--- @Description FSM state machine module.
+--[=[
+	@module StatusEffectFSM
+	@description Defines the `StatusEffectFSM` state machine module and its exported API.
+]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
@@ -204,8 +206,18 @@ local function applyTick(fsm: any)
 		broadcastEntity(charEntity)
 	end
 end
+--[=[
+	@description Handles `RegisterStates` for `StatusEffectFSM`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function StatusEffectFSM:RegisterStates()
+	--[=[
+		@state ValidateInput
+		@description Handles the `ValidateInput` state for `StatusEffectFSM`.
+	]=]
+
 	self:AddState("ValidateInput", {
 		OnEnter = function(_, fsm)
 			if typeof(fsm.CharacterEntityId) ~= "string" or fsm.CharacterEntityId == "" then
@@ -215,6 +227,10 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "LoadEntities"
 		end,
 	}, { "LoadEntities", "Failed" })
+	--[=[
+		@state LoadEntities
+		@description Handles the `LoadEntities` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("LoadEntities", {
 		OnEnter = function(_, fsm)
@@ -230,6 +246,10 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "LoadEffectDef"
 		end,
 	}, { "LoadEffectDef", "Failed" })
+	--[=[
+		@state LoadEffectDef
+		@description Handles the `LoadEffectDef` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("LoadEffectDef", {
 		OnEnter = function(_, fsm)
@@ -246,6 +266,10 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "InitializeContext"
 		end,
 	}, { "InitializeContext", "Failed" })
+	--[=[
+		@state InitializeContext
+		@description Handles the `InitializeContext` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("InitializeContext", {
 		OnEnter = function(_, fsm)
@@ -263,6 +287,10 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "UpdateEffectsRegistry"
 		end,
 	}, { "UpdateEffectsRegistry" })
+	--[=[
+		@state UpdateEffectsRegistry
+		@description Handles the `UpdateEffectsRegistry` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("UpdateEffectsRegistry", {
 		OnEnter = function(_, fsm)
@@ -292,6 +320,10 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "ApplyStatModifiers"
 		end,
 	}, { "ApplyStatModifiers", "Failed" })
+	--[=[
+		@state ApplyStatModifiers
+		@description Handles the `ApplyStatModifiers` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("ApplyStatModifiers", {
 		OnEnter = function(_, fsm)
@@ -315,6 +347,10 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "ApplyStatusFlags"
 		end,
 	}, { "ApplyStatusFlags", "Failed" })
+	--[=[
+		@state ApplyStatusFlags
+		@description Handles the `ApplyStatusFlags` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("ApplyStatusFlags", {
 		OnEnter = function(_, fsm)
@@ -340,6 +376,10 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "SyncResources"
 		end,
 	}, { "SyncResources", "Failed" })
+	--[=[
+		@state SyncResources
+		@description Handles the `SyncResources` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("SyncResources", {
 		OnEnter = function(_, fsm)
@@ -355,6 +395,10 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "BroadcastUpdate"
 		end,
 	}, { "BroadcastUpdate", "Failed" })
+	--[=[
+		@state BroadcastUpdate
+		@description Handles the `BroadcastUpdate` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("BroadcastUpdate", {
 		OnEnter = function(_, fsm)
@@ -368,6 +412,10 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "Ticking"
 		end,
 	}, { "Ticking", "Failed" })
+	--[=[
+		@state Ticking
+		@description Handles the `Ticking` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("Ticking", {
 		OnEnter = function(_, fsm)
@@ -393,6 +441,10 @@ function StatusEffectFSM:RegisterStates()
 			end
 		end,
 	}, { "RemoveStatModifiers", "Failed" })
+	--[=[
+		@state RemoveStatModifiers
+		@description Handles the `RemoveStatModifiers` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("RemoveStatModifiers", {
 		OnEnter = function(_, fsm)
@@ -400,6 +452,10 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "RemoveStatusFlags"
 		end,
 	}, { "RemoveStatusFlags" })
+	--[=[
+		@state RemoveStatusFlags
+		@description Handles the `RemoveStatusFlags` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("RemoveStatusFlags", {
 		OnEnter = function(_, fsm)
@@ -407,6 +463,10 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "CleanupRegistry"
 		end,
 	}, { "CleanupRegistry" })
+	--[=[
+		@state CleanupRegistry
+		@description Handles the `CleanupRegistry` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("CleanupRegistry", {
 		OnEnter = function(_, fsm)
@@ -414,6 +474,10 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "BroadcastCleanup"
 		end,
 	}, { "BroadcastCleanup" })
+	--[=[
+		@state BroadcastCleanup
+		@description Handles the `BroadcastCleanup` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("BroadcastCleanup", {
 		OnEnter = function(_, fsm)
@@ -427,10 +491,24 @@ function StatusEffectFSM:RegisterStates()
 			fsm.State = "Expired"
 		end,
 	}, { "Expired" })
+	--[=[
+		@state Expired
+		@description Handles the `Expired` state for `StatusEffectFSM`.
+	]=]
 
 	self:AddState("Expired", function() end, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `StatusEffectFSM`.
+	]=]
+
 	self:AddState("Failed", function() end, {})
 end
+--[=[
+	@description Implements `StatusEffectFSM.OnCleanup`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function StatusEffectFSM:OnCleanup()
 	local context = getContext(self)

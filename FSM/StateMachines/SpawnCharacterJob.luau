@@ -1,7 +1,8 @@
 --!strict
--- @Name SpawnCharacterJob
--- @Author iKrypto
--- @Description Handles character respawn: rebinds CharacterEntity to new character model, re-equips loadout
+--[=[
+	@module SpawnCharacterJob
+	@description Defines the `SpawnCharacterJob` state machine module and its exported API.
+]=]
 
 local SpawnCharacterJob = {
 	Name = "SpawnCharacterJob",
@@ -30,8 +31,18 @@ local function createAndStartStateMachine(
 
 	return machine
 end
+--[=[
+	@description Handles `RegisterStates` for `SpawnCharacterJob`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function SpawnCharacterJob:RegisterStates()
+	--[=[
+		@state Validate
+		@description Handles the `Validate` state for `SpawnCharacterJob`.
+	]=]
+
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			local player = fsm.Player
@@ -49,6 +60,10 @@ function SpawnCharacterJob:RegisterStates()
 			fsm.State = "BindEntity"
 		end,
 	}, { "BindEntity", "Failed" })
+	--[=[
+		@state BindEntity
+		@description Handles the `BindEntity` state for `SpawnCharacterJob`.
+	]=]
 
 	self:AddState("BindEntity", {
 		OnEnter = function(_, fsm)
@@ -79,6 +94,10 @@ function SpawnCharacterJob:RegisterStates()
 			fsm.State = "ApplyLoadout"
 		end,
 	}, { "ApplyLoadout", "Failed" })
+	--[=[
+		@state ApplyLoadout
+		@description Handles the `ApplyLoadout` state for `SpawnCharacterJob`.
+	]=]
 
 	self:AddState("ApplyLoadout", {
 		OnEnter = function(_, fsm)
@@ -119,8 +138,17 @@ function SpawnCharacterJob:RegisterStates()
 			fsm.State = "Completed"
 		end,
 	}, { "Completed", "Failed" })
+	--[=[
+		@state Completed
+		@description Handles the `Completed` terminal state for `SpawnCharacterJob`.
+	]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `SpawnCharacterJob`.
+	]=]
+
 	self:AddState("Failed", function(_fsm) end, {})
 end
 

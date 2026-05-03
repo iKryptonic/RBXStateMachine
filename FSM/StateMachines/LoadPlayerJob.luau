@@ -1,6 +1,8 @@
 --!strict
--- @Name LoadPlayerJob
--- @Description FSM state machine module.
+--[=[
+	@module LoadPlayerJob
+	@description Defines the `LoadPlayerJob` state machine module and its exported API.
+]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
@@ -380,8 +382,18 @@ local function getCommandRegistrationContext(fsm: any)
 
 	return orchestrator, charEntityId, playerEntityId, ownerUserId, isAuthorized
 end
+--[=[
+	@description Handles `RegisterStates` for `LoadPlayerJob`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LoadPlayerJob:RegisterStates()
+	--[=[
+		@state Start
+		@description Handles the `Start` state for `LoadPlayerJob`.
+	]=]
+
 	self:AddState("Start", {
 		OnEnter = function(_, fsm)
 			local userId = fsm.UserId
@@ -393,6 +405,10 @@ function LoadPlayerJob:RegisterStates()
 			fsm.State = "ValidatePlayer"
 		end,
 	}, { "ValidatePlayer", "Failed" })
+	--[=[
+		@state ValidatePlayer
+		@description Handles the `ValidatePlayer` state for `LoadPlayerJob`.
+	]=]
 
 	self:AddState("ValidatePlayer", {
 		OnEnter = function(_, fsm)
@@ -411,6 +427,10 @@ function LoadPlayerJob:RegisterStates()
 			fsm.State = "CreatePlayerEntity"
 		end,
 	}, { "CreatePlayerEntity", "Failed" })
+	--[=[
+		@state CreatePlayerEntity
+		@description Handles the `CreatePlayerEntity` state for `LoadPlayerJob`.
+	]=]
 
 	self:AddState("CreatePlayerEntity", {
 		OnEnter = function(_, fsm)
@@ -444,12 +464,20 @@ function LoadPlayerJob:RegisterStates()
 			fsm.State = "LoadData"
 		end,
 	}, { "LoadData", "Failed" })
+	--[=[
+		@state LoadData
+		@description Handles the `LoadData` state for `LoadPlayerJob`.
+	]=]
 
 	self:AddState("LoadData", {
 		OnEnter = function(_, fsm)
 			fsm.State = "AwaitCharacter"
 		end,
 	}, { "AwaitCharacter", "Failed" })
+	--[=[
+		@state AwaitCharacter
+		@description Handles the `AwaitCharacter` state for `LoadPlayerJob`.
+	]=]
 
 	self:AddState("AwaitCharacter", {
 		OnEnter = function(_, fsm)
@@ -481,6 +509,10 @@ function LoadPlayerJob:RegisterStates()
 			end
 		end,
 	}, { "CreateCharacterEntity", "Failed" })
+	--[=[
+		@state CreateCharacterEntity
+		@description Handles the `CreateCharacterEntity` state for `LoadPlayerJob`.
+	]=]
 
 	self:AddState("CreateCharacterEntity", {
 		OnEnter = function(_, fsm)
@@ -541,12 +573,20 @@ function LoadPlayerJob:RegisterStates()
 			fsm.State = "RegisterCommands"
 		end,
 	}, { "RegisterCommands", "Failed" })
+	--[=[
+		@state RegisterCommands
+		@description Handles the `RegisterCommands` state for `LoadPlayerJob`.
+	]=]
 
 	self:AddState("RegisterCommands", {
 		OnEnter = function(_, fsm)
 			fsm.State = "RegisterCombatCommands"
 		end,
 	}, { "RegisterCombatCommands", "Failed" })
+	--[=[
+		@state RegisterCombatCommands
+		@description Handles the `RegisterCombatCommands` state for `LoadPlayerJob`.
+	]=]
 
 	self:AddState("RegisterCombatCommands", {
 		OnEnter = function(_, fsm)
@@ -654,6 +694,10 @@ function LoadPlayerJob:RegisterStates()
 			fsm.State = "RegisterEquipCommands"
 		end,
 	}, { "RegisterEquipCommands", "Failed" })
+	--[=[
+		@state RegisterEquipCommands
+		@description Handles the `RegisterEquipCommands` state for `LoadPlayerJob`.
+	]=]
 
 	self:AddState("RegisterEquipCommands", {
 		OnEnter = function(_, fsm)
@@ -802,6 +846,10 @@ function LoadPlayerJob:RegisterStates()
 			fsm.State = "RegisterAbilityCommands"
 		end,
 	}, { "RegisterAbilityCommands", "Failed" })
+	--[=[
+		@state RegisterAbilityCommands
+		@description Handles the `RegisterAbilityCommands` state for `LoadPlayerJob`.
+	]=]
 
 	self:AddState("RegisterAbilityCommands", {
 		OnEnter = function(_, fsm)
@@ -1031,6 +1079,10 @@ function LoadPlayerJob:RegisterStates()
 			fsm.State = "RegisterUtilityCommands"
 		end,
 	}, { "RegisterUtilityCommands", "Failed" })
+	--[=[
+		@state RegisterUtilityCommands
+		@description Handles the `RegisterUtilityCommands` state for `LoadPlayerJob`.
+	]=]
 
 	self:AddState("RegisterUtilityCommands", {
 		OnEnter = function(_, fsm)
@@ -1169,6 +1221,10 @@ function LoadPlayerJob:RegisterStates()
 			fsm.State = "PublishLoaded"
 		end,
 	}, { "PublishLoaded", "Failed" })
+	--[=[
+		@state PublishLoaded
+		@description Handles the `PublishLoaded` state for `LoadPlayerJob`.
+	]=]
 
 	self:AddState("PublishLoaded", {
 		OnEnter = function(_, fsm)
@@ -1179,8 +1235,17 @@ function LoadPlayerJob:RegisterStates()
 			fsm.State = "Completed"
 		end,
 	}, { "Completed", "Failed" })
+	--[=[
+		@state Completed
+		@description Handles the `Completed` terminal state for `LoadPlayerJob`.
+	]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `LoadPlayerJob`.
+	]=]
+
 	self:AddState("Failed", function(_fsm) end, {})
 end
 

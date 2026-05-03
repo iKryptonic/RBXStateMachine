@@ -1,7 +1,8 @@
 --!nocheck
--- @Name Test_EquipJob
--- @Author iKrypto
--- @Description Unit tests for EquipJob module loading and request validation flow.
+--[=[
+	@module Test_EquipJob
+	@description Defines the `Test_EquipJob` state machine module and its exported API.
+]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
@@ -113,6 +114,11 @@ local function captureStates(job)
 	job:RegisterStates()
 	return states
 end
+--[=[
+	@description Implements `Test_EquipJob.Run`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Test_EquipJob.Run()
 	local tester = TestBase.new("EquipJob")
@@ -183,6 +189,12 @@ function Test_EquipJob.Run()
 				Failure = nil,
 				State = nil,
 			}
+			--[=[
+				@description Implements `fsm.Fail`.
+				@param reason any -- `reason` input parameter.
+				@return any -- Return value produced by the implementation, if any.
+			]=]
+
 			function fsm:Fail(reason)
 				self.Failure = reason
 			end

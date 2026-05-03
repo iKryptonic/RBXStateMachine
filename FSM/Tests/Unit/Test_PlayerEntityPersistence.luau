@@ -1,7 +1,8 @@
 --!nocheck
--- @Name Test_PlayerEntityPersistence
--- @Author iKrypto
--- @Description Unit tests for PlayerEntity persistence schema and filtered serialize/deserialize behavior.
+--[=[
+	@module Test_PlayerEntityPersistence
+	@description Defines the `Test_PlayerEntityPersistence` module and its exported API.
+]=]
 
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)
 
@@ -55,6 +56,11 @@ local function deserializePersisted(schema, entity, payload)
 	end
 	return entity
 end
+--[=[
+	@description Implements `Test_PlayerEntityPersistence.Run`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Test_PlayerEntityPersistence.Run()
 	local tester = TestBase.new("PlayerEntityPersistence")

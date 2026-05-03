@@ -1,8 +1,8 @@
 --!strict
--- @Name ServiceManager/Tests/RunAllTests.luau
--- @Author iKrypto
--- @Description Loads every *.spec module in Tests/Specs (which registers their
--- spec function with TestRunner) then invokes loadAndRun for repeatable runs.
+--[=[
+	@module RunAllTests
+	@description Defines the `RunAllTests` module and its exported API.
+]=]
 
 local TestRunner = require(script.Parent.TestRunner)
 

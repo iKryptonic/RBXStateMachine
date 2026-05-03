@@ -1,7 +1,8 @@
 --!strict
--- @Name ServiceManager/Tests/TestRunner.luau
--- @Author iKrypto
--- @Description Minimal expect/describe/it framework for in-game tests.
+--[=[
+	@module TestRunner
+	@description Defines the `TestRunner` module and its exported API.
+]=]
 
 local TestRunner = {}
 
@@ -56,51 +57,102 @@ local function valueToString(v: any): string
 	end
 	return tostring(v)
 end
+--[=[
+	@description Implements `TestRunner.expect`.
+	@param actual any -- `actual` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TestRunner.expect(actual: any): any
 	local matcher = {}
+	--[=[
+		@description Implements `matcher.toEqual`.
+		@param expected any -- `expected` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toEqual(expected: any)
 		if not deepEqual(actual, expected) then
 			error(string.format("Expected %s to equal %s", valueToString(actual), valueToString(expected)), 2)
 		end
 	end
+	--[=[
+		@description Implements `matcher.toBe`.
+		@param expected any -- `expected` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toBe(expected: any)
 		if actual ~= expected then
 			error(string.format("Expected %s to be %s (identity)", valueToString(actual), valueToString(expected)), 2)
 		end
 	end
+	--[=[
+		@description Implements `matcher.toBeNil`.
+		@param none nil -- This function does not accept explicit parameters.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toBeNil()
 		if actual ~= nil then error("Expected nil, got " .. valueToString(actual), 2) end
 	end
+	--[=[
+		@description Implements `matcher.toBeTruthy`.
+		@param none nil -- This function does not accept explicit parameters.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toBeTruthy()
 		if not actual then error("Expected truthy, got " .. valueToString(actual), 2) end
 	end
+	--[=[
+		@description Implements `matcher.toBeFalsy`.
+		@param none nil -- This function does not accept explicit parameters.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toBeFalsy()
 		if actual then error("Expected falsy, got " .. valueToString(actual), 2) end
 	end
+	--[=[
+		@description Implements `matcher.toBeGreaterThan`.
+		@param n number -- `n` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toBeGreaterThan(n: number)
 		if type(actual) ~= "number" or actual <= n then
 			error(string.format("Expected %s > %s", valueToString(actual), valueToString(n)), 2)
 		end
 	end
+	--[=[
+		@description Implements `matcher.toBeGreaterThanOrEqual`.
+		@param n number -- `n` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toBeGreaterThanOrEqual(n: number)
 		if type(actual) ~= "number" or actual < n then
 			error(string.format("Expected %s >= %s", valueToString(actual), valueToString(n)), 2)
 		end
 	end
+	--[=[
+		@description Implements `matcher.toBeLessThan`.
+		@param n number -- `n` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toBeLessThan(n: number)
 		if type(actual) ~= "number" or actual >= n then
 			error(string.format("Expected %s < %s", valueToString(actual), valueToString(n)), 2)
 		end
 	end
+	--[=[
+		@description Implements `matcher.toBeCloseTo`.
+		@param n number -- `n` input parameter.
+		@param tolerance number? -- `tolerance` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toBeCloseTo(n: number, tolerance: number?)
 		local tol = tolerance or 0.001
@@ -108,6 +160,11 @@ function TestRunner.expect(actual: any): any
 			error(string.format("Expected %s ≈ %s (tol %s)", valueToString(actual), valueToString(n), valueToString(tol)), 2)
 		end
 	end
+	--[=[
+		@description Implements `matcher.toContain`.
+		@param needle any -- `needle` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toContain(needle: any)
 		if type(actual) == "string" then
@@ -123,6 +180,12 @@ function TestRunner.expect(actual: any): any
 			error("toContain requires string or table actual", 2)
 		end
 	end
+	--[=[
+		@description Implements `matcher.toHaveProperty`.
+		@param key string -- `key` input parameter.
+		@param value any? -- `value` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toHaveProperty(key: string, value: any?)
 		if type(actual) ~= "table" then
@@ -135,6 +198,11 @@ function TestRunner.expect(actual: any): any
 			error(string.format("Expected property %s = %s, got %s", key, valueToString(value), valueToString(actual[key])), 2)
 		end
 	end
+	--[=[
+		@description Implements `matcher.toHaveLength`.
+		@param n number -- `n` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toHaveLength(n: number)
 		if type(actual) ~= "table" and type(actual) ~= "string" then
@@ -145,6 +213,11 @@ function TestRunner.expect(actual: any): any
 			error(string.format("Expected length %d, got %d", n, len), 2)
 		end
 	end
+	--[=[
+		@description Implements `matcher.toThrow`.
+		@param messagePattern string? -- `messagePattern` input parameter.
+		@return any -- Return value produced by the implementation, if any.
+	]=]
 
 	function matcher.toThrow(messagePattern: string?)
 		if type(actual) ~= "function" then
@@ -172,10 +245,12 @@ function TestRunner.expect(actual: any): any
 
 	return matcher
 end
-
--- ══════════════════════════════════════════════════════════════
--- SUITES
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `TestRunner.describe`.
+	@param name string -- `name` input parameter.
+	@param fn () -> () -- `fn` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TestRunner.describe(name: string, fn: () -> ())
 	local suite: Suite = {
@@ -193,6 +268,12 @@ function TestRunner.describe(name: string, fn: () -> ())
 		warn(string.format("[TestRunner] describe '%s' setup error: %s", name, tostring(err)))
 	end
 end
+--[=[
+	@description Implements `TestRunner.it`.
+	@param name string -- `name` input parameter.
+	@param fn () -> () -- `fn` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TestRunner.it(name: string, fn: () -> ())
 	table.insert(_currentSuite.cases, { name = name, fn = fn })
@@ -239,11 +320,12 @@ local function runSuite(suite: Suite, depth: number, prefix: string, results: { 
 		runSuite(child, depth + 1, prefix .. suite.name .. " > ", results)
 	end
 end
-
 --[=[
-	Run all registered suites. Prints results to console and returns a summary.
-	@return summary table with pass/fail/error counts and timing
+	@description Implements `TestRunner.run`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return { -- Return value produced by the implementation, if any.
 ]=]
+
 function TestRunner.run(): {
 	total: number,
 	passed: number,
@@ -284,10 +366,12 @@ function TestRunner.run(): {
 		results = results,
 	}
 end
-
 --[=[
-	Reset the runner — useful when re-running tests after hot-reload.
+	@description Implements `TestRunner.reset`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function TestRunner.reset()
 	_rootSuite = {
 		name = "_root",
@@ -304,6 +388,11 @@ end
 	after reset() — bypassing Lua's require cache.
 ]=]
 local _registeredSpecs: { (any) -> () } = {}
+--[=[
+	@description Implements `TestRunner.register`.
+	@param specFn (any) -> () -- `specFn` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TestRunner.register(specFn: (any) -> ())
 	if type(specFn) ~= "function" then return end
@@ -313,6 +402,11 @@ function TestRunner.register(specFn: (any) -> ())
 	end
 	table.insert(_registeredSpecs, specFn)
 end
+--[=[
+	@description Implements `TestRunner.loadAndRun`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return { -- Return value produced by the implementation, if any.
+]=]
 
 function TestRunner.loadAndRun(): {
 	total: number,

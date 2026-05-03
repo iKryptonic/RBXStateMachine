@@ -1,7 +1,8 @@
 --!strict
--- @Name CharacterSetupFSM
--- @Author Copilot
--- @Description Foundation client FSM for deterministic character bootstrap and teardown.
+--[=[
+	@module CharacterSetupFSM
+	@description Defines the `CharacterSetupFSM` state machine module and its exported API.
+]=]
 
 local CharacterSetupFSM = {
 	Name = "CharacterSetupFSM",
@@ -104,8 +105,18 @@ local function safeInvoke(factory: any, fsm: any, ...: any): any
 	end
 	return result
 end
+--[=[
+	@description Handles `RegisterStates` for `CharacterSetupFSM`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function CharacterSetupFSM:RegisterStates()
+	--[=[
+		@state Validating
+		@description Handles the `Validating` state for `CharacterSetupFSM`.
+	]=]
+
 	self:AddState("Validating", {
 		OnEnter = function(_, fsm)
 			local character = getCharacterModel(fsm)
@@ -152,6 +163,10 @@ function CharacterSetupFSM:RegisterStates()
 			fsm.State = "DisablingDefaults"
 		end,
 	}, { "DisablingDefaults", "Failed" })
+	--[=[
+		@state DisablingDefaults
+		@description Handles the `DisablingDefaults` state for `CharacterSetupFSM`.
+	]=]
 
 	self:AddState("DisablingDefaults", {
 		OnEnter = function(_, fsm)
@@ -180,6 +195,10 @@ function CharacterSetupFSM:RegisterStates()
 			fsm.State = "AwaitingEntities"
 		end,
 	}, { "AwaitingEntities", "Failed" })
+	--[=[
+		@state AwaitingEntities
+		@description Handles the `AwaitingEntities` state for `CharacterSetupFSM`.
+	]=]
 
 	self:AddState("AwaitingEntities", {
 		OnEnter = function(_, fsm)
@@ -220,6 +239,10 @@ function CharacterSetupFSM:RegisterStates()
 			end
 		end,
 	}, { "InitControllers", "Failed" })
+	--[=[
+		@state InitControllers
+		@description Handles the `InitControllers` state for `CharacterSetupFSM`.
+	]=]
 
 	self:AddState("InitControllers", {
 		OnEnter = function(_, fsm)
@@ -242,6 +265,10 @@ function CharacterSetupFSM:RegisterStates()
 			fsm.State = "InitFSMs"
 		end,
 	}, { "InitFSMs", "Failed" })
+	--[=[
+		@state InitFSMs
+		@description Handles the `InitFSMs` state for `CharacterSetupFSM`.
+	]=]
 
 	self:AddState("InitFSMs", {
 		OnEnter = function(_, fsm)
@@ -263,6 +290,10 @@ function CharacterSetupFSM:RegisterStates()
 			fsm.State = "BindingEvents"
 		end,
 	}, { "BindingEvents", "Failed" })
+	--[=[
+		@state BindingEvents
+		@description Handles the `BindingEvents` state for `CharacterSetupFSM`.
+	]=]
 
 	self:AddState("BindingEvents", {
 		OnEnter = function(_, fsm)
@@ -274,6 +305,10 @@ function CharacterSetupFSM:RegisterStates()
 			fsm.State = "Active"
 		end,
 	}, { "Active", "Failed" })
+	--[=[
+		@state Active
+		@description Handles the `Active` state for `CharacterSetupFSM`.
+	]=]
 
 	self:AddState("Active", {
 		OnEnter = function(_, fsm)
@@ -294,6 +329,10 @@ function CharacterSetupFSM:RegisterStates()
 			end
 		end,
 	}, { "TearingDown", "Failed" })
+	--[=[
+		@state TearingDown
+		@description Handles the `TearingDown` state for `CharacterSetupFSM`.
+	]=]
 
 	self:AddState("TearingDown", {
 		OnEnter = function(_, fsm)
@@ -325,6 +364,10 @@ function CharacterSetupFSM:RegisterStates()
 			fsm.State = "Completed"
 		end,
 	}, { "Completed" })
+	--[=[
+		@state Completed
+		@description Handles the `Completed` terminal state for `CharacterSetupFSM`.
+	]=]
 
 	self:AddState("Completed", {
 		OnEnter = function(_, fsm)
@@ -334,6 +377,10 @@ function CharacterSetupFSM:RegisterStates()
 			})
 		end,
 	}, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `CharacterSetupFSM`.
+	]=]
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm, reason)

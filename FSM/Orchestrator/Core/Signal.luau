@@ -1,23 +1,29 @@
 --!strict
--- @Name Signal
--- @Author iKrypto (inspired by FastSignal)
--- @Description High-performance signal implementation to replace BindableEvents.
+--[=[
+	@module Signal
+	@description Defines the `Signal` module and its exported API.
+]=]
 
 local Signal = {}
 Signal.__index = Signal
+--[=[
+	@description Implements `Signal.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- @description Creates a new Signal.
--- @returns A new Signal.
 function Signal.new(): any
 	local self = setmetatable({
 		_handlers = {},
 	}, Signal)
 	return (self :: any)
 end
+--[=[
+	@description Implements `Signal.Connect`.
+	@param handler (...any) -> () -- `handler` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- @description Connects a handler to the signal.
--- @param handler The handler to connect.
--- @returns A connection object.
 function Signal:Connect(handler: (...any) -> ()): any
 	local connection = {
 		_handler = handler,
@@ -37,10 +43,12 @@ function Signal:Connect(handler: (...any) -> ()): any
 	table.insert(self._handlers, connection)
 	return (connection :: any)	
 end
+--[=[
+	@description Implements `Signal.Once`.
+	@param handler (...any) -> () -- `handler` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- @description Connects a handler to the signal that will only fire once.
--- @param handler The handler to connect.
--- @returns A connection object.
 function Signal:Once(handler: (...any) -> ())
 	local connection
 	connection = self:Connect(function(...)
@@ -49,10 +57,12 @@ function Signal:Once(handler: (...any) -> ())
 	end)
 	return connection
 end
+--[=[
+	@description Implements `Signal.Fire`.
+	@param ... any -- `...` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- @description Fires the signal with the given arguments.
--- @param ... The arguments to fire the signal with.
--- @returns void
 function Signal:Fire(...: any)
 	-- Snapshot the handler list so that Disconnect/Destroy during firing is safe
 	local handlers = self._handlers
@@ -64,9 +74,12 @@ function Signal:Fire(...: any)
 		end
 	end
 end
+--[=[
+	@description Implements `Signal.Wait`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return ...any -- Return value produced by the implementation, if any.
+]=]
 
--- @description Waits for the signal to fire and returns the arguments.
--- @returns The arguments that the signal was fired with.
 function Signal:Wait(): ...any
 	local thread = coroutine.running()
 	self:Once(function(...)
@@ -74,9 +87,12 @@ function Signal:Wait(): ...any
 	end)
 	return coroutine.yield()
 end
+--[=[
+	@description Implements `Signal.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- @description Destroys the signal and all its connections.
--- @returns void
 function Signal:Destroy()
 	for _, conn in ipairs(self._handlers) do
 		conn._signal = nil -- Break reference

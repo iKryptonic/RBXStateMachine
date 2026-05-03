@@ -134,20 +134,18 @@ local function ensureEntitiesAlive(fsm): (any?, any?, any?)
 	end
 	return charEntity, playerEntity, character
 end
-
 --[=[
-    @description Registers every UnEquipJob state, rollback edge, and terminal no-op with the FSM base class.
-    @return nil -- Mutates the module definition by adding states.
+	@description Handles `RegisterStates` for `UnEquipJob`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function UnEquipJob:RegisterStates()
-	--[=[
-    @state ValidateRequest
-    @description Validates the character entity, normalizes the requested hand, and seeds request context for the rest of the unequip pipeline.
-    @transitions Transitions to `AcquireEquipLock` when the request is well-formed; otherwise transitions to `Failed`.
-    @failure Fails immediately when the character entity cannot be found or the requested hand is neither `Right` nor `Left`.
-    @reads `fsm.CharacterEntityId`, `fsm.Hand`.
-    @writes `fsm.Context.Hand`.
+--[=[
+	@state ValidateRequest
+	@description Handles the `ValidateRequest` state for `UnEquipJob`.
 ]=]
+
 self:AddState("ValidateRequest", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -167,15 +165,11 @@ self:AddState("ValidateRequest", {
 			fsm.State = "AcquireEquipLock"
 		end,
 	}, { "AcquireEquipLock", "Failed" })
-
-	--[=[
-    @state AcquireEquipLock
-    @description Serializes unequips per hand by cloning the character `EquipLock` table and retrying for a short period while another job owns the requested hand.
-    @transitions Transitions to `ResolveExistingItem` after this job marks the hand as locked; may self-transition back to `AcquireEquipLock` while waiting; transitions to `Failed` if the character disappears or the retry budget is exhausted.
-    @failure Fails when the character no longer exists or when the lock remains occupied after five retries.
-    @reads `fsm.CharacterEntityId`, `fsm.Hand`, `fsm.Context._equipLockRetryCount`, characterEntity.`EquipLock`.
-    @writes `fsm.Context._equipLockRetryCount`, `_equipLockHeld`, `fsm.WaitSpan`, characterEntity.`EquipLock`.
+--[=[
+	@state AcquireEquipLock
+	@description Handles the `AcquireEquipLock` state for `UnEquipJob`.
 ]=]
+
 self:AddState("AcquireEquipLock", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -207,15 +201,11 @@ self:AddState("AcquireEquipLock", {
 			fsm.State = "ResolveExistingItem"
 		end,
 	}, { "ResolveExistingItem", "Rollback", "Failed" })
-
-	--[=[
-    @state ResolveExistingItem
-    @description Resolves the live hand part, current handle weld, mounted item model, optional item metadata, and best-effort item id so later states can decide whether to stow, drop, or just clean up entity state.
-    @transitions Transitions to `DoUnEquip` when live entities and the hand part are available; otherwise queues `Rollback`.
-    @failure Queues rollback if the entities disappear or the hand part cannot be resolved from the live character.
-    @reads `fsm.Hand`, live entities from `ensureEntitiesAlive(...)`, current equipped property, hand weld and mounted model.
-    @writes `fsm.Context._resolvedHandPart`, `_resolvedWeld`, `_resolvedItem`, `_resolvedItemData`, `_resolvedItemId`.
+--[=[
+	@state ResolveExistingItem
+	@description Handles the `ResolveExistingItem` state for `UnEquipJob`.
 ]=]
+
 self:AddState("ResolveExistingItem", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
@@ -249,15 +239,11 @@ self:AddState("ResolveExistingItem", {
 			fsm.State = "DoUnEquip"
 		end,
 	}, { "DoUnEquip", "Rollback", "Failed" })
-
-	--[=[
-    @state DoUnEquip
-    @description Performs the physical unequip action by either dropping the mounted item when forced or non-stowable, or stowing it onto the character and marking `_wasStowed` so logical equipped state can remain intact.
-    @transitions Transitions to `CommitState` after the physical action or warning path runs; otherwise queues `Rollback` when live entities vanish first.
-    @failure Queues rollback if live entities disappear before the physical action. Missing weld or item does not fail; the state logs a warning and still advances so logical state can be cleaned up.
-    @reads `fsm.Context._resolvedWeld`, `_resolvedItem`, `_resolvedItemData`, `fsm.Context.ForceRemove`, live entities from `ensureEntitiesAlive(...)`.
-    @writes Physical item placement through `DropItem(...)` or `StowItem(...)`; `fsm.Context._wasStowed` when a stow operation succeeds.
+--[=[
+	@state DoUnEquip
+	@description Handles the `DoUnEquip` state for `UnEquipJob`.
 ]=]
+
 self:AddState("DoUnEquip", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
@@ -297,15 +283,11 @@ self:AddState("DoUnEquip", {
 			fsm.State = "CommitState"
 		end,
 	}, { "CommitState", "Rollback", "Failed" })
-
-	--[=[
-    @state CommitState
-    @description Commits replicated character and player state based on whether the physical item was stowed. Stowed items remain logically equipped, while dropped items clear equipped fields and are returned to inventory when an item id is known.
-    @transitions Transitions to `EmitIntent` after entity updates are pushed; otherwise queues `Rollback`.
-    @failure Queues rollback if the character, player, or live model disappears before state commit. There is no restoration inside rollback, so previously written physical changes remain if failure occurs after `DoUnEquip`.
-    @reads `fsm.Hand`, `fsm.Context._wasStowed`, `_resolvedItemId`, live entities from `ensureEntitiesAlive(...)`, playerEntity.`Equipped`, `Inventory`, `WeaponEqp`.
-    @writes When `_wasStowed` is true, only replication updates are pushed. Otherwise character equipped property, playerEntity.`Equipped`, possible inventory insertion, and player entity replication are updated.
+--[=[
+	@state CommitState
+	@description Handles the `CommitState` state for `UnEquipJob`.
 ]=]
+
 self:AddState("CommitState", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
@@ -350,15 +332,11 @@ self:AddState("CommitState", {
 			fsm.State = "EmitIntent"
 		end,
 	}, { "EmitIntent", "Rollback", "Failed" })
-
-	--[=[
-    @state EmitIntent
-    @description Appends the `UnEquip` intent so clients can mirror the authoritative unequip action after entity state has been committed.
-    @transitions Transitions to `ReleaseEquipLock` when the intent is appended; otherwise queues `Rollback`.
-    @failure Queues rollback if the character, player, or live model disappears before intent emission.
-    @reads `fsm.Hand`, `fsm.Context._resolvedItemId`, live entities from `ensureEntitiesAlive(...)`.
-    @writes Character entity intent queue through `IntentSchema.AppendIntent(...)`.
+--[=[
+	@state EmitIntent
+	@description Handles the `EmitIntent` state for `UnEquipJob`.
 ]=]
+
 self:AddState("EmitIntent", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
@@ -380,15 +358,11 @@ self:AddState("EmitIntent", {
 			fsm.State = "ReleaseEquipLock"
 		end,
 	}, { "ReleaseEquipLock", "Rollback", "Failed" })
-
-	--[=[
-    @state ReleaseEquipLock
-    @description Clears the per-hand equip lock if this job still owns it, then chooses `Completed` or `Failed` based on whether rollback stored `_failureReason`.
-    @transitions Transitions to `Completed` when no failure reason exists, otherwise transitions to `Failed`.
-    @failure Even after rollback, this state still releases the lock and logs `_failureReason` before entering `Failed`.
-    @reads `fsm.CharacterEntityId`, `fsm.Hand`, `fsm.Context._equipLockHeld`, `fsm.Context._failureReason`, characterEntity.`EquipLock`.
-    @writes Character entity.`EquipLock`, `fsm.Context._equipLockHeld`; emits an error log when `_failureReason` is present.
+--[=[
+	@state ReleaseEquipLock
+	@description Handles the `ReleaseEquipLock` state for `UnEquipJob`.
 ]=]
+
 self:AddState("ReleaseEquipLock", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -411,38 +385,27 @@ self:AddState("ReleaseEquipLock", {
 			end
 		end,
 	}, { "Completed", "Failed" })
-
-	--[=[
-    @state Rollback
-    @description Minimal rollback state that currently performs no physical restoration and simply advances to lock release.
-    @transitions Always transitions to `ReleaseEquipLock`.
-    @failure Cleanup is limited to lock release; any prior drop or stow action is not undone here.
-    @reads Stored `_failureReason` and lock-ownership context from earlier states.
-    @writes No additional fields are written beyond the subsequent state transition.
+--[=[
+	@state Rollback
+	@description Handles the `Rollback` state for `UnEquipJob`.
 ]=]
+
 self:AddState("Rollback", {
 		OnEnter = function(_, fsm)
 			fsm.State = "ReleaseEquipLock"
 		end,
 	}, { "ReleaseEquipLock" })
+--[=[
+	@state Completed
+	@description Handles the `Completed` terminal state for `UnEquipJob`.
+]=]
 
-	--[=[
-    @state Completed
-    @description Terminal success state for the unequip pipeline. No additional work runs here.
-    @transitions No outbound transitions; the job stops here.
-    @failure All required entity updates, optional stow handling, and lock release have already completed successfully.
-    @reads No additional fields are read.
-    @writes No additional fields are written.
-]=]
 self:AddState("Completed", function(_fsm) end, {})
-	--[=[
-    @state Failed
-    @description Terminal failure state reached after rollback and lock release finish.
-    @transitions No outbound transitions; the job stops here.
-    @failure The rollback path only guarantees lock release, so physical stow/drop effects from earlier states may already be visible when the job fails.
-    @reads Previously stored `fsm.Context._failureReason` and related rollback context.
-    @writes No additional fields are written by the state itself.
+--[=[
+	@state Failed
+	@description Handles the `Failed` terminal state for `UnEquipJob`.
 ]=]
+
 self:AddState("Failed", function(_fsm) end, {})
 end
 

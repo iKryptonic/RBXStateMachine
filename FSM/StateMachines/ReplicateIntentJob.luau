@@ -144,20 +144,18 @@ local function validateAllowedPayload(kind: string, payload: { [string]: any }, 
 
 	return nil
 end
-
 --[=[
-    @description Registers every ReplicateIntentJob state and terminal no-op with the FSM base class.
-    @return nil -- Mutates the module definition by adding states.
+	@description Handles `RegisterStates` for `ReplicateIntentJob`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function ReplicateIntentJob:RegisterStates()
-	--[=[
-    @state Validate
-    @description Verifies the orchestrator, target character id, requested kind, target entity, and allow-list policy for that kind before caching the character entity for later stages.
-    @transitions Transitions to `NormalizePayload` when the request is allowed; otherwise transitions to `Failed`.
-    @failure Fails immediately when the orchestrator is missing, the target entity id or kind is blank, the character entity cannot be resolved, the kind is not allowed, or the kind is marked server-only.
-    @reads `fsm.CharacterEntityId`, `fsm.Kind`, resolved character entity, allow-list policy lookups.
-    @writes `fsm.Context._characterEntity`.
+--[=[
+	@state Validate
+	@description Handles the `Validate` state for `ReplicateIntentJob`.
 ]=]
+
 self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -196,15 +194,11 @@ self:AddState("Validate", {
 			fsm.State = "NormalizePayload"
 		end,
 	}, { "NormalizePayload", "Failed" })
-
-	--[=[
-    @state NormalizePayload
-    @description Sanitizes the raw payload, applies per-kind field aliases and default values, and caches the normalized table that will be allow-list checked and replicated.
-    @transitions Transitions to `CheckAllowList` after payload normalization; otherwise transitions to `Failed`.
-    @failure Fails when the payload is not a table, contains cycles, non-string keys, NaN values, non-serializable values, or does not pass `IntentSchema.ValidatePayload(...)`.
-    @reads `fsm.Payload`, `fsm.Kind`, schema clamp/validate helpers, raw payload fields such as `AnimationName`, `EffectName`, `Id`, `Speed`, `FadeTime`, `Volume`, `Pitch`.
-    @writes `fsm.Context._normalizedPayload`.
+--[=[
+	@state NormalizePayload
+	@description Handles the `NormalizePayload` state for `ReplicateIntentJob`.
 ]=]
+
 self:AddState("NormalizePayload", {
 		OnEnter = function(_, fsm)
 			local intentSchema = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(), "IntentSchema")
@@ -242,15 +236,11 @@ self:AddState("NormalizePayload", {
 			fsm.State = "CheckAllowList"
 		end,
 	}, { "CheckAllowList", "Failed" })
-
-	--[=[
-    @state CheckAllowList
-    @description Enforces allow-list membership on the normalized payload for the requested kind before any entity mutation occurs.
-    @transitions Transitions to `ApplyToEntity` when the normalized payload is still allowed; otherwise transitions to `Failed`.
-    @failure Fails when normalization did not produce a table or when the payload references an animation, effect, or sound that is not allow-listed.
-    @reads `fsm.Kind`, `fsm.Context._normalizedPayload`, shared allow-list tables.
-    @writes No new context fields; only control flow changes.
+--[=[
+	@state CheckAllowList
+	@description Handles the `CheckAllowList` state for `ReplicateIntentJob`.
 ]=]
+
 self:AddState("CheckAllowList", {
 		OnEnter = function(_, fsm)
 			local AllowLists = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(), "AllowLists")
@@ -269,15 +259,11 @@ self:AddState("CheckAllowList", {
 			fsm.State = "ApplyToEntity"
 		end,
 	}, { "ApplyToEntity", "Failed" })
-
-	--[=[
-    @state ApplyToEntity
-    @description Appends the sanitized client intent to the character entity using the caller as both source and target so downstream replication systems can fan it out.
-    @transitions Transitions to `Completed` when the intent is appended; otherwise transitions to `Failed`.
-    @failure Fails when the cached character entity or normalized payload is missing before append time.
-    @reads `fsm.Kind`, `fsm.CharacterEntityId`, `fsm.Context._characterEntity`, `fsm.Context._normalizedPayload`.
-    @writes Character entity intent queue through `IntentSchema.AppendIntent(...)`.
+--[=[
+	@state ApplyToEntity
+	@description Handles the `ApplyToEntity` state for `ReplicateIntentJob`.
 ]=]
+
 self:AddState("ApplyToEntity", {
 		OnEnter = function(_, fsm)
 			local IntentSchema = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(), "IntentSchema")
@@ -297,31 +283,25 @@ self:AddState("ApplyToEntity", {
 			fsm.State = "Completed"
 		end,
 	}, { "Completed", "Failed" })
+--[=[
+	@state Completed
+	@description Handles the `Completed` terminal state for `ReplicateIntentJob`.
+]=]
 
-	--[=[
-    @state Completed
-    @description Terminal success state for the replication pipeline. No additional work runs here.
-    @transitions No outbound transitions; the job stops here.
-    @failure No rollback is needed because the only mutation was the final append that already succeeded.
-    @reads No additional fields are read.
-    @writes No additional fields are written.
-]=]
 self:AddState("Completed", function() end, {})
-	--[=[
-    @state Failed
-    @description Terminal failure state reached when validation or normalization rejects the client request.
-    @transitions No outbound transitions; the job stops here.
-    @failure No rollback path is necessary because entity mutation is deferred until `ApplyToEntity` and failures before that point are side-effect free.
-    @reads Previously supplied failure context from `fsm:Fail(...)`.
-    @writes No additional fields are written by the state itself.
+--[=[
+	@state Failed
+	@description Handles the `Failed` terminal state for `ReplicateIntentJob`.
 ]=]
+
 self:AddState("Failed", function() end, {})
 end
-
 --[=[
-    @description Runs post-shutdown cleanup for the replication job. No additional cleanup is required because failed requests never mutate state and successful requests commit immediately.
-    @return nil -- No extra cleanup work is performed.
+	@description Implements `ReplicateIntentJob.OnCleanup`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function ReplicateIntentJob:OnCleanup() end
 
 return ReplicateIntentJob

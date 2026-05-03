@@ -23,41 +23,35 @@ local function deductResource(charEntity: any, field: string, cost: number): boo
 	charEntity[field] = current - cost
 	return true
 end
-
 --[=[
-	@description Attempts to spend stamina from the character entity. This is a thin wrapper over deductResource for callers that want a stamina-specific API.
-	@param charEntity any -- Character entity table that owns the Stamina field.
-	@param cost number -- Stamina cost to spend.
-	@return boolean -- True when Stamina was reduced, or false when available stamina is lower than cost.
-	@reads charEntity.Stamina
-	@writes charEntity.Stamina
+	@description Implements `ResourceHelpers.deductStamina`.
+	@param charEntity any -- `charEntity` input parameter.
+	@param cost number -- `cost` input parameter.
+	@return boolean -- Return value produced by the implementation, if any.
 ]=]
+
 function ResourceHelpers.deductStamina(charEntity: any, cost: number): boolean
 	return deductResource(charEntity, "Stamina", cost)
 end
-
 --[=[
-	@description Attempts to spend mana from the character entity. This is a thin wrapper over deductResource for callers that want a mana-specific API.
-	@param charEntity any -- Character entity table that owns the Mana field.
-	@param cost number -- Mana cost to spend.
-	@return boolean -- True when Mana was reduced, or false when available mana is lower than cost.
-	@reads charEntity.Mana
-	@writes charEntity.Mana
+	@description Implements `ResourceHelpers.deductMana`.
+	@param charEntity any -- `charEntity` input parameter.
+	@param cost number -- `cost` input parameter.
+	@return boolean -- Return value produced by the implementation, if any.
 ]=]
+
 function ResourceHelpers.deductMana(charEntity: any, cost: number): boolean
 	return deductResource(charEntity, "Mana", cost)
 end
-
 --[=[
-	@description Restores a resource field by a positive amount and clamps the result to the entity's configured maximum field. Missing or invalid current and max values are treated as zero.
-	@param charEntity any -- Character entity table whose resource field will be restored.
-	@param field string -- Entity field name containing the current resource value.
-	@param amount number -- Amount to add before clamping to the maximum.
-	@param maxField string -- Entity field name containing the resource cap.
-	@return number -- New clamped resource value written back to the entity.
-	@reads charEntity[field], charEntity[maxField]
-	@writes charEntity[field]
+	@description Implements `ResourceHelpers.restoreResource`.
+	@param charEntity any -- `charEntity` input parameter.
+	@param field string -- `field` input parameter.
+	@param amount number -- `amount` input parameter.
+	@param maxField string -- `maxField` input parameter.
+	@return number -- Return value produced by the implementation, if any.
 ]=]
+
 function ResourceHelpers.restoreResource(charEntity: any, field: string, amount: number, maxField: string): number
 	local current = tonumber(charEntity[field]) or 0
 	local max = tonumber(charEntity[maxField]) or 0
@@ -65,14 +59,12 @@ function ResourceHelpers.restoreResource(charEntity: any, field: string, amount:
 	charEntity[field] = newVal
 	return newVal
 end
-
 --[=[
-	@description Clamps Health, Stamina, and Mana fields into their configured min/max ranges using fallback maxima when max fields are missing. This is typically called after stat recalculation, damage, or restoration to keep entity state internally consistent.
-	@param charEntity any -- Character entity table whose Health, Stamina, and Mana values should be normalized.
-	@return nil -- No explicit return value.
-	@reads charEntity.Health, charEntity.MaxHealth, charEntity.Stamina, charEntity.MaxStamina, charEntity.Mana, charEntity.MaxMana
-	@writes charEntity.Health, charEntity.Stamina, charEntity.Mana
+	@description Implements `ResourceHelpers.clampResources`.
+	@param charEntity any -- `charEntity` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function ResourceHelpers.clampResources(charEntity: any)
 	charEntity.Health = math.clamp(tonumber(charEntity.Health) or 0, 0, tonumber(charEntity.MaxHealth) or 100)
 	charEntity.Stamina = math.clamp(tonumber(charEntity.Stamina) or 0, 0, tonumber(charEntity.MaxStamina) or 100)

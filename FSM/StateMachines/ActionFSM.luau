@@ -1,9 +1,8 @@
 --!strict
--- @Name ActionFSM
--- @Author iKrypto
--- @Description Client-side FSM managing action overlays (melee, dash, flip, hit react).
---   Writes ActionOverlay to CharacterEntity for ServiceManager observability.
---   Replaces imperative _attackBusy flag and ad-hoc cooldown logic.
+--[=[
+	@module ActionFSM
+	@description Defines the `ActionFSM` state machine module and its exported API.
+]=]
 
 local ActionFSM = {
 	Name = "ActionFSM",
@@ -37,9 +36,18 @@ local function writeActionOverlay(fsm: any, overlay: string)
 		charEntity.ActionOverlay = overlay
 	end
 end
+--[=[
+	@description Handles `RegisterStates` for `ActionFSM`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ActionFSM:RegisterStates()
-	-- None: idle, waiting for action commands
+	--[=[
+		@state None
+		@description Handles the `None` state for `ActionFSM`.
+	]=]
+
 	self:AddState("None", {
 		OnEnter = function(_, fsm)
 			writeActionOverlay(fsm, "None")
@@ -48,8 +56,11 @@ function ActionFSM:RegisterStates()
 			fsm.Context._phaseIndex = nil
 		end,
 	}, { "MeleeWindup", "Dashing", "Flipping", "HitReact" })
+	--[=[
+		@state MeleeWindup
+		@description Handles the `MeleeWindup` state for `ActionFSM`.
+	]=]
 
-	-- MeleeWindup: first phase of a melee attack
 	self:AddState("MeleeWindup", {
 		OnEnter = function(_, fsm)
 			local phases = fsm.Context._movePhases
@@ -70,8 +81,11 @@ function ActionFSM:RegisterStates()
 		Timeout = nil, -- set dynamically in OnEnter
 		OnTimeout = "MeleeStrike",
 	}, { "MeleeStrike", "None" })
+	--[=[
+		@state MeleeStrike
+		@description Handles the `MeleeStrike` state for `ActionFSM`.
+	]=]
 
-	-- MeleeStrike: second phase (or single phase for simple attacks)
 	self:AddState("MeleeStrike", {
 		OnEnter = function(_, fsm)
 			local phases = fsm.Context._movePhases
@@ -93,8 +107,11 @@ function ActionFSM:RegisterStates()
 			end
 		end,
 	}, { "MeleeRecovery", "None" })
+	--[=[
+		@state MeleeRecovery
+		@description Handles the `MeleeRecovery` state for `ActionFSM`.
+	]=]
 
-	-- MeleeRecovery: brief recovery before returning to None
 	self:AddState("MeleeRecovery", {
 		OnEnter = function(_, fsm)
 			writeActionOverlay(fsm, "Recovery")
@@ -102,8 +119,11 @@ function ActionFSM:RegisterStates()
 		Timeout = 0.1,
 		OnTimeout = "None",
 	}, { "None" })
+	--[=[
+		@state Dashing
+		@description Handles the `Dashing` state for `ActionFSM`.
+	]=]
 
-	-- Dashing: active dash with impulse
 	self:AddState("Dashing", {
 		OnEnter = function(_, fsm)
 			local direction = fsm.Context._dashDirection or "W"
@@ -112,8 +132,11 @@ function ActionFSM:RegisterStates()
 		Timeout = 0.25,
 		OnTimeout = "None",
 	}, { "None" })
+	--[=[
+		@state Flipping
+		@description Handles the `Flipping` state for `ActionFSM`.
+	]=]
 
-	-- Flipping: double jump flip
 	self:AddState("Flipping", {
 		OnEnter = function(_, fsm)
 			writeActionOverlay(fsm, "Flipping")
@@ -121,8 +144,11 @@ function ActionFSM:RegisterStates()
 		Timeout = 0.4,
 		OnTimeout = "None",
 	}, { "None" })
+	--[=[
+		@state HitReact
+		@description Handles the `HitReact` state for `ActionFSM`.
+	]=]
 
-	-- HitReact: stagger from being hit (knockback impulse + overlay)
 	self:AddState("HitReact", {
 		OnEnter = function(_, fsm)
 			writeActionOverlay(fsm, "HitReact")
@@ -151,12 +177,27 @@ function ActionFSM:RegisterStates()
 		Timeout = 0.2,
 		OnTimeout = "None",
 	}, { "None" })
+	--[=[
+		@state Completed
+		@description Handles the `Completed` terminal state for `ActionFSM`.
+	]=]
 
 	self:AddState("Completed", function() end, {})
+	--[=[
+		@state Failed
+		@description Handles the `Failed` terminal state for `ActionFSM`.
+	]=]
+
 	self:AddState("Failed", function() end, {})
 end
+--[=[
+	@description Handles `RequestMelee` for `ActionFSM`.
+	@param fsm any -- `fsm` input parameter.
+	@param phases { { Name: string, Speed: number, Duration: number } } -- `phases` input parameter.
+	@param onAnimate (string, number?, number?) -> () -- `onAnimate` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Public API: request a melee attack sequence
 function ActionFSM.RequestMelee(
 	fsm: any,
 	phases: { { Name: string, Speed: number, Duration: number } },
@@ -175,6 +216,12 @@ function ActionFSM.RequestMelee(
 	fsm:ScheduleTransition(windupDuration, "MeleeStrike")
 	return true
 end
+--[=[
+	@description Handles `RequestDash` for `ActionFSM`.
+	@param fsm any -- `fsm` input parameter.
+	@param direction string -- `direction` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ActionFSM.RequestDash(fsm: any, direction: string)
 	if fsm.State ~= "None" then
@@ -184,6 +231,11 @@ function ActionFSM.RequestDash(fsm: any, direction: string)
 	fsm.State = "Dashing"
 	return true
 end
+--[=[
+	@description Handles `RequestFlip` for `ActionFSM`.
+	@param fsm any -- `fsm` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ActionFSM.RequestFlip(fsm: any)
 	if fsm.State ~= "None" then
@@ -192,6 +244,11 @@ function ActionFSM.RequestFlip(fsm: any)
 	fsm.State = "Flipping"
 	return true
 end
+--[=[
+	@description Handles `RequestHitReact` for `ActionFSM`.
+	@param fsm any -- `fsm` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ActionFSM.RequestHitReact(fsm: any)
 	fsm.State = "HitReact"

@@ -1,29 +1,31 @@
 --!strict
--- @Name ServiceManager/Subsystems/InsightsModule.luau
--- @Author iKrypto
--- @Description Independent module for the INSIGHTS subsystem.
--- Displays AnalyticsEngine detections, history, and severity breakdown.
+--[=[
+	@module InsightsModule
+	@description Defines the `InsightsModule` module and its exported API.
+]=]
 
 local Theme = require(script.Parent.Parent.Theme)
 
 local InsightsModule = {}
 InsightsModule.__index = InsightsModule
+--[=[
+	@description Implements `InsightsModule.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Create the INSIGHTS subsystem controller.
-	Stores the active/history insight collections surfaced by AnalyticsEngine.
-]]
 function InsightsModule.new(): any
 	local self = setmetatable({}, InsightsModule)
 	self._activeInsights = {} :: { any }
 	self._historyInsights = {} :: { any }
 	return self
 end
+--[=[
+	@description Implements `InsightsModule.FetchData`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Run an analytics pass when needed and cache the latest active/history insight
-	snapshots for rendering and status-bar summaries.
-]]
 function InsightsModule:FetchData(nexus: any)
 	local analytics = nexus._analyticsEngine
 	if not analytics then return end
@@ -45,22 +47,20 @@ function InsightsModule:FetchData(nexus: any)
 		nexus.Store:Set("insights.activeCount", #self._activeInsights)
 	end)
 end
+--[=[
+	@description Implements `InsightsModule.Render`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	INSIGHTS rendering is produced by BuildRootLayer and insight detail layers.
-]]
 function InsightsModule:Render(nexus: any) end
+--[=[
+	@description Creates the result managed by `InsightsModule.BuildRootLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- Z-AXIS LAYER BUILDERS
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Build or rebuild the INSIGHTS root layer inside the supplied navigator frame.
-	Creates the severity summary, active/history lists, and drill-down affordances
-	for insight details and dismissal actions.
-]]
 function InsightsModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -207,6 +207,14 @@ function InsightsModule:BuildRootLayer(frame: Frame, context: any)
 		)
 	end
 end
+--[=[
+	@description Implements `InsightsModule._BuildInsightRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param insight any -- `insight` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param order number -- `order` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
+]=]
 
 function InsightsModule:_BuildInsightRow(parent: Frame, insight: any, nexus: any, order: number): Frame
 	local severityColors = {
@@ -380,6 +388,13 @@ function InsightsModule:_BuildInsightRow(parent: Frame, insight: any, nexus: any
 
 	return row
 end
+--[=[
+	@description Implements `InsightsModule._BuildHistoryRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param insight any -- `insight` input parameter.
+	@param order number -- `order` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
+]=]
 
 function InsightsModule:_BuildHistoryRow(parent: Frame, insight: any, order: number): Frame
 	local row = Instance.new("Frame")
@@ -427,6 +442,12 @@ function InsightsModule:_BuildHistoryRow(parent: Frame, insight: any, order: num
 
 	return row
 end
+--[=[
+	@description Implements `InsightsModule._BuildInsightDetailLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function InsightsModule:_BuildInsightDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -559,10 +580,12 @@ function InsightsModule:_BuildInsightDetailLayer(frame: Frame, context: any)
 		end
 	end)
 end
+--[=[
+	@description Implements `InsightsModule.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Clear cached insight collections.
-]]
 function InsightsModule:Destroy()
 	table.clear(self._activeInsights)
 	table.clear(self._historyInsights)

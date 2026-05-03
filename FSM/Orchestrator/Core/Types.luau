@@ -1,4 +1,9 @@
 --!strict
+--[=[
+	@module Types
+	@description Defines the `Types` module and its exported API.
+]=]
+
 export type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG"
 
 -- Definition of a property in the schema

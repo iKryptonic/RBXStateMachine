@@ -1,7 +1,8 @@
 --!nocheck
--- @Name Test_AttackTimelinePurity
--- @Author iKrypto
--- @Description Unit tests ensuring combo keyframe arrays remain pure data.
+--[=[
+	@module Test_AttackTimelinePurity
+	@description Defines the `Test_AttackTimelinePurity` module and its exported API.
+]=]
 
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)
 
@@ -33,6 +34,11 @@ local function timelineIsPure(combo)
 
 	return true
 end
+--[=[
+	@description Implements `Test_AttackTimelinePurity.Run`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Test_AttackTimelinePurity.Run()
 	local tester = TestBase.new("AttackTimelinePurity")

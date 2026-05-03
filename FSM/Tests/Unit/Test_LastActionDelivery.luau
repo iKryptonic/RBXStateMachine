@@ -1,7 +1,8 @@
 --!nocheck
--- @Name Test_LastActionDelivery
--- @Author iKrypto
--- @Description Unit tests for IntentSchema.AppendIntent sequencing and ring-buffer behavior.
+--[=[
+	@module Test_LastActionDelivery
+	@description Defines the `Test_LastActionDelivery` module and its exported API.
+]=]
 
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)
 
@@ -37,6 +38,11 @@ local function createMockEntity()
 		end,
 	}
 end
+--[=[
+	@description Implements `Test_LastActionDelivery.Run`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Test_LastActionDelivery.Run()
 	local tester = TestBase.new("LastActionDelivery")

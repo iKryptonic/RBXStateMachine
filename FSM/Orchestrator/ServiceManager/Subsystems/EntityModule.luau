@@ -1,9 +1,8 @@
 --!strict
--- @Name ServiceManager/Subsystems/EntityModule.luau
--- @Author iKrypto
--- @Description Enhanced ENTITY subsystem with active/dead tracking, full object inspector
--- (Identity, State, Context, Data, Schema, Logs sections), sort options, search bar,
--- type badges, and detailed entity drill-down.
+--[=[
+	@module EntityModule
+	@description Defines the `EntityModule` module and its exported API.
+]=]
 
 local Theme = require(script.Parent.Parent.Theme)
 local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
@@ -12,12 +11,12 @@ local EntityModule = {}
 EntityModule.__index = EntityModule
 
 local SORT_MODES = { "Name", "Type", "Age", "Status" }
+--[=[
+	@description Implements `EntityModule.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Create the ENTITY subsystem controller.
-	Owns the live/dead entity caches plus the search and selection state used by
-	the inspector and its nested drill-down layers.
-]]
 function EntityModule.new(): any
 	local self = setmetatable({}, EntityModule)
 	self._entityCache = {} :: { [string]: any }
@@ -28,11 +27,12 @@ function EntityModule.new(): any
 	self._selectedEntity = nil :: string?
 	return self
 end
+--[=[
+	@description Implements `EntityModule.FetchData`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Refresh the entity snapshot for the current context and publish the latest
-	list data into local caches and the shared store.
-]]
 function EntityModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
 	if not orchestrator then return end
@@ -119,6 +119,12 @@ function EntityModule:FetchData(nexus: any)
 		nexus.Store:Set("entity.dead", self._deadEntities)
 	end)
 end
+--[=[
+	@description Implements `EntityModule._ExtractEntityData`.
+	@param id string -- `id` input parameter.
+	@param entity any -- `entity` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function EntityModule:_ExtractEntityData(id: string, entity: any): any
 	local className = "Unknown"
@@ -251,16 +257,18 @@ function EntityModule:_ExtractEntityData(id: string, entity: any): any
 		VersionHistory = versionHistory,
 	}
 end
+--[=[
+	@description Implements `EntityModule.Render`.
+	@param _nexus any -- `_nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	ENTITY rendering is performed by BuildRootLayer and detail-layer builders.
-]]
 function EntityModule:Render(_nexus: any) end
-
--- ══════════════════════════════════════════════════════════════
--- SORTING / FILTERING
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `EntityModule._GetSorted`.
+	@param source { [string]: any } -- `source` input parameter.
+	@return { { Id: string, Data: any } } -- Return value produced by the implementation, if any.
+]=]
 
 function EntityModule:_GetSorted(source: { [string]: any }): { { Id: string, Data: any } }
 	local result = {}
@@ -286,16 +294,13 @@ function EntityModule:_GetSorted(source: { [string]: any }): { { Id: string, Dat
 	end)
 	return result
 end
+--[=[
+	@description Creates the result managed by `EntityModule.BuildRootLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- ROOT LAYER
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Build or rebuild the ENTITY overview layer inside the supplied navigator frame.
-	Creates the summary strip, toolbar, and entity rows that fan out into the
-	full inspector, table view, and version-history drill-downs.
-]]
 function EntityModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -369,6 +374,11 @@ function EntityModule:BuildRootLayer(frame: Frame, context: any)
 		)
 	end
 end
+--[=[
+	@description Implements `EntityModule._BuildSummaryStrip`.
+	@param parent Frame -- `parent` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function EntityModule:_BuildSummaryStrip(parent: Frame)
 	local strip = Instance.new("Frame")
@@ -440,6 +450,12 @@ function EntityModule:_BuildSummaryStrip(parent: Frame)
 		})
 	end
 end
+--[=[
+	@description Implements `EntityModule._BuildToolbar`.
+	@param parent Frame -- `parent` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function EntityModule:_BuildToolbar(parent: Frame, nexus: any)
 	local toolbar = Instance.new("Frame")
@@ -559,10 +575,16 @@ function EntityModule:_BuildToolbar(parent: Frame, nexus: any)
 		if nexus then nexus._lastDataRefresh = 0 end
 	end)
 end
-
--- ══════════════════════════════════════════════════════════════
--- ENTITY ROW
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `EntityModule._BuildEntityRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param id string -- `id` input parameter.
+	@param entityData any -- `entityData` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param order number -- `order` input parameter.
+	@param isDead boolean -- `isDead` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
+]=]
 
 function EntityModule:_BuildEntityRow(parent: Frame, id: string, entityData: any, nexus: any, order: number, isDead: boolean): Frame
 	local statusColor = if isDead then Theme.Colors.Danger else Theme.Colors.Success
@@ -649,10 +671,12 @@ function EntityModule:_BuildEntityRow(parent: Frame, id: string, entityData: any
 
 	return row
 end
-
--- ══════════════════════════════════════════════════════════════
--- ENTITY DETAIL LAYER
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `EntityModule._BuildEntityDetailLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -938,10 +962,11 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 		end
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- HELPERS
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `EntityModule._Stringify`.
+	@param value any -- `value` input parameter.
+	@return string -- Return value produced by the implementation, if any.
+]=]
 
 function EntityModule:_Stringify(value: any): string
 	local t = type(value)
@@ -955,6 +980,11 @@ function EntityModule:_Stringify(value: any): string
 	elseif t == "nil" then return "nil"
 	else return tostring(value) end
 end
+--[=[
+	@description Implements `EntityModule._TypeColor`.
+	@param value any -- `value` input parameter.
+	@return Color3 -- Return value produced by the implementation, if any.
+]=]
 
 function EntityModule:_TypeColor(value: any): Color3
 	local t = type(value)
@@ -964,6 +994,15 @@ function EntityModule:_TypeColor(value: any): Color3
 	elseif t == "table" then return Theme.Colors.Purple
 	else return Theme.Colors.TextMuted end
 end
+--[=[
+	@description Implements `EntityModule._BuildPropRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param key string -- `key` input parameter.
+	@param value string -- `value` input parameter.
+	@param color Color3 -- `color` input parameter.
+	@param order number -- `order` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function EntityModule:_BuildPropRow(parent: Frame, key: string, value: string, color: Color3, order: number)
 	local propRow = Instance.new("Frame")
@@ -983,10 +1022,12 @@ function EntityModule:_BuildPropRow(parent: Frame, key: string, value: string, c
 	Theme.CreateLabel({ Text = key, Size = UDim2.new(0.45, 0, 1, 0), Color = Theme.Colors.TextSecondary, FontSize = Theme.TextSize.Caption, Parent = propRow })
 	Theme.CreateLabel({ Text = value, Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.48, 0, 0, 0), Color = color, FontSize = Theme.TextSize.Body, FontFace = Theme.Font.Mono, Alignment = Enum.TextXAlignment.Right, Parent = propRow })
 end
-
--- ══════════════════════════════════════════════════════════════
--- TABLE DRILL-DOWN LAYER
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `EntityModule._BuildTableViewLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function EntityModule:_BuildTableViewLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -1071,26 +1112,24 @@ function EntityModule:_BuildTableViewLayer(frame: Frame, context: any)
 		if order > 200 then break end
 	end
 end
+--[=[
+	@description Implements `EntityModule.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Release autocomplete resources and clear cached entity snapshots.
-]]
 function EntityModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end
 	table.clear(self._entityCache)
 	table.clear(self._deadEntities)
 end
-
--- ══════════════════════════════════════════════════════════════
--- VERSION HISTORY LAYER (drill-down from entity detail)
--- ══════════════════════════════════════════════════════════════
-
 --[=[
-	Render a per-entity version history list. Each entry shows:
-	  v<N>  field name  old → new   timestamp
-	@param frame Frame — the layer frame containing a child named "Content"
-	@param context { Nexus, EntityId, VersionHistory: { { Version, Time, Field, From, To } }, CurrentVersion }
+	@description Implements `EntityModule._BuildVersionHistoryLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function EntityModule:_BuildVersionHistoryLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
 	if not contentFrame then return end

@@ -1,9 +1,8 @@
 --!strict
--- @Name ServiceManager/Subsystems/LogsModule.luau
--- @Author iKrypto
--- @Description Aggregated log viewer subsystem with level filters, regex search,
--- source subsystem badges, auto-scroll, and correlation ID support.
--- Feature parity with legacy ServiceManager Logs page.
+--[=[
+	@module LogsModule
+	@description Defines the `LogsModule` module and its exported API.
+]=]
 
 local TweenService = game:GetService("TweenService")
 
@@ -31,12 +30,12 @@ LogsModule.__index = LogsModule
 
 local MAX_DISPLAY_LOGS = 200
 local LEVEL_ORDER = { "ALL", "DEBUG", "INFO", "WARN", "ERROR" }
+--[=[
+	@description Implements `LogsModule.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Create the LOGS subsystem controller.
-	Owns the rolling log buffers, active filters, and cached UI references needed
-	to render the live log viewer efficiently.
-]]
 function LogsModule.new(): any
 	local self = setmetatable({}, LogsModule)
 	self._logCache = {} :: { LogEntry }
@@ -52,15 +51,12 @@ function LogsModule.new(): any
 	self._lastServerLogCount = 0
 	return self
 end
+--[=[
+	@description Implements `LogsModule.FetchData`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- DATA FETCH
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Ingest fresh log lines from orchestrator, Nexus, and optional server buffers.
-	Applies retention limits before pushing counts back into the shared store.
-]]
 function LogsModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
 	if not orchestrator then return end
@@ -149,16 +145,18 @@ function LogsModule:FetchData(nexus: any)
 		nexus.Store:Set("logs.filter", self._activeFilter)
 	end)
 end
+--[=[
+	@description Implements `LogsModule.Render`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	LOGS rendering is produced by BuildRootLayer and incremental log redraws.
-]]
 function LogsModule:Render(nexus: any) end
-
--- ══════════════════════════════════════════════════════════════
--- FILTERING
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `LogsModule._ApplyFilters`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LogsModule:_ApplyFilters()
 	self._filteredLogs = {}
@@ -187,15 +185,13 @@ function LogsModule:_ApplyFilters()
 		table.remove(self._filteredLogs, 1)
 	end
 end
+--[=[
+	@description Creates the result managed by `LogsModule.BuildRootLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- Z-AXIS LAYER BUILDERS
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Build or rebuild the LOGS root layer inside the supplied navigator frame.
-	Sets up the filter controls, search box, and scrolling log transcript view.
-]]
 function LogsModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -450,6 +446,11 @@ function LogsModule:BuildRootLayer(frame: Frame, context: any)
 	-- Render initial logs
 	self:_RenderLogs()
 end
+--[=[
+	@description Implements `LogsModule._UpdateFilterVisuals`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LogsModule:_UpdateFilterVisuals()
 	local levelColors = {
@@ -469,6 +470,11 @@ function LogsModule:_UpdateFilterVisuals()
 		}):Play()
 	end
 end
+--[=[
+	@description Implements `LogsModule._RenderLogs`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LogsModule:_RenderLogs()
 	local scroll = self._scrollFrame
@@ -594,10 +600,12 @@ function LogsModule:_RenderLogs()
 		end)
 	end
 end
+--[=[
+	@description Implements `LogsModule.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Release autocomplete resources and clear cached log state.
-]]
 function LogsModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end
 	table.clear(self._logCache)
