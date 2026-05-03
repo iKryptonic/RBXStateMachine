@@ -202,6 +202,12 @@ Orchestrator.CreateStateMachine({
 })
 ```
 
+### Testing mandate
+All new FSMs and entity modifications MUST include corresponding mock tests.
+- Test file naming: `{FSMName}.mock.spec.luau` in `FSM/Orchestrator/ServiceManager/Tests/Specs/`
+- Minimum coverage per FSM: happy path, validation failures, resource insufficiency, lock contention
+- Use `MockFramework` for all FSM tests — never depend on live Roblox services in unit tests
+
 ## Coding conventions
 
 - Use `--!strict` in Luau modules.
@@ -230,6 +236,103 @@ TR.register(spec)
 
 - `RunAllTests.luau` loads all spec modules and calls `TestRunner.loadAndRun()`.
 - The current suite contains **267 tests** across dashboard/framework specs.
+
+## Mock framework usage
+
+Use `FSM/Orchestrator/ServiceManager/Tests/MockFramework.luau` to build deterministic FSM unit tests with mock entities, a mock orchestrator, transition capture, and frame stepping.
+
+```luau
+local TR = require(script.Parent.Parent.TestRunner)
+local MockFramework = require(script.Parent.Parent.MockFramework)
+
+local TestFSM = {
+    Name = "TestFSM",
+    className = "TestFSM",
+    validStates = { "Validate", "Execute", "Completed", "Failed" },
+    terminalStates = { "Completed", "Failed" },
+    initialState = "Validate",
+}
+
+function TestFSM:RegisterStates()
+    self:AddState("Validate", {
+        OnEnter = function(_, fsm)
+            local entity = fsm:GetEntity(fsm.EntityId)
+            if not entity then
+                fsm:Fail("Entity not found")
+                return
+            end
+            if not entity:AcquireLock(fsm.Id) then
+                fsm:Fail("Lock contention")
+                return
+            end
+            fsm.Context._entity = entity
+            fsm.State = "Execute"
+        end,
+    }, { "Execute", "Failed" })
+
+    self:AddState("Execute", {
+        OnEnter = function(_, fsm)
+            local entity = fsm.Context._entity
+            entity.Value = 10
+            entity:UpdateEntity(fsm.Id)
+            entity:ReleaseLock(fsm.Id)
+            fsm:GetOrchestrator():ServerCommandEntity(entity.EntityId, "SyncValue", entity.Value)
+            fsm.State = "Completed"
+        end,
+    }, { "Completed" })
+end
+
+local function spec()
+    local describe = TR.describe
+    local it = TR.it
+    local expect = TR.expect
+
+    describe("TestFSM", function()
+        it("records transitions and commands", function()
+            local mock = MockFramework.new()
+            mock:CreateEntity("ExampleEntity", "Entity_1", { Value = 0 })
+
+            local fsm = mock:CreateFSM(TestFSM, {
+                StateMachineId = "FSM_1",
+                EntityId = "Entity_1",
+            })
+
+            mock:StepFrames(2)
+
+            expect(fsm.State).toEqual("Completed")
+            expect(mock.entities.Entity_1.Value).toEqual(10)
+            expect(mock:GetTransitions("FSM_1")).toHaveLength(3)
+            expect(mock:GetCommands()).toHaveLength(1)
+        end)
+
+        it("supports lock-contention tests", function()
+            local mock = MockFramework.new()
+            local entity = mock:CreateEntity("ExampleEntity", "Entity_2", { Value = 0 })
+            entity:SetLockBehavior(false)
+
+            local fsm = mock:CreateFSM(TestFSM, {
+                StateMachineId = "FSM_2",
+                EntityId = "Entity_2",
+            })
+
+            mock:StepFrames(1)
+
+            expect(fsm.State).toEqual("Failed")
+        end)
+    end)
+end
+
+TR.register(spec)
+return spec
+```
+
+Key API surface:
+- `MockFramework.new()` → creates `entities`, `stateMachines`, `transitions`, `commands`
+- `mock:CreateEntity(className, entityId, initialData)` → mock BaseEntity-like proxy
+- `mock:GetOrchestrator():RegisterModule(name, module)` → inject shared module dependencies
+- `mock:CreateFSM(fsmClass, context)` → compiles/starts a real FSM with mock orchestrator injection
+- `mock:StepFrames(count)` → advances `BaseStateMachine.Step(1/60)` deterministically
+- `mock:GetTransitions(fsmId?)` / `mock:GetCommands()` / `mock:Reset()` → assert and clean up
 
 ## Anti-patterns to avoid
 
