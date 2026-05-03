@@ -205,6 +205,7 @@ function UnEquipJob:RegisterStates()
 					equipHelpers.DropItem(item, weld)
 				else
 					equipHelpers.StowItem(item, character, weld, itemData)
+					fsm.Context._wasStowed = true
 				end
 			end
 
@@ -221,28 +222,37 @@ function UnEquipJob:RegisterStates()
 			end
 
 			local hand = fsm.Hand :: string
-			charEntity[getHandProperty(hand)] = ""
-			charEntity:UpdateEntity()
 
-			local equipped = if typeof(playerEntity.Equipped) == "table"
-				then table.clone(playerEntity.Equipped)
-				else {}
-			equipped[hand] = nil
-			playerEntity.Equipped = equipped
-			if hand == "Right" and not fsm.Context._resolvedItemId then
-				-- Only clear WeaponEqp if no item was resolved (shouldn't happen normally)
-				playerEntity.WeaponEqp = ""
-			end
-			-- Keep WeaponEqp set so Z-key can re-equip the last weapon
-			local inventory = playerEntity.Inventory
-			if typeof(inventory) == "table" and fsm.Context._resolvedItemId and fsm.Context._resolvedItemId ~= "" then
-				if not table.find(inventory, fsm.Context._resolvedItemId) then
-					inventory = table.clone(inventory)
-					table.insert(inventory, fsm.Context._resolvedItemId)
-					playerEntity.Inventory = inventory
+			-- When stowed, the weapon is still equipped (just on the character's back).
+			-- Only clear equipped state and return to inventory for non-stow unequips.
+			if fsm.Context._wasStowed then
+				-- Keep EquippedRight/Left, Equipped table, and WeaponEqp intact.
+				-- The item stays "equipped" but visually stowed.
+				charEntity:UpdateEntity()
+				playerEntity:UpdateEntity()
+			else
+				charEntity[getHandProperty(hand)] = ""
+				charEntity:UpdateEntity()
+
+				local equipped = if typeof(playerEntity.Equipped) == "table"
+					then table.clone(playerEntity.Equipped)
+					else {}
+				equipped[hand] = nil
+				playerEntity.Equipped = equipped
+				if hand == "Right" and not fsm.Context._resolvedItemId then
+					playerEntity.WeaponEqp = ""
 				end
+				-- Return item to inventory
+				local inventory = playerEntity.Inventory
+				if typeof(inventory) == "table" and fsm.Context._resolvedItemId and fsm.Context._resolvedItemId ~= "" then
+					if not table.find(inventory, fsm.Context._resolvedItemId) then
+						inventory = table.clone(inventory)
+						table.insert(inventory, fsm.Context._resolvedItemId)
+						playerEntity.Inventory = inventory
+					end
+				end
+				playerEntity:UpdateEntity()
 			end
-			playerEntity:UpdateEntity()
 
 			fsm.State = "EmitIntent"
 		end,
