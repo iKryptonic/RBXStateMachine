@@ -1,6 +1,42 @@
 --!strict
--- @Name AttackJob
--- @Author iKrypto
+--[=[
+    @Name AttackJob
+    @Author iKrypto
+    @Description Validates attack prerequisites, acquires the character combat lock, resolves combo data from the equipped weapon, applies temporary movement constraints, plays the combo timeline by emitting intents and spawning `DamageJob` children, then rolls constraints back and releases the lock before ending in the terminal `Completed` state. Any failure stores `_failureReason` and routes through rollback. Historical integrations must target `Completed`; the deprecated `Complete` spelling is intentionally not used.
+
+    State flow diagram:
+    Validate → AcquireCombatLock → ResolveAttackDef → ApplyMovementConstraints → EmitWindupIntent → PlayTimeline → EmitRecoveryIntent → RollbackConstraints → ReleaseCombatLock → Completed
+             ↘ RollbackConstraints → ReleaseCombatLock → Failed
+
+    Context fields:
+    - _characterEntity: any -- resolved attacking character entity.
+    - _character: Model -- resolved attacker character model.
+    - _humanoid: Humanoid -- attacker humanoid used to detect death during the timeline.
+    - _root: BasePart -- attacker root used for victim scans.
+    - _playerEntity: any -- resolved player entity for weapon fallback data.
+    - _weaponId: string -- weapon id whose combo definitions drive the timeline.
+    - _comboSlot: number -- requested combo slot, clamped to at least 1.
+    - _itemData: any -- resolved weapon data module contents.
+    - _comboDef: any -- raw combo definition bucket for the selected slot.
+    - _selectedCombo: table -- concrete combo timeline used for playback.
+    - _comboPointer: number -- sequential pointer chosen for `Type == "Sequential"` combos.
+    - _comboTotalFrames: number -- total frame count that determines when recovery starts.
+    - _attackName: string -- generated attack label propagated into `DamageJob` and event consumers.
+    - _priorConstraints: table -- snapshot of movement fields restored during rollback.
+    - _constraintsApplied: boolean -- whether movement constraints were successfully pushed.
+    - _combatLockApplied: boolean -- whether the `CombatLock` entity field was committed.
+    - _entityLockHeld: boolean -- whether `AcquireLock(fsm.Id)` succeeded and still needs release.
+    - _timelineElapsed: number -- accumulated timeline seconds.
+    - _timelineFrame: number -- current rounded timeline frame.
+    - _timelineFired: table -- per-entry fired markers so each timeline row runs once.
+    - _hitDebounces: table -- victim debounce expiries for repeated damage frames.
+    - _failureReason: string? -- stored reason that determines the `Failed` terminal path after cleanup.
+
+    Required params:
+    - CharacterEntityId: string -- attacking character entity id.
+    - PlayerEntityId: string? -- optional explicit player entity id; falls back to the character entity link.
+    - ComboSlot: number? -- optional combo slot index; defaults to 1.
+]=]
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -39,6 +75,12 @@ local DEFAULT_CONSTRAINTS = {
 	MouseLocked = true,
 }
 
+--[=[
+    @description Stores a failure reason and routes the FSM either into rollback or directly into the terminal failure state if cleanup is already underway.
+    @param fsm any -- Active attack FSM instance.
+    @param reason string -- Human-readable failure reason persisted into context.
+    @return nil -- Mutates `fsm.Context._failureReason` and `fsm.State`.
+]=]
 local function transitionToFailure(fsm: any, reason: string)
 	fsm.Context._failureReason = reason
 	if fsm.State == "ReleaseCombatLock" then
@@ -48,6 +90,12 @@ local function transitionToFailure(fsm: any, reason: string)
 	end
 end
 
+--[=[
+    @description Returns the configured scalar value, picks a random entry from non-empty arrays, or falls back to the supplied default.
+    @param value any -- Value or value list to normalize.
+    @param defaultValue any -- Fallback returned when the incoming value is nil or an empty array.
+    @return any -- Selected scalar value ready for timeline use.
+]=]
 local function chooseValue(value: any, defaultValue: any): any
 	if typeof(value) == "table" then
 		local count = #value
@@ -62,6 +110,15 @@ local function chooseValue(value: any, defaultValue: any): any
 	return value
 end
 
+--[=[
+    @description Builds and appends an optional intent definition when a combo stage declares a valid `Kind` and payload.
+    @param orchestrator any -- Orchestrator passed into `IntentHelpers.appendIntent`.
+    @param characterEntity any -- Character entity receiving the intent.
+    @param intentDef any -- Optional combo intent definition table.
+    @param sourceCharId string -- Source and target character id for the emitted intent.
+    @param lockId string? -- Optional lock id associated with the attack timeline.
+    @return nil -- Emits an intent as a side effect when the definition is valid.
+]=]
 local function appendOptionalIntent(
 	orchestrator: any,
 	characterEntity: any,
@@ -84,6 +141,11 @@ local function appendOptionalIntent(
 	end
 end
 
+--[=[
+    @description Finds a weapon asset under `ReplicatedStorage.Assets`, resolves its data module, and safely requires the item metadata.
+    @param weaponId string -- Weapon asset name or id looked up in the assets tree.
+    @return any? -- Required item data table, or nil when the asset metadata cannot be resolved.
+]=]
 local function getItemData(weaponId: string): any?
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
 	if not assets then
@@ -107,6 +169,15 @@ local function getItemData(weaponId: string): any?
 	return nil
 end
 
+--[=[
+    @description Advances and persists the per-weapon sequential combo pointer, resetting it after one second of inactivity.
+    @param characterEntity any -- Character entity storing combo pointer context.
+    @param comboSlot number -- Combo bucket index being resolved.
+    @param weaponId string -- Weapon id used to namespace pointer state.
+    @param comboDef any -- Sequential combo definition array.
+    @return any? -- Selected combo timeline entry.
+    @return number? -- One-based pointer into the sequential combo definition.
+]=]
 local function getSequentialCombo(
 	characterEntity: any,
 	comboSlot: number,
@@ -148,6 +219,12 @@ local function getSequentialCombo(
 	return comboDef[pointerState.Pointer], pointerState.Pointer
 end
 
+--[=[
+    @description Writes a debug log entry for timeline processing diagnostics.
+    @param fsm any -- Active attack FSM instance.
+    @param message string -- Diagnostic message to log.
+    @return nil -- Emits a log side effect only.
+]=]
 local function logTimelineStep(fsm: any, message: string)
 	fsm:Log({
 		Level = "DEBUG",
@@ -155,6 +232,11 @@ local function logTimelineStep(fsm: any, message: string)
 	})
 end
 
+--[=[
+    @description Resolves the total timeline duration in frames, preferring an explicit `t` field and otherwise scanning the largest keyed frame value.
+    @param combo any -- Selected combo table or timeline array.
+    @return number -- Total frame count used to determine timeline completion.
+]=]
 local function resolveTimelineLength(combo: any): number
 	local explicit = combo.t
 	if typeof(explicit) == "number" and explicit > 0 then
@@ -171,6 +253,14 @@ local function resolveTimelineLength(combo: any): number
 	return highest
 end
 
+--[=[
+    @description Creates a child `DamageJob` for one victim hit during the combo timeline after validating the victim identifiers.
+    @param orchestrator any -- Orchestrator passed into combat helper job creation.
+    @param fsm any -- Parent attack FSM whose ids and attack name seed the child job.
+    @param victimEntity any -- Victim entity selected by the forward scan.
+    @param frameNumber number -- Timeline frame that triggered the hit.
+    @return boolean -- True when a `DamageJob` was created, otherwise false when victim identity was invalid.
+]=]
 local function applyDamageToVictim(orchestrator: any, fsm: any, victimEntity: any, frameNumber: number): boolean
 	local victimId = if typeof(victimEntity.EntityId) == "string" then victimEntity.EntityId else nil
 	if typeof(victimId) ~= "string" or victimId == "" then
@@ -199,6 +289,13 @@ local function applyDamageToVictim(orchestrator: any, fsm: any, victimEntity: an
 	return true
 end
 
+--[=[
+    @description Emits the optional hit-confirmation sound intent associated with a damage keyframe.
+    @param characterEntity any -- Character entity receiving the sound intent.
+    @param entry table -- Raw combo timeline entry that may contain sound id, volume, and pitch values.
+    @param fsm any -- Parent attack FSM used for ids and debug logging.
+    @return nil -- Emits an intent side effect when a sound is configured.
+]=]
 local function playHitSound(characterEntity: any, entry: { any }, fsm: any)
 	local hitSoundId = chooseValue(entry[3], nil)
 	if hitSoundId == nil then
@@ -214,6 +311,13 @@ local function playHitSound(characterEntity: any, entry: { any }, fsm: any)
 	}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 end
 
+--[=[
+    @description Scans forward for victims at a damage keyframe, respects per-victim debounce windows, spawns child damage jobs, and optionally plays the hit sound when at least one victim is struck.
+    @param fsm any -- Active attack FSM with cached attacker context.
+    @param entry table -- Raw timeline entry describing damage radius and debounce configuration.
+    @param frameNumber number -- Timeline frame currently being processed.
+    @return nil -- Mutates hit debounce context and creates side effects through combat helpers.
+]=]
 local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: number)
 	local orchestrator = fsm:GetOrchestrator()
 	local characterEntity = fsm.Context._characterEntity
@@ -268,6 +372,12 @@ local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: numb
 	end
 end
 
+--[=[
+    @description Dispatches a single timeline row into the correct behavior: damage processing, sound intent, effect intent, or animation intent emission.
+    @param fsm any -- Active attack FSM.
+    @param entry table -- Raw combo timeline row.
+    @return nil -- Emits intents or child jobs as timeline side effects.
+]=]
 local function processTimelineEntry(fsm: any, entry: { any })
 	local characterEntity = fsm.Context._characterEntity
 	if not characterEntity then
@@ -308,8 +418,20 @@ local function processTimelineEntry(fsm: any, entry: { any })
 	end
 end
 
+--[=[
+    @description Registers every AttackJob state, rollback edge, and terminal handler with the FSM base class.
+    @return nil -- Mutates the module definition by adding states.
+]=]
 function AttackJob:RegisterStates()
-	self:AddState("Validate", {
+	--[=[
+    @state Validate
+    @description Verifies the orchestrator, attacker character and player entities, living humanoid root, crowd-control restrictions, and currently equipped weapon before caching all reusable combat context.
+    @transitions Transitions to `AcquireCombatLock` after all attack prerequisites are resolved; otherwise transitions to `RollbackConstraints` through `transitionToFailure(...)`.
+    @failure Stores `_failureReason` and routes into rollback when the orchestrator, entities, living humanoid, or weapon context is missing, or when the character is stunned or knocked.
+    @reads `fsm.CharacterEntityId`, `fsm.PlayerEntityId`, `fsm.ComboSlot`, characterEntity.`IsStunned`, `IsKnocked`, `EquippedRight`, `EquippedLeft`, playerEntity.`WeaponEqp`.
+    @writes `fsm.Context._characterEntity`, `_character`, `_humanoid`, `_root`, `_playerEntity`, `_weaponId`, `_comboSlot`.
+]=]
+self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
@@ -383,7 +505,15 @@ function AttackJob:RegisterStates()
 		end,
 	}, { "AcquireCombatLock", "RollbackConstraints" })
 
-	self:AddState("AcquireCombatLock", {
+	--[=[
+    @state AcquireCombatLock
+    @description Acquires the character entity lock and commits the replicated `CombatLock` flag so no competing combat action can start during this attack.
+    @transitions Transitions to `ResolveAttackDef` after both the entity lock and `CombatLock` field are applied; otherwise transitions to `RollbackConstraints`.
+    @failure On failure it releases any partial entity lock, stores `_failureReason`, and routes to rollback.
+    @reads `fsm.Context._characterEntity`, `fsm.Id`.
+    @writes Character entity lock ownership, characterEntity.`CombatLock`, `fsm.Context._entityLockHeld`, `fsm.Context._combatLockApplied`.
+]=]
+self:AddState("AcquireCombatLock", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if not characterEntity then
@@ -410,7 +540,15 @@ function AttackJob:RegisterStates()
 		end,
 	}, { "ResolveAttackDef", "RollbackConstraints" })
 
-	self:AddState("ResolveAttackDef", {
+	--[=[
+    @state ResolveAttackDef
+    @description Loads weapon combo metadata, resolves sequential combo pointers when required, computes the full timeline length, and caches the concrete combo that will be played.
+    @transitions Transitions to `ApplyMovementConstraints` when combo data is valid; otherwise transitions to `RollbackConstraints`.
+    @failure Stores `_failureReason` and rolls back if weapon metadata is missing, the combo slot does not exist, sequential selection fails, or the resolved timeline has no positive length.
+    @reads `fsm.Context._characterEntity`, `_weaponId`, `_comboSlot`, weapon item data, combo definitions.
+    @writes `fsm.Context._itemData`, `_comboDef`, `_selectedCombo`, `_comboPointer`, `_comboTotalFrames`, `_attackName`, combo pointer context on the character entity.
+]=]
+self:AddState("ResolveAttackDef", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			local weaponId = fsm.Context._weaponId
@@ -463,7 +601,15 @@ function AttackJob:RegisterStates()
 		end,
 	}, { "ApplyMovementConstraints", "RollbackConstraints" })
 
-	self:AddState("ApplyMovementConstraints", {
+	--[=[
+    @state ApplyMovementConstraints
+    @description Snapshots the character's current movement-related fields, applies the combo-specific movement patch or the default hard-lock constraints, and replicates the change.
+    @transitions Transitions to `EmitWindupIntent` after the entity update succeeds; otherwise transitions to `RollbackConstraints`.
+    @failure If `UpdateEntity(fsm.Id)` fails, `_failureReason` is stored and the rollback state restores the prior movement fields.
+    @reads `fsm.Context._characterEntity`, `fsm.Context._selectedCombo`, default movement constants, characterEntity.`CanMove`, `MoveSpeedCap`, `MouseLocked`.
+    @writes `fsm.Context._priorConstraints`, `fsm.Context._constraintsApplied`, characterEntity.`CanMove`, `MoveSpeedCap`, `MouseLocked`.
+]=]
+self:AddState("ApplyMovementConstraints", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if not characterEntity then
@@ -503,7 +649,15 @@ function AttackJob:RegisterStates()
 		end,
 	}, { "EmitWindupIntent", "RollbackConstraints" })
 
-	self:AddState("EmitWindupIntent", {
+	--[=[
+    @state EmitWindupIntent
+    @description Appends the optional windup intent declared by the selected combo so clients can play anticipation feedback before timeline execution starts.
+    @transitions Always transitions to `PlayTimeline`.
+    @failure Missing or malformed windup intent definitions are ignored rather than failing the attack.
+    @reads `fsm.Context._characterEntity`, `fsm.Context._selectedCombo`, `fsm.CharacterEntityId`, `fsm.Id`.
+    @writes Character entity intent queue when `WindupIntent` resolves to a valid payload.
+]=]
+self:AddState("EmitWindupIntent", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity then
@@ -520,7 +674,15 @@ function AttackJob:RegisterStates()
 		end,
 	}, { "PlayTimeline", "RollbackConstraints" })
 
-	self:AddState("PlayTimeline", {
+	--[=[
+    @state PlayTimeline
+    @description Initializes per-run timeline bookkeeping on entry, then advances the combo frame-by-frame on heartbeat, firing each timeline entry once and spawning child damage jobs or intents as frames are reached.
+    @transitions Transitions to `EmitRecoveryIntent` once the current frame reaches `_comboTotalFrames`; transitions to `RollbackConstraints` if the attacker dies, combo data disappears, or a timeline entry errors.
+    @failure Any pcall failure from `processTimelineEntry(...)` stores `_failureReason` and routes to rollback. The state also aborts if the humanoid dies mid-animation.
+    @reads `fsm.Context._humanoid`, `_selectedCombo`, `_timelineElapsed`, `_timelineFrame`, `_timelineFired`, `_comboTotalFrames`, `_root`, `_characterEntity`.
+    @writes `fsm.Context._timelineElapsed`, `_timelineFrame`, `_timelineFired`, `_hitDebounces`; child intents and `DamageJob` instances created by timeline helpers.
+]=]
+self:AddState("PlayTimeline", {
 		OnEnter = function(_, fsm)
 			fsm.Context._timelineElapsed = 0
 			fsm.Context._timelineFrame = 0
@@ -574,7 +736,15 @@ function AttackJob:RegisterStates()
 		end,
 	}, { "EmitRecoveryIntent", "RollbackConstraints" })
 
-	self:AddState("EmitRecoveryIntent", {
+	--[=[
+    @state EmitRecoveryIntent
+    @description Appends the optional recovery intent declared by the selected combo so clients can play exit feedback before control is restored.
+    @transitions Always transitions to `RollbackConstraints`.
+    @failure Missing or malformed recovery intent definitions are ignored rather than failing after a successful timeline.
+    @reads `fsm.Context._characterEntity`, `fsm.Context._selectedCombo`, `fsm.CharacterEntityId`, `fsm.Id`.
+    @writes Character entity intent queue when `RecoveryIntent` resolves to a valid payload.
+]=]
+self:AddState("EmitRecoveryIntent", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity then
@@ -591,7 +761,15 @@ function AttackJob:RegisterStates()
 		end,
 	}, { "RollbackConstraints" })
 
-	self:AddState("RollbackConstraints", {
+	--[=[
+    @state RollbackConstraints
+    @description Restores the character's pre-attack movement fields when constraints were applied, logs a warning if the rollback update reports no pending changes, and then advances to lock release.
+    @transitions Always transitions to `ReleaseCombatLock`.
+    @failure Rollback is best-effort. Missing character context simply skips the restore, while any stored `_failureReason` is preserved for the later `Failed` transition.
+    @reads `fsm.Context._characterEntity`, `_constraintsApplied`, `_priorConstraints`, `fsm.Id`.
+    @writes Character entity.`CanMove`, `MoveSpeedCap`, `MouseLocked`, `fsm.Context._constraintsApplied`.
+]=]
+self:AddState("RollbackConstraints", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity and fsm.Context._constraintsApplied == true then
@@ -608,7 +786,15 @@ function AttackJob:RegisterStates()
 		end,
 	}, { "ReleaseCombatLock" })
 
-	self:AddState("ReleaseCombatLock", {
+	--[=[
+    @state ReleaseCombatLock
+    @description Clears the replicated `CombatLock` flag, releases the underlying entity lock, and chooses the terminal state based on whether `_failureReason` was set earlier.
+    @transitions Transitions to `Completed` when no failure reason exists, otherwise transitions to `Failed`.
+    @failure Even on failure, cleanup still releases both lock layers before the terminal state is selected.
+    @reads `fsm.Context._characterEntity`, `_combatLockApplied`, `_entityLockHeld`, `_failureReason`, `fsm.Id`.
+    @writes Character entity.`CombatLock`, entity lock ownership, `fsm.Context._combatLockApplied`, `fsm.Context._entityLockHeld`.
+]=]
+self:AddState("ReleaseCombatLock", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity and fsm.Context._combatLockApplied == true then
@@ -630,8 +816,24 @@ function AttackJob:RegisterStates()
 		end,
 	}, { "Completed", "Failed" })
 
-	self:AddState("Completed", function() end, {})
-	self:AddState("Failed", function(fsm)
+	--[=[
+    @state Completed
+    @description Terminal success state for the attack pipeline. No additional work runs here.
+    @transitions No outbound transitions; the job stops here.
+    @failure No failure path remains because rollback and lock release already completed.
+    @reads No additional fields are read.
+    @writes No additional fields are written.
+]=]
+self:AddState("Completed", function() end, {})
+	--[=[
+    @state Failed
+    @description Terminal failure state that logs the stored `_failureReason` after rollback and lock release have finished.
+    @transitions No outbound transitions; the job stops here.
+    @failure By the time this state runs, movement constraints and combat locks have already been cleaned up by the rollback path.
+    @reads `fsm.Context._failureReason`.
+    @writes No additional FSM data beyond the emitted error log.
+]=]
+self:AddState("Failed", function(fsm)
 		if typeof(fsm.Context._failureReason) == "string" then
 			fsm:Log({
 				Level = "ERROR",
@@ -641,6 +843,10 @@ function AttackJob:RegisterStates()
 	end, {})
 end
 
+--[=[
+    @description Runs post-shutdown cleanup for the attack job. Cleanup is intentionally empty because rollback and lock release are handled as explicit FSM states.
+    @return nil -- No extra cleanup work is performed.
+]=]
 function AttackJob:OnCleanup() end
 
 return AttackJob

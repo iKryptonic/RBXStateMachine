@@ -1,6 +1,22 @@
 --!strict
--- @Name ReplicateIntentJob
--- @Author iKrypto
+--[=[
+    @Name ReplicateIntentJob
+    @Author iKrypto
+    @Description Validates a client-authored replication intent, recursively sanitizes and normalizes its payload, enforces shared allow lists, appends the normalized intent to the character entity, and finishes in the terminal `Completed` state. Invalid requests fail fast without mutating the entity. Historical integrations must target `Completed`; the deprecated `Complete` spelling is intentionally not used.
+
+    State flow diagram:
+    Validate → NormalizePayload → CheckAllowList → ApplyToEntity → Completed
+             ↘ Failed
+
+    Context fields:
+    - _characterEntity: any -- resolved character entity receiving the replicated intent.
+    - _normalizedPayload: table -- sanitized payload with defaults applied per intent kind.
+
+    Required params:
+    - CharacterEntityId: string -- target character entity id.
+    - Kind: string -- client intent kind (`Animation`, `Effect`, or `Sound`).
+    - Payload: table? -- raw client payload that will be sanitized and normalized.
+]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
@@ -15,6 +31,11 @@ local ReplicateIntentJob = {
 	initialState = "Validate",
 }
 
+--[=[
+    @description Normalizes scalar payload values by clamping large numbers and rejecting non-serializable Luau runtime types.
+    @param value any -- Scalar payload value to normalize.
+    @return any -- Sanitized scalar value or nil when the value type is not serializable.
+]=]
 local function normalizeScalar(value: any)
 	local valueType = typeof(value)
 	if valueType == "number" then
@@ -27,6 +48,14 @@ local function normalizeScalar(value: any)
 	return value
 end
 
+--[=[
+    @description Recursively clamps and validates a payload table, rejects cyclic references and non-string keys, and returns a sanitized table accepted by `IntentSchema.ValidatePayload`.
+    @param intentSchema any -- Shared intent schema module providing clamp and validation helpers.
+    @param payload any -- Raw payload value supplied by the caller.
+    @param seen table -- Recursion guard used to detect cyclic tables.
+    @return any? -- Sanitized payload table or nil.
+    @return string? -- Validation error string when sanitization fails.
+]=]
 local function sanitizePayload(intentSchema: any, payload: any, seen: { [table]: boolean }): (any?, string?)
 	if payload == nil then
 		return nil, nil
@@ -83,6 +112,13 @@ local function sanitizePayload(intentSchema: any, payload: any, seen: { [table]:
 	return sanitized, nil
 end
 
+--[=[
+    @description Checks the normalized payload against allow-listed animation names, effect names, and sound ids for the specified intent kind.
+    @param kind string -- Intent kind being validated.
+    @param payload table -- Normalized payload fields.
+    @param allowLists any -- Shared allow-list module contents.
+    @return string? -- Nil when allowed, otherwise an explanatory failure reason.
+]=]
 local function validateAllowedPayload(kind: string, payload: { [string]: any }, allowLists: any): string?
 	if kind == "Animation" then
 		local name = payload.Name
@@ -109,8 +145,20 @@ local function validateAllowedPayload(kind: string, payload: { [string]: any }, 
 	return nil
 end
 
+--[=[
+    @description Registers every ReplicateIntentJob state and terminal no-op with the FSM base class.
+    @return nil -- Mutates the module definition by adding states.
+]=]
 function ReplicateIntentJob:RegisterStates()
-	self:AddState("Validate", {
+	--[=[
+    @state Validate
+    @description Verifies the orchestrator, target character id, requested kind, target entity, and allow-list policy for that kind before caching the character entity for later stages.
+    @transitions Transitions to `NormalizePayload` when the request is allowed; otherwise transitions to `Failed`.
+    @failure Fails immediately when the orchestrator is missing, the target entity id or kind is blank, the character entity cannot be resolved, the kind is not allowed, or the kind is marked server-only.
+    @reads `fsm.CharacterEntityId`, `fsm.Kind`, resolved character entity, allow-list policy lookups.
+    @writes `fsm.Context._characterEntity`.
+]=]
+self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
@@ -149,7 +197,15 @@ function ReplicateIntentJob:RegisterStates()
 		end,
 	}, { "NormalizePayload", "Failed" })
 
-	self:AddState("NormalizePayload", {
+	--[=[
+    @state NormalizePayload
+    @description Sanitizes the raw payload, applies per-kind field aliases and default values, and caches the normalized table that will be allow-list checked and replicated.
+    @transitions Transitions to `CheckAllowList` after payload normalization; otherwise transitions to `Failed`.
+    @failure Fails when the payload is not a table, contains cycles, non-string keys, NaN values, non-serializable values, or does not pass `IntentSchema.ValidatePayload(...)`.
+    @reads `fsm.Payload`, `fsm.Kind`, schema clamp/validate helpers, raw payload fields such as `AnimationName`, `EffectName`, `Id`, `Speed`, `FadeTime`, `Volume`, `Pitch`.
+    @writes `fsm.Context._normalizedPayload`.
+]=]
+self:AddState("NormalizePayload", {
 		OnEnter = function(_, fsm)
 			local intentSchema = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(), "IntentSchema")
 			local payload, err = sanitizePayload(intentSchema, fsm.Payload or {}, {})
@@ -187,7 +243,15 @@ function ReplicateIntentJob:RegisterStates()
 		end,
 	}, { "CheckAllowList", "Failed" })
 
-	self:AddState("CheckAllowList", {
+	--[=[
+    @state CheckAllowList
+    @description Enforces allow-list membership on the normalized payload for the requested kind before any entity mutation occurs.
+    @transitions Transitions to `ApplyToEntity` when the normalized payload is still allowed; otherwise transitions to `Failed`.
+    @failure Fails when normalization did not produce a table or when the payload references an animation, effect, or sound that is not allow-listed.
+    @reads `fsm.Kind`, `fsm.Context._normalizedPayload`, shared allow-list tables.
+    @writes No new context fields; only control flow changes.
+]=]
+self:AddState("CheckAllowList", {
 		OnEnter = function(_, fsm)
 			local AllowLists = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(), "AllowLists")
 			local payload = fsm.Context._normalizedPayload
@@ -206,7 +270,15 @@ function ReplicateIntentJob:RegisterStates()
 		end,
 	}, { "ApplyToEntity", "Failed" })
 
-	self:AddState("ApplyToEntity", {
+	--[=[
+    @state ApplyToEntity
+    @description Appends the sanitized client intent to the character entity using the caller as both source and target so downstream replication systems can fan it out.
+    @transitions Transitions to `Completed` when the intent is appended; otherwise transitions to `Failed`.
+    @failure Fails when the cached character entity or normalized payload is missing before append time.
+    @reads `fsm.Kind`, `fsm.CharacterEntityId`, `fsm.Context._characterEntity`, `fsm.Context._normalizedPayload`.
+    @writes Character entity intent queue through `IntentSchema.AppendIntent(...)`.
+]=]
+self:AddState("ApplyToEntity", {
 		OnEnter = function(_, fsm)
 			local IntentSchema = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(), "IntentSchema")
 			local characterEntity = fsm.Context._characterEntity
@@ -226,10 +298,30 @@ function ReplicateIntentJob:RegisterStates()
 		end,
 	}, { "Completed", "Failed" })
 
-	self:AddState("Completed", function() end, {})
-	self:AddState("Failed", function() end, {})
+	--[=[
+    @state Completed
+    @description Terminal success state for the replication pipeline. No additional work runs here.
+    @transitions No outbound transitions; the job stops here.
+    @failure No rollback is needed because the only mutation was the final append that already succeeded.
+    @reads No additional fields are read.
+    @writes No additional fields are written.
+]=]
+self:AddState("Completed", function() end, {})
+	--[=[
+    @state Failed
+    @description Terminal failure state reached when validation or normalization rejects the client request.
+    @transitions No outbound transitions; the job stops here.
+    @failure No rollback path is necessary because entity mutation is deferred until `ApplyToEntity` and failures before that point are side-effect free.
+    @reads Previously supplied failure context from `fsm:Fail(...)`.
+    @writes No additional fields are written by the state itself.
+]=]
+self:AddState("Failed", function() end, {})
 end
 
+--[=[
+    @description Runs post-shutdown cleanup for the replication job. No additional cleanup is required because failed requests never mutate state and successful requests commit immediately.
+    @return nil -- No extra cleanup work is performed.
+]=]
 function ReplicateIntentJob:OnCleanup() end
 
 return ReplicateIntentJob

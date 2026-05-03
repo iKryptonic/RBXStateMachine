@@ -830,6 +830,37 @@ function LoadPlayerJob:RegisterStates()
 				)
 			end)
 
+			registerEntityCommand(orchestrator, charEntityId, "RequestAbilityCombo", function(player, data)
+				if not isAuthorized(player) then
+					return
+				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
+					return
+				end
+
+				local payload = if typeof(data) == "table" then data else {}
+				local abilityId = if typeof(data) == "string" then data else payload.AbilityId
+				if typeof(abilityId) ~= "string" or abilityId == "" then
+					return
+				end
+
+				createAndStartStateMachine(
+					orchestrator,
+					"AbilityComboFSM",
+					"Ability_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						AbilityId = abilityId,
+						CharacterEntityId = charEntityId,
+						PlayerEntityId = playerEntityId,
+						_onAnimate = payload._onAnimate,
+					},
+					"ValidateAbility"
+				)
+			end)
+
 			registerEntityCommand(orchestrator, charEntityId, "RequestRangedAttack", function(player)
 				if not isAuthorized(player) then
 					return
@@ -890,6 +921,60 @@ function LoadPlayerJob:RegisterStates()
 					},
 					"Validate"
 				)
+			end)
+
+			registerEntityCommand(orchestrator, playerEntityId, "RequestSelectTalent", function(player, data)
+				if not isAuthorized(player) then
+					return
+				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
+					return
+				end
+
+				local payload = if typeof(data) == "table" then data else {}
+				local tier = tonumber(payload.Tier)
+				local choiceId = payload.ChoiceId
+				if typeof(tier) ~= "number" or typeof(choiceId) ~= "string" or choiceId == "" then
+					return
+				end
+
+				local talentDefs = ModuleLoader.requireSharedModule(orchestrator, "TalentPassiveDefs")
+				local playerEntity = orchestrator.GetEntity(playerEntityId)
+				if not playerEntity then
+					return
+				end
+
+				local tierData = talentDefs.Tiers[tier]
+				if not tierData then
+					return
+				end
+
+				local level = tonumber(playerEntity.Level) or 1
+				if level < (tonumber(tierData.RequiredLevel) or 1) then
+					return
+				end
+
+				local isChoiceValid = false
+				for _, choice in ipairs(tierData.Choices) do
+					if choice.Id == choiceId then
+						isChoiceValid = true
+						break
+					end
+				end
+				if not isChoiceValid then
+					return
+				end
+
+				local selections = if typeof(playerEntity.TalentSelections) == "table"
+					then table.clone(playerEntity.TalentSelections)
+					else {}
+				selections[tier] = choiceId
+				playerEntity.TalentSelections = selections
+				playerEntity.UnlockedAbilities = talentDefs.GetUnlockedAbilities(selections)
+				playerEntity:UpdateEntity()
 			end)
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestUnlockTalent", function(player, nodeId)

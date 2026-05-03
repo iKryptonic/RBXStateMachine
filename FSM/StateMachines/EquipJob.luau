@@ -1,7 +1,39 @@
 --!strict
--- @Name EquipJob
--- @Author iKrypto
--- @Description Handles equipping an item to a hand: validates, clones asset, creates weld, mounts, emits intent
+--[=[
+    @Name EquipJob
+    @Author iKrypto
+    @Description Equips an inventory item into a requested hand by validating ownership, serializing access with the per-hand equip lock, cloning and mounting the asset, committing replicated character and player state, emitting the equip intent, and finally releasing the lock. If any stage calls `queueRollback`, the flow destroys the new clone, attempts to restore any captured previous item snapshot, releases the lock, and ends in `Failed`. Historical integrations must target `Completed`; the deprecated `Complete` spelling is intentionally not used.
+
+    State flow diagram:
+    ValidateRequest → AcquireEquipLock → ResolveItemMeta → PreUnEquip → CloneAsset → CreateWeld → MountItem → CommitState → EmitIntent → ReleaseEquipLock → Completed
+                    ↘ Rollback → ReleaseEquipLock → Failed
+
+    Context fields:
+    - Hand: string -- normalized hand name (`Right` or `Left`).
+    - ItemId: string -- normalized item id being equipped.
+    - _equipLockRetryCount: number -- retry counter while waiting for a stale per-hand equip lock.
+    - _equipLockHeld: boolean -- whether this job currently owns the per-hand equip lock.
+    - _clonedItem: Instance -- cloned weapon model tracked for rollback.
+    - _itemData: any -- required item data module contents.
+    - _handle: BasePart -- resolved handle or fallback base part used for welding.
+    - _weld: WeldConstraint? -- weld created between the hand part and handle.
+    - _handPart: BasePart? -- resolved hand part receiving the mounted item.
+    - _previousItemId: string? -- previously equipped item id returned to inventory on successful swap.
+    - _previousItem: Instance? -- optional previous item snapshot used only when rollback restoration data was captured externally.
+    - _previousItemData: any? -- optional metadata used when rollback attempts to remount the previous item.
+    - _previousItemAction: string? -- optional label describing the step that triggered rollback during previous-item restoration.
+    - _failureReason: string? -- reason recorded by rollback helpers and logged during lock release.
+
+    Required params:
+    - CharacterEntityId: string -- character entity that will hold the equipped item.
+    - PlayerEntityId: string -- player entity whose inventory/equipped state is updated.
+    - ItemId: string -- asset and inventory id to equip.
+    - Hand: string? -- optional hand override; defaults to `Right`.
+
+    Notes:
+    - `fsm:TrackInstance(item, ..., true)` uses the `trackOnly` form so the cloned asset is registered for cleanup bookkeeping without changing the explicit rollback ownership model. `Rollback` still destroys `_clonedItem` itself.
+    - This job does not set `_wasStowed`; when swapping items it destroys old hand-held or stowed duplicates instead of preserving a visual stow state.
+]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
@@ -34,6 +66,11 @@ local EquipJob = {
 local cachedEquipHelpers = nil :: any
 local cachedIntentSchema = nil :: any
 
+--[=[
+    @description Lazily resolves and caches the shared `EquipHelpers` module for repeated use across states.
+    @param orchestrator any -- Orchestrator passed into `ModuleLoader.requireSharedModule`.
+    @return any -- Cached `EquipHelpers` module table.
+]=]
 local function getEquipHelpers(orchestrator: any)
 	if not cachedEquipHelpers then
 		cachedEquipHelpers = ModuleLoader.requireSharedModule(orchestrator, "EquipHelpers")
@@ -41,6 +78,11 @@ local function getEquipHelpers(orchestrator: any)
 	return cachedEquipHelpers
 end
 
+--[=[
+    @description Lazily resolves and caches the shared `IntentSchema` module used to append equip intents.
+    @param orchestrator any -- Orchestrator passed into `ModuleLoader.requireSharedModule`.
+    @return any -- Cached `IntentSchema` module table.
+]=]
 local function getIntentSchema(orchestrator: any)
 	if not cachedIntentSchema then
 		cachedIntentSchema = ModuleLoader.requireSharedModule(orchestrator, "IntentSchema")
@@ -48,10 +90,22 @@ local function getIntentSchema(orchestrator: any)
 	return cachedIntentSchema
 end
 
+--[=[
+    @description Maps a hand name to the matching character entity equipped-property field.
+    @param hand string -- `Right` or `Left`.
+    @return string -- `EquippedRight` for the right hand, otherwise `EquippedLeft`.
+]=]
 local function getHandProperty(hand: string): string
 	return if hand == "Right" then "EquippedRight" else "EquippedLeft"
 end
 
+--[=[
+    @description Re-resolves the character entity, player entity, and live character model, falling back to the Roblox `Players` service if the cached character instance was replaced server-side.
+    @param fsm any -- Active equip FSM instance.
+    @return any? -- Current character entity.
+    @return any? -- Current player entity.
+    @return any? -- Live character model.
+]=]
 local function ensureEntitiesAlive(fsm): (any?, any?, any?)
 	local orchestrator = fsm:GetOrchestrator()
 	local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
@@ -79,8 +133,20 @@ local function ensureEntitiesAlive(fsm): (any?, any?, any?)
 	return charEntity, playerEntity, character
 end
 
+--[=[
+    @description Registers every EquipJob state, rollback edge, and terminal no-op with the FSM base class.
+    @return nil -- Mutates the module definition by adding states.
+]=]
 function EquipJob:RegisterStates()
-	self:AddState("ValidateRequest", {
+	--[=[
+    @state ValidateRequest
+    @description Validates the character and player entities, confirms the requested item id exists under assets and is present in bag or inventory when those collections are populated, normalizes the hand, and stores normalized request context.
+    @transitions Transitions to `AcquireEquipLock` when the request is well-formed; otherwise transitions to `Failed`.
+    @failure Fails immediately when required entities, item id, asset data, inventory ownership, or hand validity checks fail.
+    @reads `fsm.CharacterEntityId`, `fsm.PlayerEntityId`, `fsm.ItemId`, `fsm.Hand`, playerEntity.`BagContents`, `Inventory`, `ReplicatedStorage.Assets`.
+    @writes `fsm.Context.Hand`, `fsm.Context.ItemId`.
+]=]
+self:AddState("ValidateRequest", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
@@ -133,7 +199,15 @@ function EquipJob:RegisterStates()
 		end,
 	}, { "AcquireEquipLock", "Failed" })
 
-	self:AddState("AcquireEquipLock", {
+	--[=[
+    @state AcquireEquipLock
+    @description Serializes equips per hand by cloning the character `EquipLock` table, retrying briefly if another job already owns the hand, and force-clearing a stale lock after the retry budget is exhausted.
+    @transitions Transitions to `ResolveItemMeta` after this job marks the requested hand as locked; may self-transition back to `AcquireEquipLock` while waiting; transitions to `Failed` if the character disappears.
+    @failure If the character no longer exists the job fails immediately. Stale-lock recovery does not fail; it force-clears the lock and continues.
+    @reads `fsm.CharacterEntityId`, `fsm.Hand`, `fsm.Context._equipLockRetryCount`, characterEntity.`EquipLock`.
+    @writes `fsm.Context._equipLockRetryCount`, `_equipLockHeld`, `fsm.WaitSpan`, characterEntity.`EquipLock`.
+]=]
+self:AddState("AcquireEquipLock", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
@@ -168,7 +242,15 @@ function EquipJob:RegisterStates()
 		end,
 	}, { "ResolveItemMeta", "Rollback", "Failed" })
 
-	self:AddState("ResolveItemMeta", {
+	--[=[
+    @state ResolveItemMeta
+    @description Clones the requested asset, tracks that clone for cleanup bookkeeping, requires item metadata, resolves a usable handle part, and caches all data needed for mount-time work.
+    @transitions Transitions to `PreUnEquip` when the clone, data module, and handle are valid; otherwise queues `Rollback`.
+    @failure `queueRollback(...)` records the failure reason when the item cannot be cloned, lacks a data module, or has no usable handle. The partially cloned item is explicitly destroyed before rollback when necessary.
+    @reads `fsm.ItemId`, shared `EquipHelpers.CloneItem`, cloned item children and `PrimaryPart`.
+    @writes `fsm.Context._clonedItem`, `_itemData`, `_handle`, and tracked instance bookkeeping via `fsm:TrackInstance(..., true)`.
+]=]
+self:AddState("ResolveItemMeta", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local equipHelpers = getEquipHelpers(orchestrator)
@@ -210,7 +292,15 @@ function EquipJob:RegisterStates()
 		end,
 	}, { "PreUnEquip", "Rollback", "Failed" })
 
-	self:AddState("PreUnEquip", {
+	--[=[
+    @state PreUnEquip
+    @description Resolves the current character model, destroys any existing hand-held clone on the target hand, records the previous item id for inventory restoration, and clears any lingering stowed duplicate of that previous item before the new asset is mounted.
+    @transitions Transitions to `CloneAsset` when the target hand has been prepared; otherwise queues `Rollback`.
+    @failure Queues rollback if the character entity disappears or the live character model is unavailable before the swap can proceed.
+    @reads `fsm.CharacterEntityId`, `fsm.Hand`, current equipped property, existing hand welds, existing item parent model.
+    @writes `fsm.Context._previousItemId`; destroys old welds, old mounted clones, and stowed duplicates through `EquipHelpers`.
+]=]
+self:AddState("PreUnEquip", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local equipHelpers = getEquipHelpers(orchestrator)
@@ -251,7 +341,15 @@ function EquipJob:RegisterStates()
 		end,
 	}, { "CloneAsset", "Rollback", "Failed" })
 
-	self:AddState("CloneAsset", {
+	--[=[
+    @state CloneAsset
+    @description Clears any stowed duplicate of the item being newly equipped so only one visual instance remains before the fresh clone is welded in-hand.
+    @transitions Transitions to `CreateWeld` on success; otherwise queues `Rollback`.
+    @failure Queues rollback if the character entity or live character model disappears before duplicate cleanup runs.
+    @reads `fsm.CharacterEntityId`, `fsm.ItemId`, live character model.
+    @writes Character descendants by removing stowed duplicates of the new item through `EquipHelpers.ClearStowedDuplicate(...)`.
+]=]
+self:AddState("CloneAsset", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local equipHelpers = getEquipHelpers(orchestrator)
@@ -272,7 +370,15 @@ function EquipJob:RegisterStates()
 		end,
 	}, { "CreateWeld", "Rollback", "Failed" })
 
-	self:AddState("CreateWeld", {
+	--[=[
+    @state CreateWeld
+    @description Finds the target hand part on the live character and creates the weld that binds the cloned item handle to that hand using the configured grip offset.
+    @transitions Transitions to `MountItem` when the hand part and weld are created; otherwise queues `Rollback`.
+    @failure Queues rollback if the character model disappears or the requested hand part cannot be found.
+    @reads `fsm.CharacterEntityId`, `fsm.Hand`, `fsm.Context._handle`, `fsm.Context._itemData.GripC1`.
+    @writes `fsm.Context._weld`, `fsm.Context._handPart`.
+]=]
+self:AddState("CreateWeld", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local equipHelpers = getEquipHelpers(orchestrator)
@@ -302,7 +408,15 @@ function EquipJob:RegisterStates()
 		end,
 	}, { "MountItem", "Rollback", "Failed" })
 
-	self:AddState("MountItem", {
+	--[=[
+    @state MountItem
+    @description Parents the cloned item into the live character rig using the previously resolved hand part and weld context.
+    @transitions Transitions to `CommitState` when mount succeeds; otherwise queues `Rollback`.
+    @failure Queues rollback if any entity became unavailable or if `EquipHelpers.MountItem(...)` errors during parenting.
+    @reads `fsm.Context._clonedItem`, `fsm.Context._handPart`, current live entities from `ensureEntitiesAlive(...)`.
+    @writes Character model hierarchy by mounting the cloned item.
+]=]
+self:AddState("MountItem", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
@@ -323,7 +437,15 @@ function EquipJob:RegisterStates()
 		end,
 	}, { "CommitState", "Rollback", "Failed" })
 
-	self:AddState("CommitState", {
+	--[=[
+    @state CommitState
+    @description Commits the equipped item id onto the character entity and player entity, updates right-hand `WeaponEqp` when applicable, returns any swapped-out item id to inventory, and removes the newly equipped item from inventory.
+    @transitions Transitions to `EmitIntent` after state is committed; otherwise queues `Rollback`.
+    @failure Queues rollback if the character, player, or live model disappears before replicated entity fields can be updated.
+    @reads `fsm.Hand`, `fsm.ItemId`, `fsm.Context._previousItemId`, playerEntity.`Equipped`, `Inventory`, character equipped property.
+    @writes Character equipped property (`EquippedRight` or `EquippedLeft`), playerEntity.`Equipped`, `WeaponEqp`, `Inventory`, and replicated entity updates.
+]=]
+self:AddState("CommitState", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
@@ -368,7 +490,15 @@ function EquipJob:RegisterStates()
 		end,
 	}, { "EmitIntent", "Rollback", "Failed" })
 
-	self:AddState("EmitIntent", {
+	--[=[
+    @state EmitIntent
+    @description Appends the `Equip` intent so clients can mirror the successful equip action after the authoritative entity state has been committed.
+    @transitions Transitions to `ReleaseEquipLock` when the intent is appended; otherwise queues `Rollback`.
+    @failure Queues rollback if the character, player, or live model disappears before intent emission.
+    @reads `fsm.Hand`, `fsm.ItemId`, live entities from `ensureEntitiesAlive(...)`.
+    @writes Character entity intent queue through `IntentSchema.AppendIntent(...)`.
+]=]
+self:AddState("EmitIntent", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
@@ -390,7 +520,15 @@ function EquipJob:RegisterStates()
 		end,
 	}, { "ReleaseEquipLock", "Rollback", "Failed" })
 
-	self:AddState("ReleaseEquipLock", {
+	--[=[
+    @state ReleaseEquipLock
+    @description Clears the per-hand equip lock if this job still owns it, then chooses `Completed` or `Failed` based on whether rollback stored `_failureReason`.
+    @transitions Transitions to `Completed` when no failure reason exists, otherwise transitions to `Failed`.
+    @failure Even after rollback, this state still releases the lock and logs `_failureReason` before entering `Failed`.
+    @reads `fsm.CharacterEntityId`, `fsm.Hand`, `fsm.Context._equipLockHeld`, `fsm.Context._failureReason`, characterEntity.`EquipLock`.
+    @writes Character entity.`EquipLock`, `fsm.Context._equipLockHeld`; emits an error log when `_failureReason` is present.
+]=]
+self:AddState("ReleaseEquipLock", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
@@ -413,7 +551,15 @@ function EquipJob:RegisterStates()
 		end,
 	}, { "Completed", "Failed" })
 
-	self:AddState("Rollback", {
+	--[=[
+    @state Rollback
+    @description Destroys the newly cloned item if it still exists and, when a previous item snapshot was captured, attempts to recreate its weld and remount it before handing control to lock release.
+    @transitions Always transitions to `ReleaseEquipLock`.
+    @failure Rollback is best-effort. If no `_previousItem` snapshot exists, cleanup only destroys the new clone. If remounting the previous item fails, the job logs a warning but still proceeds to lock release and then `Failed`.
+    @reads `fsm.Context._clonedItem`, `_previousItem`, `_previousItemData`, `_previousItemAction`, `_previousItemId`, `fsm.Hand`, live entities from `ensureEntitiesAlive(...)`.
+    @writes Destroys `_clonedItem`; may recreate a weld and remount `_previousItem`; leaves `_failureReason` intact for `ReleaseEquipLock`.
+]=]
+self:AddState("Rollback", {
 		OnEnter = function(_, fsm)
 			local clonedItem = fsm.Context._clonedItem
 			if clonedItem and clonedItem.Parent then
@@ -423,6 +569,11 @@ function EquipJob:RegisterStates()
 			local previousItem = fsm.Context._previousItem
 			if previousItem then
 				local action = tostring(fsm.Context._previousItemAction or "unknown action")
+				--[=[
+				    @description Emits a rollback warning through the FSM logger when available, otherwise falls back to `warn`.
+				    @param message string -- Warning message describing the rollback restoration issue.
+				    @return nil -- Produces a logging side effect only.
+				]=]
 				local function logRollbackWarning(message: string)
 					if type(fsm.Log) == "function" then
 						fsm:Log({ Level = "WARN", Message = message })
@@ -489,8 +640,24 @@ function EquipJob:RegisterStates()
 		end,
 	}, { "ReleaseEquipLock" })
 
-	self:AddState("Completed", function(_fsm) end, {})
-	self:AddState("Failed", function(_fsm) end, {})
+	--[=[
+    @state Completed
+    @description Terminal success state for the equip pipeline. No additional work runs here.
+    @transitions No outbound transitions; the job stops here.
+    @failure No rollback remains because the clone, entity state, and lock release have already completed successfully.
+    @reads No additional fields are read.
+    @writes No additional fields are written.
+]=]
+self:AddState("Completed", function(_fsm) end, {})
+	--[=[
+    @state Failed
+    @description Terminal failure state reached after rollback and lock release finish.
+    @transitions No outbound transitions; the job stops here.
+    @failure Any cleanup that could be performed has already happened in `Rollback` and `ReleaseEquipLock`; remaining issues are surfaced through the stored `_failureReason` log.
+    @reads Previously stored `fsm.Context._failureReason` and related rollback context.
+    @writes No additional fields are written by the state itself.
+]=]
+self:AddState("Failed", function(_fsm) end, {})
 end
 
 return EquipJob
