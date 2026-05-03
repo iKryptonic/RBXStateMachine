@@ -167,13 +167,14 @@ function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {
 	self._states = {} :: { [string]: any }
 	self._transitions = {} :: { [string]: {string} }
 	self._cleanupTasks = {} :: { any }
+	self._managedInstances = {} :: { { Instance: Instance, Label: string, CreatedAt: number } }
 	self._legacyCleanup = {} :: {[(() -> ())?]: any}?
 	self._connection = nil :: RBXScriptConnection?
 	-- Ring buffer of transitions for the visualizer's history panel.
 	-- Each entry: { From: string?, To: string, Time: number }
 	self.TransitionHistory = {} :: { { From: string?, To: string, Time: number } }
 	-- Clamp to a sane range so users can't accidentally set this to 10M.
-	local histMax = 100
+	local histMax = 30
 	if type(params) == "table" and type((params :: any).TransitionHistoryMax) == "number" then
 		histMax = math.clamp(math.floor((params :: any).TransitionHistoryMax), 10, 500)
 	end
@@ -500,6 +501,50 @@ end
 function BaseStateMachine:Manage(object: any)
 	table.insert(self._cleanupTasks, object)
 	return object
+end
+
+--[=[
+	@description Registers a Roblox Instance for tracked cleanup when the FSM is destroyed.
+	Unlike Manage(), TrackInstance provides profiler-visible metadata (label, creation time)
+	so the ServiceManager can report which FSMs own which Instances and detect orphans.
+
+	@param inst Instance -- The Roblox Instance to track
+	@param label string? -- Optional human-readable label (e.g., "WeaponClone", "Hitbox")
+	@param trackOnly boolean? -- If true, only monitors (no auto-destroy). Use for Instances that outlive the FSM.
+	@return Instance -- The same Instance (for inline chaining)
+	@writes self._managedInstances, self._cleanupTasks
+]=]
+function BaseStateMachine:TrackInstance(inst: Instance, label: string?, trackOnly: boolean?): Instance
+	table.insert(self._managedInstances, {
+		Instance = inst,
+		Label = label or inst.Name,
+		CreatedAt = os.clock(),
+		TrackOnly = trackOnly or false,
+	})
+	if not trackOnly then
+		table.insert(self._cleanupTasks, inst)
+	end
+	return inst
+end
+
+--[=[
+	@description Returns the list of tracked Instances this FSM currently owns.
+	Used by the ServiceManager Profiler to display per-FSM Instance ownership
+	and detect potential leaks.
+
+	@return { { Instance: Instance, Label: string, CreatedAt: number } }
+	@reads self._managedInstances
+]=]
+function BaseStateMachine:GetManagedInstances(): { any }
+	-- Prune destroyed Instances before returning
+	local alive = {}
+	for _, entry in ipairs(self._managedInstances) do
+		if entry.Instance and entry.Instance.Parent ~= nil then
+			table.insert(alive, entry)
+		end
+	end
+	self._managedInstances = alive
+	return alive
 end
 
 -- RUNTIME
@@ -1314,18 +1359,6 @@ end
 	@writes None (subclass-defined)
 ]=]
 function BaseStateMachine:OnCleanup()
-	self.Logger:Log
-	{ 
-		Level = "WARN", 
-		Message = "Abstract Method 'OnCleanup' called.", 
-		OperationId = self.Id 
-	}
-	self.Logger:Log
-	{ 
-		Level = "WARN", 
-		Message = "Subclasses must implement 'OnCleanup' to handle cleanup tasks.", 
-		OperationId = self.Id 
-	}
 end
 
 --[=[
@@ -1444,8 +1477,12 @@ function BaseStateMachine:Fail(reason: string?)
 	end
 	if combinedReason ~= "" then
 		combinedReason = combinedReason:gsub(" | $", "")
+    else
+        combinedReason = "StateMachine failed"
 	end
 
+    self._error = combinedReason
+    self.Error = combinedReason
 	self:_Teardown()
 	self._failed:Fire(combinedReason)
 	self.Logger:Log
@@ -1507,7 +1544,29 @@ function BaseStateMachine:Destroy()
 		OperationId = self.Id
 	}
 
+    local orchestrator = self:GetOrchestrator()
+    local registry = orchestrator and orchestrator.Factory and orchestrator.Factory.Registry
+    if registry and type(registry.GetStateMachine) == "function" and type(registry.UnregisterStateMachine) == "function" then
+        local registered = registry.GetStateMachine(self.Id)
+        if registered == self then
+            registry.UnregisterStateMachine(self.Id)
+        end
+    end
+
 	self:_Teardown()
+	-- Log managed Instance cleanup count for diagnostics
+	if #self._managedInstances > 0 then
+		local aliveCount = 0
+		for _, entry in ipairs(self._managedInstances) do
+			if entry.Instance and entry.Instance.Parent ~= nil then
+				aliveCount += 1
+			end
+		end
+		if aliveCount > 0 then
+			self:Log { Level = "DEBUG", Message = string.format("Cleaning up %d managed Instances", aliveCount) }
+		end
+	end
+	self._managedInstances = {}
 	for _, cleanupTask in ipairs(self._cleanupTasks) do
 		pcall(function()
 			if typeof(cleanupTask) == "Instance" then cleanupTask:Destroy()
@@ -1522,6 +1581,20 @@ function BaseStateMachine:Destroy()
 	if self._pendingTransitions then table.clear(self._pendingTransitions) end
 	-- Free history ring buffer
 	if self.TransitionHistory then table.clear(self.TransitionHistory) end
+	-- Free logger history + summary
+	if self.Logger then
+		if self.Logger.History then table.clear(self.Logger.History) end
+		if self.Logger.Summary then table.clear(self.Logger.Summary) end
+	end
+
+    local context = self.Context
+    if type(context) == "table" then
+        context._Orchestrator = nil
+        context.Orchestrator = nil
+        context.FSM = nil
+    end
+    self.Context = nil
+
 	if self._completed then self._completed:Destroy() end
 	if self._failed then self._failed:Destroy() end
 	if self._cancelled then self._cancelled:Destroy() end
