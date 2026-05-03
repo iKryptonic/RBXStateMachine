@@ -69,6 +69,18 @@ local function ensureEntitiesAlive(fsm): (any?, any?, any?)
 
 	local character = charEntity.Instance
 	if not character or not character.Parent then
+		local Players = game:GetService("Players")
+		local userId = charEntity.UserId or charEntity:GetContext("UserId")
+		if userId then
+			for _, player in Players:GetPlayers() do
+				if player.UserId == userId and player.Character and player.Character.Parent then
+					character = player.Character
+					break
+				end
+			end
+		end
+	end
+	if not character or not character.Parent then
 		return nil, nil, nil
 	end
 	return charEntity, playerEntity, character
