@@ -11,23 +11,6 @@
       "Examples": {
         "$path": "example"
       }
-    },
-    "ServerScriptService": {
-      "$className": "ServerScriptService",
-      "$ignoreUnknownInstances": true,
-      "TestBootstrap": {
-        "$path": "test/main.server.luau"
-      }
-    },
-    "StarterPlayer": {
-      "$className": "StarterPlayer",
-      "StarterPlayerScripts": {
-        "$className": "StarterPlayerScripts",
-        "$ignoreUnknownInstances": true,
-        "ClientBootstrap": {
-          "$path": "test/Client.client.luau"
-        }
-      }
     }
   }
 }
