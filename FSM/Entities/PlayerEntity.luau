@@ -63,7 +63,7 @@ function PlayerEntity:GetContext(params: { [any]: any })
 			Accessory2 = "",
 			Accessory3 = "",
 		},
-		WeaponEqp = context.WeaponEqp or "1",
+		WeaponEqp = context.WeaponEqp or "",
 		LearnedAbilities = context.LearnedAbilities or {},
 		SkillPoints = context.SkillPoints or 0,
 		StatPoints = context.StatPoints or 0,

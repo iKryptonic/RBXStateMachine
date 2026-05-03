@@ -8,6 +8,8 @@ local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
 assert(Helpers, "Helpers folder not found")
+local Shared = ReplicatedStorage:WaitForChild("shared")
+local EquipHelpers = require(Shared:WaitForChild("EquipHelpers"))
 local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
 local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
 local CombatHelpers = require(Helpers:WaitForChild("CombatHelpers"))
@@ -58,8 +60,8 @@ local function getItemData(weaponId: string): any?
 	if not item then
 		return nil
 	end
-	local dataModule = item:FindFirstChild("Data")
-	if not dataModule or not dataModule:IsA("ModuleScript") then
+	local dataModule = EquipHelpers.ResolveDataModule(item)
+	if not dataModule then
 		return nil
 	end
 	local ok, data = pcall(require, dataModule)

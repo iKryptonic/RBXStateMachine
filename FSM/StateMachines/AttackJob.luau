@@ -6,6 +6,8 @@ local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
 assert(Helpers, "Helpers folder not found")
+local Shared = ReplicatedStorage:WaitForChild("shared")
+local EquipHelpers = require(Shared:WaitForChild("EquipHelpers"))
 local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
 local CombatHelpers = require(Helpers:WaitForChild("CombatHelpers"))
 local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
@@ -93,8 +95,8 @@ local function getItemData(weaponId: string): any?
 		return nil
 	end
 
-	local dataModule = item:FindFirstChild("Data")
-	if not dataModule or not dataModule:IsA("ModuleScript") then
+	local dataModule = EquipHelpers.ResolveDataModule(item)
+	if not dataModule then
 		return nil
 	end
 
