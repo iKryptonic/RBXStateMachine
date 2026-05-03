@@ -496,11 +496,15 @@ end)
 end
 
 if entity._privateProperties and entity._privateProperties.Persistent and Factory.PersistenceManager and next(changes) then
-task.defer(function()
-if entity._privateProperties and entity._privateProperties.IsValid and entity._privateProperties._lifecycleToken == lifecycleToken then
-pcall(Factory.PersistenceManager.SaveState, entity)
-end
-end)
+	-- Debounce persistent saves: wait 2 seconds after last change before saving
+	local pp = entity._privateProperties
+	pp._pendingSaveToken = (pp._pendingSaveToken or 0) + 1
+	local saveToken = pp._pendingSaveToken
+	task.delay(2, function()
+		if pp._pendingSaveToken == saveToken and pp.IsValid and pp._lifecycleToken == lifecycleToken then
+			pcall(Factory.PersistenceManager.SaveState, entity)
+		end
+	end)
 end
 end)
 
