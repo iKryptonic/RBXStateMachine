@@ -41,9 +41,11 @@ function ProfilerModule.new(): any
 	self._threadPool = { Total = 0, Free = 0, Active = 0, Peak = 0 }
 	self._networkTraffic = {} :: { { Name: string, Count: number, LastFired: number } }
 	self._gcStats = { MemoryMB = 0 }
+	self._instanceMemory = { Services = {}, TopOffenders = {}, TotalDescendants = 0, DuplicateAssets = nil } :: any
 	self._sortMode = "AvgTime"
 	self._fsmSortMode = "AvgTime"
 	self._showDiagnostics = false
+	self._showInstanceMemory = true
 	return self
 end
 
@@ -167,6 +169,9 @@ function ProfilerModule:_FetchClient(orchestrator: any, nexus: any?)
 
 	-- GC
 	self._gcStats.MemoryMB = collectgarbage("count") / 1024
+
+	-- Instance memory (client-side)
+	self:_FetchInstanceMemoryLocal()
 end
 
 function ProfilerModule:_FetchServer(serverData: any?)
@@ -252,6 +257,11 @@ function ProfilerModule:_FetchServer(serverData: any?)
 		end
 		table.sort(self._networkTraffic, function(a, b) return a.Count > b.Count end)
 	end
+
+	-- Instance memory from server snapshot
+	if serverData.InstanceMemory then
+		self._instanceMemory = serverData.InstanceMemory
+	end
 end
 
 function ProfilerModule:_FetchNetworkClient(nm: any?)
@@ -274,6 +284,76 @@ function ProfilerModule:_FetchNetworkClient(nm: any?)
 	addStats(nm._busStats)
 	addStats(nm._invokeStats)
 	table.sort(self._networkTraffic, function(a, b) return a.Count > b.Count end)
+end
+
+function ProfilerModule:_FetchInstanceMemoryLocal()
+	local instMem: { [string]: any } = { Services = {}, TopOffenders = {}, TotalDescendants = 0 }
+	local serviceNames = {"ReplicatedStorage", "Workspace", "Lighting", "SoundService"}
+	for _, svcName in ipairs(serviceNames) do
+		local ok, svc = pcall(function() return game:GetService(svcName) end)
+		if ok and svc then
+			local c = 0
+			for _ in svc:GetDescendants() do c += 1 end
+			instMem.Services[svcName] = c
+			instMem.TotalDescendants += c
+		end
+	end
+	-- PlayerGui
+	local Players = game:GetService("Players")
+	local lp = Players.LocalPlayer
+	if lp then
+		local pg = lp:FindFirstChild("PlayerGui")
+		if pg then
+			local c = 0
+			for _ in pg:GetDescendants() do c += 1 end
+			instMem.Services["PlayerGui"] = c
+			instMem.TotalDescendants += c
+		end
+	end
+	-- Top offenders in RS
+	local rs = game:FindFirstChild("ReplicatedStorage")
+	if rs then
+		for _, child in rs:GetChildren() do
+			local c = 0
+			for _ in child:GetDescendants() do c += 1 end
+			if c > 50 then
+				table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "RS" })
+			end
+		end
+	end
+	-- Top offenders in Workspace
+	for _, child in game.Workspace:GetChildren() do
+		local c = 0
+		for _ in child:GetDescendants() do c += 1 end
+		if c > 100 then
+			table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "WS" })
+		end
+	end
+	table.sort(instMem.TopOffenders, function(a, b) return a.Count > b.Count end)
+	if #instMem.TopOffenders > 15 then
+		local trimmed = {}
+		for i = 1, 15 do trimmed[i] = instMem.TopOffenders[i] end
+		instMem.TopOffenders = trimmed
+	end
+	-- Detect duplicate assets
+	local assetsFolder = rs and rs:FindFirstChild("Assets")
+	if assetsFolder then
+		local nameCounts: {[string]: number} = {}
+		for _, child in assetsFolder:GetChildren() do
+			nameCounts[child.Name] = (nameCounts[child.Name] or 0) + 1
+		end
+		local dupes = {}
+		for name, count in pairs(nameCounts) do
+			if count > 1 then
+				table.insert(dupes, { Name = name, Count = count })
+			end
+		end
+		if #dupes > 0 then
+			table.sort(dupes, function(a, b) return a.Count > b.Count end)
+			instMem.DuplicateAssets = dupes
+		end
+	end
+	self._instanceMemory = instMem
 end
 
 --[[
@@ -366,6 +446,9 @@ function ProfilerModule:BuildRootLayer(frame: Frame, context: any)
 	-- ── HOT FSMs ──────────────────────────────────────────────
 	self:_BuildHotFSMsSection(contentFrame, nexus, nextOrder())
 
+	-- ── INSTANCE MEMORY ──────────────────────────────────────
+	self:_BuildInstanceMemorySection(contentFrame, nexus, nextOrder())
+
 	-- ── DIAGNOSTICS (collapsed) ───────────────────────────────
 	self:_BuildDiagnosticsSection(contentFrame, nexus, nextOrder())
 end
@@ -433,10 +516,14 @@ function ProfilerModule:_BuildBudgetBar(parent: Frame, layoutOrder: number)
 	fill.Parent = track
 	Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 4)
 
-	-- Memory badge
+	-- Memory badge (Lua heap + Instance count)
+	local totalInst = self._instanceMemory.TotalDescendants or 0
+	local instColor = if totalInst > 5000 then "#FF4444" elseif totalInst > 2000 then "#FFAA00" else "#888"
 	Theme.CreateLabel({
-		Text = string.format('<font color="#666">MEM</font> %.1fMB', self._gcStats.MemoryMB),
-		Size = UDim2.new(0, 100, 0, 14),
+		Text = string.format('<font color="#666">LUA</font> %.1fMB  <font color="%s">INST</font> <font color="%s">%s</font>',
+			self._gcStats.MemoryMB, instColor, instColor,
+			if totalInst > 1000 then string.format("%.1fK", totalInst / 1000) else tostring(totalInst)),
+		Size = UDim2.new(0, 200, 0, 14),
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, 0),
 		Color = Theme.Colors.TextMuted,
@@ -558,6 +645,159 @@ function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOr
 			Alignment = Enum.TextXAlignment.Center,
 			Parent = parent,
 		}).LayoutOrder = layoutOrder * 100 + 2
+	end
+end
+
+-- ══════════════════════════════════════════════════════════════
+-- INSTANCE MEMORY (Roblox engine memory — meshes, textures, GUI)
+-- ══════════════════════════════════════════════════════════════
+
+function ProfilerModule:_BuildInstanceMemorySection(parent: Frame, _nexus: any, layoutOrder: number)
+	local im = self._instanceMemory
+	local total = im.TotalDescendants or 0
+	local totalColor = if total > 5000 then Theme.Colors.Danger
+		elseif total > 2000 then Theme.Colors.Warning
+		else Theme.Colors.Success
+
+	-- Toggle button
+	local btn = Instance.new("TextButton")
+	btn.Name = "InstanceMemoryToggle"
+	btn.Size = UDim2.new(1, 0, 0, 22)
+	btn.BackgroundColor3 = Theme.Colors.GlassTertiary
+	btn.BackgroundTransparency = 0.8
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = false
+	btn.LayoutOrder = layoutOrder * 100
+	btn.Text = ""
+	btn.Parent = parent
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, Theme.Radius.Xs)
+
+	local chevron = if self._showInstanceMemory then "▾" else "▸"
+	Theme.CreateLabel({
+		Text = string.format(
+			'<font color="#FF8C00">%s</font> INSTANCE MEMORY <font color="#666">(%s total descendants)</font>',
+			chevron,
+			if total > 1000 then string.format("%.1fK", total / 1000) else tostring(total)),
+		Size = UDim2.new(1, -8, 1, 0),
+		Position = UDim2.new(0, 8, 0, 0),
+		Color = totalColor,
+		FontSize = Theme.TextSize.Caption,
+		FontFace = Theme.Font.Bold,
+		Alignment = Enum.TextXAlignment.Left,
+		Parent = btn,
+	})
+
+	if not self._showInstanceMemory then
+		btn.MouseButton1Click:Connect(function()
+			self._showInstanceMemory = true
+			local nav = _nexus and _nexus._navigator
+			if nav then nav:RebuildCurrentLayer() end
+		end)
+		return
+	end
+
+	btn.MouseButton1Click:Connect(function()
+		self._showInstanceMemory = false
+		local nav = _nexus and _nexus._navigator
+		if nav then nav:RebuildCurrentLayer() end
+	end)
+
+	-- Service breakdown
+	Theme.CreateLabel({
+		Text = '<font color="#888">SERVICE BREAKDOWN</font>',
+		Size = UDim2.new(1, 0, 0, 14),
+		Color = Theme.Colors.TextSecondary,
+		FontSize = Theme.TextSize.Tiny,
+		FontFace = Theme.Font.Bold,
+		Alignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	}).LayoutOrder = layoutOrder * 100 + 1
+
+	-- Sort services by count descending
+	local services = {}
+	for name, count in pairs(im.Services or {}) do
+		table.insert(services, { Name = name, Count = count })
+	end
+	table.sort(services, function(a, b) return a.Count > b.Count end)
+
+	for i, svc in ipairs(services) do
+		local svcColor = if svc.Count > 3000 then "#FF4444"
+			elseif svc.Count > 1000 then "#FFAA00"
+			elseif svc.Count > 500 then "#FFD700"
+			else "#888"
+		Theme.CreateLabel({
+			Text = string.format('  <font color="%s">%-28s</font> <font color="%s">%s</font>',
+				"#9DC9FF", svc.Name, svcColor,
+				if svc.Count > 1000 then string.format("%.1fK", svc.Count / 1000) else tostring(svc.Count)),
+			Size = UDim2.new(1, 0, 0, 14),
+			Color = Theme.Colors.TextSecondary,
+			FontSize = Theme.TextSize.Tiny,
+			FontFace = Theme.Font.Mono,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = parent,
+		}).LayoutOrder = layoutOrder * 100 + 1 + i
+	end
+
+	-- Top offenders
+	local offenders = im.TopOffenders or {}
+	if #offenders > 0 then
+		Theme.CreateLabel({
+			Text = string.format('<font color="#888">TOP OFFENDERS</font> <font color="#666">(>50 descendants)</font>'),
+			Size = UDim2.new(1, 0, 0, 14),
+			Color = Theme.Colors.TextSecondary,
+			FontSize = Theme.TextSize.Tiny,
+			FontFace = Theme.Font.Bold,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = parent,
+		}).LayoutOrder = layoutOrder * 100 + 50
+
+		-- Header
+		self:_BuildTableHeader(parent, layoutOrder * 100 + 51,
+			{ "Name", "Class", "Descendants", "Service" },
+			{ 0.35, 0.20, 0.25, 0.15 })
+
+		for i, off in ipairs(offenders) do
+			if i > 10 then break end
+			local countColor = if off.Count > 1000 then Theme.Colors.Danger
+				elseif off.Count > 500 then Theme.Colors.Warning
+				else Theme.Colors.TextSecondary
+
+			self:_BuildTableRow(parent, layoutOrder * 100 + 51 + i, {
+				{ Text = off.Name or "?", Width = 0.35, Color = Theme.Colors.TextPrimary },
+				{ Text = off.Class or "?", Width = 0.20, Color = Theme.Colors.TextMuted },
+				{ Text = if off.Count > 1000 then string.format("%.1fK", off.Count / 1000) else tostring(off.Count), Width = 0.25, Color = countColor },
+				{ Text = off.Service or "RS", Width = 0.15, Color = Theme.Colors.Cyan },
+			})
+		end
+	end
+
+	-- Duplicate assets warning
+	local dupes = im.DuplicateAssets
+	if dupes and #dupes > 0 then
+		local dupeOrder = layoutOrder * 100 + 70
+		Theme.CreateLabel({
+			Text = string.format('<font color="#FF4444">⚠ DUPLICATE ASSETS DETECTED (%d names)</font>', #dupes),
+			Size = UDim2.new(1, 0, 0, 16),
+			Color = Theme.Colors.Danger,
+			FontSize = Theme.TextSize.Caption,
+			FontFace = Theme.Font.Bold,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = parent,
+		}).LayoutOrder = dupeOrder
+
+		for i, dupe in ipairs(dupes) do
+			if i > 10 then break end
+			Theme.CreateLabel({
+				Text = string.format('  <font color="#FF6666">%s</font> × <font color="#FF4444">%d copies</font>',
+					dupe.Name, dupe.Count),
+				Size = UDim2.new(1, 0, 0, 14),
+				Color = Theme.Colors.TextSecondary,
+				FontSize = Theme.TextSize.Tiny,
+				FontFace = Theme.Font.Mono,
+				Alignment = Enum.TextXAlignment.Left,
+				Parent = parent,
+			}).LayoutOrder = dupeOrder + i
+		end
 	end
 end
 

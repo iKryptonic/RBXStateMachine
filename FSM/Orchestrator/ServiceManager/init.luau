@@ -1282,7 +1282,76 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 		snapshot.Memory = collectgarbage("count") -- KB
 		snapshot.Timestamp = os.clock()
 
-		-- Aggregate server log history. We pull from the Orchestrator's central
+		-- Instance memory audit — surfaces Roblox engine memory (mesh/texture data)
+		-- that gcinfo() can't see. Identifies heavy services and top offenders.
+		do
+			local instMem: { [string]: any } = { Services = {}, TopOffenders = {}, TotalDescendants = 0 }
+			local serviceNames = {"ReplicatedStorage", "Workspace", "ServerScriptService", "ServerStorage", "Lighting", "StarterGui", "StarterPlayer", "SoundService"}
+			for _, svcName in ipairs(serviceNames) do
+				local ok2, svc = pcall(function() return game:GetService(svcName) end)
+				if ok2 and svc then
+					local c = 0
+					for _ in svc:GetDescendants() do c += 1 end
+					instMem.Services[svcName] = c
+					instMem.TotalDescendants += c
+				end
+			end
+			-- Top offenders: children of RS/Workspace with many descendants
+			local rs2 = game:FindFirstChild("ReplicatedStorage")
+			if rs2 then
+				for _, child in rs2:GetChildren() do
+					local c = 0
+					for _ in child:GetDescendants() do c += 1 end
+					if c > 50 then
+						table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "RS" })
+					end
+				end
+			end
+			for _, child in game.Workspace:GetChildren() do
+				local c = 0
+				for _ in child:GetDescendants() do c += 1 end
+				if c > 100 then
+					table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "WS" })
+				end
+			end
+			table.sort(instMem.TopOffenders, function(a, b) return a.Count > b.Count end)
+			if #instMem.TopOffenders > 15 then
+				local trimmed = {}
+				for i = 1, 15 do trimmed[i] = instMem.TopOffenders[i] end
+				instMem.TopOffenders = trimmed
+			end
+			-- Count PlayerGui per player
+			for _, player in game.Players:GetPlayers() do
+				local pg = player:FindFirstChild("PlayerGui")
+				if pg then
+					local c = 0
+					for _ in pg:GetDescendants() do c += 1 end
+					instMem.Services["PlayerGui:" .. player.Name] = c
+					instMem.TotalDescendants += c
+				end
+			end
+			-- Detect duplicate assets (cloned multiple times)
+			local assetsFolder = rs2 and rs2:FindFirstChild("Assets")
+			if assetsFolder then
+				local nameCounts: {[string]: number} = {}
+				for _, child in assetsFolder:GetChildren() do
+					nameCounts[child.Name] = (nameCounts[child.Name] or 0) + 1
+				end
+				local dupes = {}
+				for name, count in pairs(nameCounts) do
+					if count > 1 then
+						table.insert(dupes, { Name = name, Count = count })
+					end
+				end
+				if #dupes > 0 then
+					table.sort(dupes, function(a, b) return a.Count > b.Count end)
+					instMem.DuplicateAssets = dupes
+				end
+			end
+			snapshot.InstanceMemory = instMem
+		end
+
+		-- Aggregate server log history.We pull from the Orchestrator's central
 		-- Logger and any per-subsystem Loggers we know about. Capped at 200
 		-- most-recent entries so the snapshot stays small.
 		do
