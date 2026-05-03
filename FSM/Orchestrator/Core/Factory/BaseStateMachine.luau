@@ -1523,8 +1523,11 @@ function BaseStateMachine:Destroy()
 	if self._pendingTransitions then table.clear(self._pendingTransitions) end
 	-- Free history ring buffer
 	if self.TransitionHistory then table.clear(self.TransitionHistory) end
-	-- Free logger history
-	if self.Logger and self.Logger.History then table.clear(self.Logger.History) end
+	-- Free logger history + summary
+	if self.Logger then
+		if self.Logger.History then table.clear(self.Logger.History) end
+		if self.Logger.Summary then table.clear(self.Logger.Summary) end
+	end
 
     local context = self.Context
     if type(context) == "table" then

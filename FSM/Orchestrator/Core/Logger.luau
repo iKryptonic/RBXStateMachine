@@ -19,6 +19,7 @@ type LogEntry = {
 local SHOW_TIMESTAMP = true
 local USE_RICH_TEXT = false
 local MAX_LOG_HISTORY = 50
+local MAX_SUMMARY_HISTORY = 200 -- compressed summaries for long-term analysis
 
 local Initialized, Settings = false, nil
 --[[
@@ -79,7 +80,7 @@ function Logger:Log(params: { Level: string, Message: string, OperationId: strin
 	local message = params.Message or ""
 	local operationId = params.OperationId
 
-	-- Store in History
+	-- Store in History (full entries, recent)
 	local entry: LogEntry = {
 		Timestamp = os.time(),
 		OperationId = operationId,
@@ -89,7 +90,16 @@ function Logger:Log(params: { Level: string, Message: string, OperationId: strin
 	}
 	table.insert(self.History, entry)
 	if #self.History > MAX_LOG_HISTORY then
-		table.remove(self.History, 1)
+		-- Compress evicted entry into summary ring (level + short message, no Data)
+		local evicted = table.remove(self.History, 1)
+		if not self.Summary then self.Summary = {} end
+		local shortMsg = if #evicted.Message > 60
+			then string.sub(evicted.Message, 1, 57) .. "..."
+			else evicted.Message
+		table.insert(self.Summary, string.format("[%s] %s %s", evicted.Level, os.date("%H:%M:%S", evicted.Timestamp), shortMsg))
+		if #self.Summary > MAX_SUMMARY_HISTORY then
+			table.remove(self.Summary, 1)
+		end
 	end
 
 	-- Format Timestamp
