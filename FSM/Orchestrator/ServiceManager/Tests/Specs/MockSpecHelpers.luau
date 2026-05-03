@@ -3,20 +3,14 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local MockFramework = require(script.Parent.Parent.MockFramework)
-local MockCharacter = require(script.Parent.Parent.Mocks.MockCharacter)
-local MockHelpers = require(script.Parent.Parent.Mocks.MockHelpers)
 
 local MockSpecHelpers = {}
-local sharedTable = shared :: any
 
-local function getStateMachinesFolder(): Instance
-	local folder = ReplicatedStorage:FindFirstChild("StateMachines") or ReplicatedStorage:FindFirstChild("StateMachine")
-	assert(folder ~= nil, "State machine folder not found in ReplicatedStorage")
-	return folder
-end
+local sharedTable = shared :: any
+local stateMachinesFolder = script.Parent.Parent.Parent.Parent.Parent.StateMachines
 
 local function assertModule(name: string): ModuleScript
-	local moduleScript = getStateMachinesFolder():FindFirstChild(name)
+	local moduleScript = stateMachinesFolder:FindFirstChild(name)
 	assert(moduleScript and moduleScript:IsA("ModuleScript"), string.format("State machine %s not found", name))
 	return moduleScript
 end
@@ -56,7 +50,7 @@ end
 
 local function makeIntentSchema(recordedIntents)
 	return {
-		AppendIntent = function(charEntity: any, intent: any)
+		AppendIntent = function(charEntity: any, intent: any, _lockId: any?)
 			local intents = charEntity:GetContext("_RecordedIntents")
 			if typeof(intents) ~= "table" then
 				intents = {}
@@ -75,10 +69,14 @@ local function makeEquipHelpers(itemCatalog: { [string]: any }, options: any?)
 	return {
 		CloneItem = function(itemId: string)
 			local entry = itemCatalog[itemId]
-			if not entry or not entry.Template then
+			if not entry then
 				return nil, nil
 			end
-			local clone = entry.Template:Clone()
+			local template = entry.Template
+			if not template then
+				return nil, nil
+			end
+			local clone = template:Clone()
 			clone.Name = itemId
 			return clone, if entry.Data then table.clone(entry.Data) else nil
 		end,
@@ -127,7 +125,7 @@ local function makeEquipHelpers(itemCatalog: { [string]: any }, options: any?)
 				item:SetAttribute("Dropped", true)
 			end
 		end,
-		StowItem = function(item: Instance, character: Model, weld: any)
+		StowItem = function(item: Instance, character: Model, weld: any, _itemData: any)
 			if weld and weld.Destroy then
 				weld:Destroy()
 			end
@@ -176,10 +174,8 @@ function MockSpecHelpers.newEnvironment(): any
 	function env:Cleanup()
 		for index = #created, 1, -1 do
 			local instance = created[index]
-			if instance then
-				pcall(function()
-					instance:Destroy()
-				end)
+			if instance and instance.Parent then
+				instance:Destroy()
 			end
 		end
 		mock:Reset()
@@ -192,21 +188,91 @@ function MockSpecHelpers.newEnvironment(): any
 end
 
 function MockSpecHelpers.makeCharacterRig(env: any, name: string?): (Model, Humanoid, BasePart, BasePart, BasePart)
-	local model, humanoid, root, rightHand, leftHand = MockCharacter.newCharacter(name or "MockCharacter", workspace)
-	env:DestroyLater(model)
+	local model = env:DestroyLater(Instance.new("Model"))
+	model.Name = name or "MockCharacter"
+	model.Parent = workspace
+
+	local humanoid = env:DestroyLater(Instance.new("Humanoid"))
+	humanoid.Parent = model
+
+	local root = env:DestroyLater(Instance.new("Part"))
+	root.Name = "HumanoidRootPart"
+	root.Size = Vector3.new(2, 2, 1)
+	root.CFrame = CFrame.new(0, 5, 0)
+	root.Parent = model
+
+	local head = env:DestroyLater(Instance.new("Part"))
+	head.Name = "Head"
+	head.Size = Vector3.new(2, 1, 1)
+	head.Position = root.Position + Vector3.new(0, 2, 0)
+	head.Parent = model
+
+	local rightHand = env:DestroyLater(Instance.new("Part"))
+	rightHand.Name = "RightHand"
+	rightHand.Size = Vector3.new(1, 1, 1)
+	rightHand.Position = root.Position + Vector3.new(2, 0, 0)
+	rightHand.Parent = model
+
+	local leftHand = env:DestroyLater(Instance.new("Part"))
+	leftHand.Name = "LeftHand"
+	leftHand.Size = Vector3.new(1, 1, 1)
+	leftHand.Position = root.Position + Vector3.new(-2, 0, 0)
+	leftHand.Parent = model
+
+	local rootJoint = env:DestroyLater(Instance.new("Motor6D"))
+	rootJoint.Name = "RootJoint"
+	rootJoint.C0 = CFrame.new()
+	rootJoint.Parent = root
+
+	model.PrimaryPart = root
+
 	return model, humanoid, root, rightHand, leftHand
 end
 
 function MockSpecHelpers.makeFakePlayer(userId: number, character: Model?): any
-	return select(1, MockCharacter.newPlayer(userId, character))
+	local player: any = {
+		UserId = userId,
+		Character = character,
+		Parent = game:GetService("Players"),
+	}
+	function player:IsA(className: string)
+		return className == "Player"
+	end
+	return player
 end
 
 function MockSpecHelpers.createCharacterEntity(env: any, entityId: string, data: any?): any
-	return MockHelpers.CreateCharacterEntity(env.Mock, entityId, data)
+	local initial = table.clone(data or {})
+	initial.Health = if initial.Health ~= nil then initial.Health else 100
+	initial.MaxHealth = if initial.MaxHealth ~= nil then initial.MaxHealth else 100
+	initial.Stamina = if initial.Stamina ~= nil then initial.Stamina else 100
+	initial.MaxStamina = if initial.MaxStamina ~= nil then initial.MaxStamina else 100
+	initial.Mana = if initial.Mana ~= nil then initial.Mana else 50
+	initial.MaxMana = if initial.MaxMana ~= nil then initial.MaxMana else 50
+	initial.IsStunned = if initial.IsStunned ~= nil then initial.IsStunned else false
+	initial.IsKnocked = if initial.IsKnocked ~= nil then initial.IsKnocked else false
+	initial.IsBlocking = if initial.IsBlocking ~= nil then initial.IsBlocking else false
+	initial.CanMove = if initial.CanMove ~= nil then initial.CanMove else true
+	initial.MoveSpeedCap = if initial.MoveSpeedCap ~= nil then initial.MoveSpeedCap else 16
+	initial.EquippedRight = if initial.EquippedRight ~= nil then initial.EquippedRight else ""
+	initial.EquippedLeft = if initial.EquippedLeft ~= nil then initial.EquippedLeft else ""
+	initial.EquipLock = if typeof(initial.EquipLock) == "table" then table.clone(initial.EquipLock) else {}
+	initial.AbilityCooldowns = if typeof(initial.AbilityCooldowns) == "table" then table.clone(initial.AbilityCooldowns) else {}
+	initial.ActiveStatusEffects = if typeof(initial.ActiveStatusEffects) == "table" then table.clone(initial.ActiveStatusEffects) else {}
+	local entity = env.Mock:CreateEntity("CharacterEntity", entityId, initial)
+	return entity
 end
 
 function MockSpecHelpers.createPlayerEntity(env: any, entityId: string, data: any?): any
-	return MockHelpers.CreatePlayerEntity(env.Mock, entityId, data)
+	local initial = table.clone(data or {})
+	initial.Inventory = if typeof(initial.Inventory) == "table" then table.clone(initial.Inventory) else {}
+	initial.BagContents = if typeof(initial.BagContents) == "table" then table.clone(initial.BagContents) else {}
+	initial.Equipped = if typeof(initial.Equipped) == "table" then table.clone(initial.Equipped) else {}
+	initial.WeaponEqp = if initial.WeaponEqp ~= nil then initial.WeaponEqp else ""
+	initial.LearnedAbilities = if typeof(initial.LearnedAbilities) == "table" then table.clone(initial.LearnedAbilities) else {}
+	initial.QuickItemSlots = if typeof(initial.QuickItemSlots) == "table" then table.clone(initial.QuickItemSlots) else { "", "", "", "" }
+	local entity = env.Mock:CreateEntity("PlayerEntity", entityId, initial)
+	return entity
 end
 
 function MockSpecHelpers.registerDefaultModules(env: any, options: any?): any
@@ -305,7 +371,7 @@ function MockSpecHelpers.ensureAsset(env: any, itemId: string, asModel: boolean?
 	if asModel == false then
 		asset = env:DestroyLater(Instance.new("Part"))
 		asset.Name = itemId
-		asset.Size = Vector3.new(1, 1, 1)
+		(asset :: BasePart).Size = Vector3.new(1, 1, 1)
 	else
 		asset = MockSpecHelpers.makeItemTemplate(env, itemId, true)
 	end
@@ -313,7 +379,7 @@ function MockSpecHelpers.ensureAsset(env: any, itemId: string, asModel: boolean?
 	return asset
 end
 
-function MockSpecHelpers.makeChildJob(outcome: string, onStart: any, failureReason: string?): any
+function MockSpecHelpers.makeChildJob(outcome: string, onStart: ((any, any) -> ())?, failureReason: string?): any
 	local completed = createSignal()
 	local failed = createSignal()
 	local cancelled = createSignal()
@@ -350,11 +416,33 @@ function MockSpecHelpers.makeChildJob(outcome: string, onStart: any, failureReas
 end
 
 function MockSpecHelpers.stepUntil(env: any, machine: any, target: any, maxFrames: number?): boolean
-	return MockHelpers.StepUntil(env.Mock, machine, target, maxFrames)
+	local frames = maxFrames or 240
+	for _ = 1, frames do
+		if type(target) == "string" then
+			if machine.State == target then
+				return true
+			end
+		elseif type(target) == "table" then
+			if table.find(target, machine.State) then
+				return true
+			end
+		elseif type(target) == "function" then
+			if target(machine) then
+				return true
+			end
+		end
+		env.Mock:StepFrames(1)
+	end
+	return false
 end
 
 function MockSpecHelpers.getTransitionSequence(env: any, machine: any): { string }
-	return MockHelpers.GetTransitionSequence(env.Mock, machine)
+	local transitions = env.Mock:GetTransitions(machine.Id)
+	local sequence = {}
+	for _, entry in ipairs(transitions) do
+		table.insert(sequence, tostring(entry.To))
+	end
+	return sequence
 end
 
 function MockSpecHelpers.setHumanoidState(humanoid: Humanoid, state: Enum.HumanoidStateType)
