@@ -1,9 +1,21 @@
 --!strict
 
+--[=[
+	@description Normalizes and appends animation, sound, and effect intent payloads for FSMs that drive presentation-side reactions. Combat, movement, and ability systems depend on these helpers to convert intent definitions into IntentSchema-compatible payloads before they are attached to character entities.
+	Assumes an IntentSchema shared module is available and that character entities can accept appended intent data through that schema.
+]=]
 local ModuleLoader = require(script.Parent.ModuleLoader)
 
 local IntentHelpers = {}
 
+--[=[
+	@description Builds a normalized intent payload for supported kinds. Animation intents require a non-empty name, sound intents require an id, and effect intents clone the original table while normalizing EffectName into Name.
+	@param kind string -- Supported intent kind such as Animation, Sound, or Effect.
+	@param rawIntent { [string]: any } -- Raw intent definition table supplied by gameplay data or FSM context.
+	@return { [string]: any }? -- Normalized payload table for supported valid intents, or nil when required fields are missing or the kind is unsupported.
+	@reads rawIntent.Name, rawIntent.AnimationName, rawIntent.Speed, rawIntent.FadeTime, rawIntent.SoundId, rawIntent.Id, rawIntent.Volume, rawIntent.Pitch, rawIntent.EffectName
+	@writes Cloned payload table for effect intents only
+]=]
 function IntentHelpers.buildIntentPayload(kind: string, rawIntent: { [string]: any }): { [string]: any }?
 	if kind == "Animation" then
 		local name = rawIntent.Name or rawIntent.AnimationName
@@ -38,6 +50,19 @@ function IntentHelpers.buildIntentPayload(kind: string, rawIntent: { [string]: a
 	return nil
 end
 
+--[=[
+	@description Appends a normalized intent entry to the target character entity through the shared IntentSchema module. When no targetCharId is provided, the sourceCharId is reused as the target.
+	@param orchestrator any -- FSM orchestrator used to resolve the IntentSchema shared module.
+	@param characterEntity any -- Character entity receiving the appended intent entry.
+	@param kind string -- Intent kind string passed through to IntentSchema.
+	@param payload { [string]: any } -- Normalized payload table expected by the given intent kind.
+	@param sourceCharId string? -- Source character/entity id recorded on the intent.
+	@param targetCharId string? -- Optional target character/entity id; defaults to sourceCharId when omitted.
+	@param lockId string? -- Optional lock or correlation id forwarded to IntentSchema.AppendIntent.
+	@return nil -- No explicit return value.
+	@reads orchestrator shared module registry, payload, sourceCharId, targetCharId
+	@writes characterEntity intent state through IntentSchema.AppendIntent
+]=]
 function IntentHelpers.appendIntent(
 	orchestrator: any,
 	characterEntity: any,
@@ -56,6 +81,18 @@ function IntentHelpers.appendIntent(
 	}, lockId)
 end
 
+--[=[
+	@description Validates an optional raw intent definition, builds a normalized payload when possible, and appends it to the character entity. Non-table definitions, missing Kind values, and invalid payloads are silently ignored.
+	@param orchestrator any -- FSM orchestrator used to resolve the IntentSchema shared module.
+	@param characterEntity any -- Character entity that may receive an appended intent.
+	@param intentDef any -- Optional raw intent definition table.
+	@param sourceCharId string -- Source character/entity id recorded on successful appended intents.
+	@param lockId string? -- Optional lock or correlation id forwarded to IntentSchema.AppendIntent.
+	@param targetCharId string? -- Optional target character/entity id used when appending the intent.
+	@return nil -- No explicit return value.
+	@reads intentDef.Kind and any fields consumed by buildIntentPayload
+	@writes characterEntity intent state through appendIntent when validation succeeds
+]=]
 function IntentHelpers.appendOptionalIntent(
 	orchestrator: any,
 	characterEntity: any,
