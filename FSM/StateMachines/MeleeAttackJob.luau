@@ -159,7 +159,7 @@ function MeleeAttackJob:RegisterStates()
 				or (typeof(equippedLeft) == "string" and equippedLeft ~= "")
 			then
 				-- Weapon drawn: silently complete — client may be slightly out of sync
-				fsm.State = "Complete"
+				fsm.State = "Completed"
 				return
 			end
 
@@ -171,19 +171,19 @@ function MeleeAttackJob:RegisterStates()
 			fsm.Context._comboSlot = comboSlot
 			fsm.State = "AcquireLock"
 		end,
-	}, { "AcquireLock", "Complete", "Failed" })
+	}, { "AcquireLock", "Completed", "Failed" })
 
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
 			if not charEntity:AcquireLock(fsm.Id) then
-				fsm.State = "Complete"
+				fsm.State = "Completed"
 				return
 			end
 			fsm.Context._lockHeld = true
 			fsm.State = "ValidateStamina"
 		end,
-	}, { "ValidateStamina", "Complete", "Failed" })
+	}, { "ValidateStamina", "Completed", "Failed" })
 
 	self:AddState("ValidateStamina", {
 		OnEnter = function(_, fsm)
