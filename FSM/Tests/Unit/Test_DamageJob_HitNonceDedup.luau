@@ -1,6 +1,6 @@
 --!nocheck
 -- @Name Test_DamageJob_HitNonceDedup
--- @Author Copilot
+-- @Author iKrypto
 -- @Description Unit tests for the hit nonce deduplication concept used by DamageJob.
 
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)

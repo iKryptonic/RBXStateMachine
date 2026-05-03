@@ -1,6 +1,6 @@
 --!nocheck
 -- @Name Test_LastActionDelivery
--- @Author Copilot
+-- @Author iKrypto
 -- @Description Unit tests for IntentSchema.AppendIntent sequencing and ring-buffer behavior.
 
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)

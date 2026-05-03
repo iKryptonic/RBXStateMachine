@@ -1,6 +1,6 @@
 --!nocheck
 -- @Name Test_DamageJob
--- @Author Copilot
+-- @Author iKrypto
 -- @Description Unit tests for DamageCalculator integration and DamageJob validation flow.
 
 local ServerStorage = game:GetService("ServerStorage")

@@ -76,7 +76,6 @@ local function spec()
 			XP = { Type = "number" },
 			MaxXP = { Type = "number" },
 			BagContents = { Type = "any" },
-			EquipSlots = { Type = "any" },
 			LearnedAbilities = { Type = "any" },
 			AbilityBindings = { Type = "any" },
 		},
@@ -91,17 +90,6 @@ local function spec()
 			BagContents = context.BagContents or {},
 			LearnedAbilities = context.LearnedAbilities or {},
 			AbilityBindings = context.AbilityBindings or { Q = "", E = "", R = "", F = "" },
-			EquipSlots = context.EquipSlots or {
-				Head = "",
-				Chest = "",
-				Legs = "",
-				Feet = "",
-				MainHand = "",
-				OffHand = "",
-				Accessory1 = "",
-				Accessory2 = "",
-				Accessory3 = "",
-			},
 		}
 	end
 
@@ -151,8 +139,8 @@ local function spec()
 			end
 		end)
 
-		it("has BagContents EquipSlots LearnedAbilities and AbilityBindings", function()
-			for _, key in ipairs({ "BagContents", "EquipSlots", "LearnedAbilities", "AbilityBindings" }) do
+		it("has BagContents LearnedAbilities and AbilityBindings", function()
+			for _, key in ipairs({ "BagContents", "LearnedAbilities", "AbilityBindings" }) do
 				expect(PlayerEntity.Schema[key]).never.toBeNil()
 			end
 		end)
@@ -163,12 +151,6 @@ local function spec()
 			expect(context.XP).toEqual(0)
 		end)
 
-		it("EquipSlots includes Head Chest Legs Feet MainHand and OffHand slots", function()
-			local context = PlayerEntity:GetContext({})
-			for _, slot in ipairs({ "Head", "Chest", "Legs", "Feet", "MainHand", "OffHand" }) do
-				expect(context.EquipSlots[slot]).never.toBeNil()
-			end
-		end)
 	end)
 end
 

@@ -36,7 +36,7 @@ end
 	@writes None
 ]]
 function DataStoreEntity:ApplyChanges(changes)
-	
+
 end
 
 --[[
@@ -129,13 +129,13 @@ function DataStoreEntity:_ExecuteRequest(requestFn, maxRetries)
 	local Orchestrator = self.Orchestrator
 	if not Orchestrator then error("DataStoreEntity missing Orchestrator context") end
 
-	self.ActiveRequests = self.ActiveRequests + 1
-	
+	self.ActiveRequests = (self.ActiveRequests or 0) + 1
+
 	-- Promise-like wrapping
 	local bindable = Instance.new("BindableEvent")
 	local resultData, resultErr
 	local success = false
-	
+
 	-- Spawn FSM (pcall-wrapped to prevent counter + Instance leak)
 	local ok, createErr = pcall(function()
 		local fsm = Orchestrator.CreateStateMachine({
@@ -147,17 +147,16 @@ function DataStoreEntity:_ExecuteRequest(requestFn, maxRetries)
 				MaxRetries = maxRetries or 3,
 				RetryCount = 0,
 				FSM = nil,
-				
 				OnSuccess = function(res)
 					success = true
 					resultData = res
-					self.ActiveRequests = self.ActiveRequests - 1
+					self.ActiveRequests = math.max(0, (self.ActiveRequests or 0) - 1)
 					bindable:Fire()
 				end,
 				OnFailure = function(err)
 					success = false
 					resultErr = err
-					self.ActiveRequests = self.ActiveRequests - 1
+					self.ActiveRequests = math.max(0, (self.ActiveRequests or 0) - 1)
 					bindable:Fire()
 				end
 			}
@@ -168,15 +167,15 @@ function DataStoreEntity:_ExecuteRequest(requestFn, maxRetries)
 	end)
 
 	if not ok then
-		self.ActiveRequests = self.ActiveRequests - 1
+		self.ActiveRequests = math.max(0, (self.ActiveRequests or 0) - 1)
 		bindable:Destroy()
 		error(createErr)
 	end
-	
+
 	-- Wait for FSM to complete (yields)
 	bindable.Event:Wait()
 	bindable:Destroy()
-	
+
 	if success then
 		return resultData
 	else

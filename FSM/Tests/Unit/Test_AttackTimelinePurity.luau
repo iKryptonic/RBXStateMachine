@@ -1,6 +1,6 @@
 --!nocheck
 -- @Name Test_AttackTimelinePurity
--- @Author Copilot
+-- @Author iKrypto
 -- @Description Unit tests ensuring combo keyframe arrays remain pure data.
 
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)

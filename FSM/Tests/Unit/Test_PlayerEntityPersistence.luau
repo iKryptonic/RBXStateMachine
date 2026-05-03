@@ -1,6 +1,6 @@
 --!nocheck
 -- @Name Test_PlayerEntityPersistence
--- @Author Copilot
+-- @Author iKrypto
 -- @Description Unit tests for PlayerEntity persistence schema and filtered serialize/deserialize behavior.
 
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)

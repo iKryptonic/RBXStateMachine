@@ -1,6 +1,6 @@
 --!nocheck
 -- @Name Test_BoundedDiscovery
--- @Author Copilot
+-- @Author iKrypto
 -- @Description Unit tests for bounded discovery loops with resolution and timeout behavior.
 
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)
