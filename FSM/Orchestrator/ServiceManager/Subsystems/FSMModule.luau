@@ -11,7 +11,7 @@ local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
 local FSMModule = {}
 FSMModule.__index = FSMModule
 
-local SORT_MODES = { "Name", "State", "Transitions", "Age", "Errors" }
+local SORT_MODES = { "Recent", "Name", "State", "Transitions", "Errors" }
 
 --[[
 	Create the FSM subsystem controller.
@@ -27,11 +27,12 @@ function FSMModule.new(): any
 	self._clientShadow = {} :: { [string]: any } -- shadow of FSMs we've seen (client mode)
 	self._clientShadowConnected = false
 	self._searchText = ""
-	self._sortMode = "Name"
+	self._sortMode = "Recent"
 	self._showFailed = true
 	self._showCompleted = true
 	self._showArchived = false
 	self._selectedFSM = nil :: string?
+	self._collapsedGroups = {} :: { [string]: boolean }
 	return self
 end
 
@@ -149,7 +150,7 @@ function FSMModule:FetchData(nexus: any)
 					Error = fsmInfo.Error,
 					IsStalled = fsmInfo.IsStalled or false,
 					EntityId = fsmInfo.EntityId,
-					Name = fsmInfo.Name,
+					Name = fsmInfo.Name or id,
 					Origin = "server",
 				}
 
@@ -187,11 +188,11 @@ function FSMModule:_ExtractFSMData(id: string, fsm: any): any
 			end
 		end
 		transitions = fsm.TransitionCount or fsm._transitionCount or 0
-		-- Derive status from IsActive and error state
+		-- Derive status from IsActive and explicit error state
 		errorMsg = fsm.Error or fsm._error
 		if fsm.IsActive == false then
 			status = if errorMsg then "failed" else "completed"
-		elseif fsm._failed then
+		elseif errorMsg then
 			status = "failed"
 		else
 			status = "active"
@@ -238,7 +239,34 @@ function FSMModule:_ExtractFSMData(id: string, fsm: any): any
 		MemLastDeltaKB = memLastDeltaKB,
 		MemMaxDeltaKB = memMaxDeltaKB,
 		MemTotalDeltaKB = memTotalDeltaKB,
+		Name = if type(fsm) == "table" then (fsm.Name or id) else id,
 	}
+end
+
+function FSMModule:_MatchesSearch(id: string, data: any): boolean
+	if self._searchText == "" then return true end
+
+	local lower = string.lower(self._searchText)
+	local haystacks = {
+		string.lower(id),
+		string.lower(data.Name or ""),
+		string.lower(data.CurrentState or ""),
+		string.lower(data.Status or ""),
+	}
+
+	for _, haystack in ipairs(haystacks) do
+		if string.find(haystack, lower, 1, true) then
+			return true
+		end
+	end
+
+	return false
+end
+
+function FSMModule:_GetRecentTimestamp(data: any): number
+	local createdAt = tonumber(data.CreatedAt) or 0
+	local lastTransition = tonumber(data.LastTransition) or 0
+	return math.max(createdAt, lastTransition)
 end
 
 --[[
@@ -254,27 +282,132 @@ function FSMModule:Render(_nexus: any) end
 function FSMModule:_GetSortedFiltered(source: { [string]: any }): { { Id: string, Data: any } }
 	local result = {}
 	for id, data in pairs(source) do
-		if self._searchText ~= "" then
-			local lower = string.lower(self._searchText)
-			if not string.lower(id):find(lower, 1, true)
-				and not string.lower(data.CurrentState or ""):find(lower, 1, true) then
-				continue
-			end
+		if self:_MatchesSearch(id, data) then
+			table.insert(result, { Id = id, Data = data })
 		end
-		table.insert(result, { Id = id, Data = data })
 	end
 
 	local mode = self._sortMode
 	table.sort(result, function(a, b)
-		if mode == "Name" then return a.Id < b.Id
+		if mode == "Recent" then
+			local aRecent = self:_GetRecentTimestamp(a.Data)
+			local bRecent = self:_GetRecentTimestamp(b.Data)
+			if aRecent == bRecent then return a.Id < b.Id end
+			return aRecent > bRecent
+		elseif mode == "Name" then return a.Id < b.Id
 		elseif mode == "State" then return (a.Data.CurrentState or "") < (b.Data.CurrentState or "")
 		elseif mode == "Transitions" then return (a.Data.Transitions or 0) > (b.Data.Transitions or 0)
-		elseif mode == "Age" then return (a.Data.CreatedAt or 0) < (b.Data.CreatedAt or 0)
 		elseif mode == "Errors" then return (a.Data.Error and 1 or 0) > (b.Data.Error and 1 or 0)
 		end
 		return a.Id < b.Id
 	end)
 	return result
+end
+
+function FSMModule:_GetGroupedFSMs(source: { [string]: any }): { any }
+	local groupsByName = {}
+	local orderedGroups = {}
+
+	for _, item in ipairs(self:_GetSortedFiltered(source)) do
+		local className = item.Data.Name or "Unknown"
+		local group = groupsByName[className]
+		if not group then
+			group = {
+				ClassName = className,
+				Items = {},
+				ActiveCount = 0,
+				CompletedCount = 0,
+				FailedCount = 0,
+				TotalCount = 0,
+			}
+			groupsByName[className] = group
+			table.insert(orderedGroups, group)
+		end
+
+		table.insert(group.Items, item)
+		group.TotalCount += 1
+
+		if item.Data.Status == "failed" or item.Data.Status == "error" then
+			group.FailedCount += 1
+		elseif item.Data.Status == "completed" then
+			group.CompletedCount += 1
+		else
+			group.ActiveCount += 1
+		end
+	end
+
+	return orderedGroups
+end
+
+function FSMModule:_FormatGroupSummary(group: any): string
+	local summary = {}
+	if group.ActiveCount > 0 then table.insert(summary, string.format("%d active", group.ActiveCount)) end
+	if group.CompletedCount > 0 then table.insert(summary, string.format("%d completed", group.CompletedCount)) end
+	if group.FailedCount > 0 then table.insert(summary, string.format("%d failed", group.FailedCount)) end
+	if #summary == 0 then return "No FSMs" end
+	return table.concat(summary, ", ")
+end
+
+function FSMModule:_BuildFSMGroupHeader(parent: Frame, group: any, nexus: any, order: number, onToggle: (() -> ())?): Frame
+	local isCollapsed = self._collapsedGroups[group.ClassName] == true
+	local chevron = if isCollapsed then Theme.Glyph.Right else Theme.Glyph.Down
+	local headerColor = if group.ActiveCount > 0 then Theme.Colors.Success
+		elseif group.FailedCount > 0 then Theme.Colors.Danger
+		else Theme.Colors.TextMuted
+
+	local row = Theme.CreateRow({
+		Name = "FSMGroup_" .. group.ClassName,
+		Size = UDim2.new(1, 0, 0, 34),
+		StatusColor = headerColor,
+		Title = string.format("%s %s", chevron, group.ClassName),
+		Subtitle = self:_FormatGroupSummary(group),
+		Stats = {
+			{
+				Text = string.format("%d/%d active", group.ActiveCount, group.TotalCount),
+				Color = if group.ActiveCount > 0 then Theme.Colors.Success else Theme.Colors.TextMuted,
+				Width = 86,
+				Mono = false,
+			},
+		},
+		BackgroundColor = Theme.Colors.CardBG,
+		BackgroundTransparency = 0.55,
+		LayoutOrder = order,
+		Parent = parent,
+		OnClick = function()
+			self._collapsedGroups[group.ClassName] = not isCollapsed
+			if onToggle then
+				onToggle()
+			elseif nexus then
+				nexus._lastDataRefresh = 0
+			end
+		end,
+	})
+
+	local button = row:FindFirstChild("ClickOverlay")
+	if button and nexus and nexus._animationController then
+		nexus._animationController:HoverGlow(button, Theme.Colors.Accent)
+	end
+
+	return row
+end
+
+function FSMModule:_BuildGroupedFSMRows(parent: Frame, groups: { any }, nexus: any, baseOrder: number, itemsToAnimate: { Instance }, onToggle: (() -> ())?): number
+	local order = baseOrder
+	for _, group in ipairs(groups) do
+		local header = self:_BuildFSMGroupHeader(parent, group, nexus, order, onToggle)
+		table.insert(itemsToAnimate, header)
+		order += 1
+
+		if self._collapsedGroups[group.ClassName] ~= true then
+			for _, item in ipairs(group.Items) do
+				local row = self:_BuildFSMRow(parent, item.Id, item.Data, nexus, order)
+				table.insert(itemsToAnimate, row)
+				order += 1
+			end
+		end
+	end
+
+	return order
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -313,11 +446,28 @@ function FSMModule:BuildRootLayer(frame: Frame, context: any)
 	self:_BuildToolbar(contentFrame, nexus)
 
 	local itemsToAnimate = {}
+	local function rebuildRoot()
+		self:BuildRootLayer(frame, context)
+	end
 
-	-- Active FSMs section
-	local activeSorted = self:_GetSortedFiltered(self._fsmCache)
+	local visibleFSMs = {}
+	for id, data in pairs(self._fsmCache) do
+		visibleFSMs[id] = data
+	end
+	if self._showFailed then
+		for id, data in pairs(self._failedFSMs) do
+			visibleFSMs[id] = data
+		end
+	end
+	if self._showCompleted then
+		for id, data in pairs(self._completedFSMs) do
+			visibleFSMs[id] = data
+		end
+	end
+
+	local visibleGroups = self:_GetGroupedFSMs(visibleFSMs)
 	Theme.CreateLabel({
-		Text = string.format("ACTIVE STATE MACHINES (%d)", #activeSorted),
+		Text = string.format("FSM GROUPS (%d)", #visibleGroups),
 		Size = UDim2.new(1, 0, 0, 18),
 		Color = Theme.Colors.TextMuted,
 		FontSize = Theme.TextSize.Caption,
@@ -325,73 +475,33 @@ function FSMModule:BuildRootLayer(frame: Frame, context: any)
 		Parent = contentFrame,
 	}).LayoutOrder = 20
 
-	for i, item in ipairs(activeSorted) do
-		local row = self:_BuildFSMRow(contentFrame, item.Id, item.Data, nexus, 20 + i)
-		table.insert(itemsToAnimate, row)
+	local nextOrder = 21
+	if #visibleGroups > 0 then
+		nextOrder = self:_BuildGroupedFSMRows(contentFrame, visibleGroups, nexus, nextOrder, itemsToAnimate, rebuildRoot)
+	else
+		Theme.CreateLabel({
+			Text = "No FSMs match the current filters.",
+			Size = UDim2.new(1, 0, 0, 22),
+			Color = Theme.Colors.TextMuted,
+			FontSize = Theme.TextSize.Body,
+			Parent = contentFrame,
+		}).LayoutOrder = nextOrder
+		nextOrder += 1
 	end
 
-	-- Failed FSMs section
-	if self._showFailed then
-		local failedSorted = self:_GetSortedFiltered(self._failedFSMs)
-		if #failedSorted > 0 then
-			Theme.CreateLabel({
-				Text = string.format('<font color="#F05050">FAILED STATE MACHINES (%d)</font>', #failedSorted),
-				Size = UDim2.new(1, 0, 0, 18),
-				Color = Theme.Colors.Danger,
-				FontSize = Theme.TextSize.Caption,
-				FontFace = Theme.Font.Bold,
-				Parent = contentFrame,
-			}).LayoutOrder = 200
-
-			for i, item in ipairs(failedSorted) do
-				local row = self:_BuildFSMRow(contentFrame, item.Id, item.Data, nexus, 200 + i)
-				table.insert(itemsToAnimate, row)
-			end
-		end
-	end
-
-	-- Completed FSMs section
-	if self._showCompleted then
-		local completedSorted = self:_GetSortedFiltered(self._completedFSMs)
-		if #completedSorted > 0 then
-			Theme.CreateLabel({
-				Text = string.format('<font color="#3CD278">COMPLETED STATE MACHINES (%d)</font>', #completedSorted),
-				Size = UDim2.new(1, 0, 0, 18),
-				Color = Theme.Colors.Success,
-				FontSize = Theme.TextSize.Caption,
-				FontFace = Theme.Font.Bold,
-				Parent = contentFrame,
-			}).LayoutOrder = 300
-
-			for i, item in ipairs(completedSorted) do
-				local row = self:_BuildFSMRow(contentFrame, item.Id, item.Data, nexus, 300 + i)
-				row.BackgroundTransparency = 0.9
-				table.insert(itemsToAnimate, row)
-			end
-		end
-	end
-
-	-- Archived section
 	if self._showArchived then
-		local archivedCount = 0
-		for _ in pairs(self._archivedFSMs) do archivedCount += 1 end
-		if archivedCount > 0 then
+		local archivedGroups = self:_GetGroupedFSMs(self._archivedFSMs)
+		if #archivedGroups > 0 then
 			Theme.CreateLabel({
-				Text = string.format("ARCHIVED (%d)", archivedCount),
+				Text = string.format("ARCHIVED GROUPS (%d)", #archivedGroups),
 				Size = UDim2.new(1, 0, 0, 18),
 				Color = Theme.Colors.TextMuted,
 				FontSize = Theme.TextSize.Caption,
 				FontFace = Theme.Font.Bold,
 				Parent = contentFrame,
-			}).LayoutOrder = 400
-
-			local order = 401
-			for id, data in pairs(self._archivedFSMs) do
-				local row = self:_BuildFSMRow(contentFrame, id, data, nexus, order)
-				row.BackgroundTransparency = 0.92
-				table.insert(itemsToAnimate, row)
-				order += 1
-			end
+			}).LayoutOrder = nextOrder
+			nextOrder += 1
+			nextOrder = self:_BuildGroupedFSMRows(contentFrame, archivedGroups, nexus, nextOrder, itemsToAnimate, rebuildRoot)
 		end
 	end
 
@@ -539,21 +649,24 @@ function FSMModule:_BuildToolbar(parent: Frame, nexus: any)
 		GetSuggestions = function(text: string): { string }
 			local lower = string.lower(text)
 			local matches = {}
-			for id, _ in pairs(self._fsmCache) do
-				if string.find(string.lower(id), lower, 1, true) then
-					table.insert(matches, id)
+			local seen = {}
+			local function collect(source: { [string]: any })
+				for id, data in pairs(source) do
+					local candidates = { id, data.Name, data.CurrentState, data.Status }
+					for _, candidate in ipairs(candidates) do
+						if type(candidate) == "string" then
+							local normalized = string.lower(candidate)
+							if string.find(normalized, lower, 1, true) and not seen[candidate] then
+								seen[candidate] = true
+								table.insert(matches, candidate)
+							end
+						end
+					end
 				end
 			end
-			for id, _ in pairs(self._failedFSMs) do
-				if string.find(string.lower(id), lower, 1, true) then
-					table.insert(matches, id)
-				end
-			end
-			for id, _ in pairs(self._completedFSMs) do
-				if string.find(string.lower(id), lower, 1, true) then
-					table.insert(matches, id)
-				end
-			end
+			collect(self._fsmCache)
+			collect(self._failedFSMs)
+			collect(self._completedFSMs)
 			table.sort(matches)
 			return matches
 		end,
@@ -609,10 +722,10 @@ function FSMModule:_BuildToolbar(parent: Frame, nexus: any)
 	-- Completed toggle
 	local completedBtn = Instance.new("TextButton")
 	completedBtn.Size = UDim2.new(0, 80, 0, 26)
-	completedBtn.BackgroundColor3 = if self._showCompleted then Theme.Colors.Success else Theme.Colors.GlassTertiary
-	completedBtn.BackgroundTransparency = if self._showCompleted then 0.5 else 0.6
+	completedBtn.BackgroundColor3 = Theme.Colors.GlassTertiary
+	completedBtn.BackgroundTransparency = if self._showCompleted then 0.35 else 0.6
 	completedBtn.Text = "Completed"
-	completedBtn.TextColor3 = if self._showCompleted then Theme.Colors.TextOnAccent else Theme.Colors.TextMuted
+	completedBtn.TextColor3 = if self._showCompleted then Theme.Colors.TextSecondary else Theme.Colors.TextMuted
 	completedBtn.TextSize = Theme.TextSize.Caption
 	completedBtn.FontFace = Theme.Font.Bold
 	completedBtn.AutoButtonColor = false
@@ -703,10 +816,17 @@ function FSMModule:_BuildFSMRow(parent: Frame, id: string, fsmData: any, nexus: 
 		Size = UDim2.new(1, 0, 0, 38),
 		StatusColor = statusColor,
 		Title = titleText,
+		TitleColor = if fsmData.Status == "failed" then Theme.Colors.Danger
+			elseif fsmData.Status == "active" and not fsmData.IsStalled then Theme.Colors.Success
+			elseif fsmData.IsStalled then Theme.Colors.Warning
+			else Theme.Colors.TextSecondary,
 		BackgroundColor = if fsmData.Status == "failed" then Theme.Colors.Danger
 			elseif fsmData.IsStalled then Theme.Colors.Warning
+			elseif fsmData.Status == "active" then Theme.Colors.Success
 			else Theme.Colors.GlassTertiary,
-		BackgroundTransparency = if fsmData.Status == "failed" or fsmData.IsStalled then 0.88 else 0.85,
+		BackgroundTransparency = if fsmData.Status == "failed" or fsmData.IsStalled then 0.88
+			elseif fsmData.Status == "active" then 0.93
+			else 0.88,
 		LayoutOrder = order,
 		Stats = stats,
 		Parent = parent,

@@ -1432,8 +1432,12 @@ function BaseStateMachine:Fail(reason: string?)
 	end
 	if combinedReason ~= "" then
 		combinedReason = combinedReason:gsub(" | $", "")
+    else
+        combinedReason = "StateMachine failed"
 	end
 
+    self._error = combinedReason
+    self.Error = combinedReason
 	self:_Teardown()
 	self._failed:Fire(combinedReason)
 	self.Logger:Log
@@ -1495,6 +1499,15 @@ function BaseStateMachine:Destroy()
 		OperationId = self.Id
 	}
 
+    local orchestrator = self:GetOrchestrator()
+    local registry = orchestrator and orchestrator.Factory and orchestrator.Factory.Registry
+    if registry and type(registry.GetStateMachine) == "function" and type(registry.UnregisterStateMachine) == "function" then
+        local registered = registry.GetStateMachine(self.Id)
+        if registered == self then
+            registry.UnregisterStateMachine(self.Id)
+        end
+    end
+
 	self:_Teardown()
 	for _, cleanupTask in ipairs(self._cleanupTasks) do
 		pcall(function()
@@ -1510,6 +1523,15 @@ function BaseStateMachine:Destroy()
 	if self._pendingTransitions then table.clear(self._pendingTransitions) end
 	-- Free history ring buffer
 	if self.TransitionHistory then table.clear(self.TransitionHistory) end
+
+    local context = self.Context
+    if type(context) == "table" then
+        context._Orchestrator = nil
+        context.Orchestrator = nil
+        context.FSM = nil
+    end
+    self.Context = nil
+
 	if self._completed then self._completed:Destroy() end
 	if self._failed then self._failed:Destroy() end
 	if self._cancelled then self._cancelled:Destroy() end
