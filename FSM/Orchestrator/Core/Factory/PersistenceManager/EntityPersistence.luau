@@ -85,58 +85,40 @@ local function decodePayload(raw: any): ({ [string]: any }, { [string]: any }?)
 	end
 	return decoded, nil
 end
-
 --[=[
-	Bootstraps EntityPersistence with a Logger. Must be called before
-	`EntityPersistence.new` is used. No-ops on subsequent calls.
-
-	@param Util table -- Shared Orchestrator utilities; must expose `Util.Logger.new`.
-	@reads Initialized
-	@writes Logger, Initialized
+	@description Handles `Initialize` for `EntityPersistence`.
+	@param Util any -- `Util` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
+
 function EntityPersistence.Initialize(Util)
-	if Initialized then
-		return
-	end
-	Initialized = true
-	Logger = Util.Logger.new({ Name = "EntityPersistence" })
+	if Initialized then return end
+    Initialized = true
+    Logger = Util.Logger.new({ Name = "EntityPersistence" })
 
 	Logger:Log({ Level = "INFO", Message = "EntityPersistence initialized" })
 end
-
 --[=[
-	Creates and returns an EntityPersistence controller bound to the given
-	`config`. The controller exposes `Save`, `Load`, `Update`, and `Delete`
-	methods that handle key construction, JSON encoding/decoding, and
-	DataStore pcall wrapping internally.
-
-	@param config PersistenceConfig -- Must contain `DataStoreName` (string),
-	       `DataStoreReference` (DataStoreEntity facade), and optionally
-	       `KeyPrefix` (string prepended to all keys as "prefix:key").
-	@return EntityPersistence -- Controller instance (plain table with methods).
-	@reads Initialized, Logger
-	@writes None (returns a new table per call)
+	@description Implements `EntityPersistence.new`.
+	@param config PersistenceConfig -- `config` input parameter.
+	@return EntityPersistence -- Return value produced by the implementation, if any.
 ]=]
+
 function EntityPersistence.new(config: PersistenceConfig): EntityPersistence
 	ValidateRequest(config)
 
 	local DataStore = config.DataStoreReference
 
+
 	local controller: EntityPersistence = {} :: any
-
 	--[=[
-		Serializes `entity` via `entity:Serialize()`, JSON-encodes the result into
-		a versioned payload, and writes it to the DataStore under the composed key.
-		Returns `(true, nil)` on success or `(false, errorCode)` on failure.
-		Error codes: "EntityMissingSerialize", "SerializeFailed", "DatastoreFail".
-
-		@param entity any -- Entity instance; must expose a `Serialize()` method.
-		@param key string -- Raw entity key (will be composed with KeyPrefix).
-		@param metadata { [string]: any }? -- Optional metadata stored alongside data.
-		@return boolean, string? -- Success flag and optional error code.
-		@reads config.DataStoreName, config.KeyPrefix, config.DataStoreReference
-		@writes DataStore entry at composed key
+		@description Implements `controller.Save`.
+		@param entity any -- `entity` input parameter.
+		@param key string -- `key` input parameter.
+		@param metadata { [string]: any }? -- `metadata` input parameter.
+		@return any -- Return value produced by the implementation, if any.
 	]=]
+
 	function controller:Save(entity: any, key: string, metadata: { [string]: any }?)
 		if not entity or type(entity.Serialize) ~= "function" then
 			return false, "EntityMissingSerialize"
@@ -153,35 +135,24 @@ function EntityPersistence.new(config: PersistenceConfig): EntityPersistence
 		-- BUG FIX: `DataStore:SetAsync(...)` returns a version string (or nil/error),
 		-- never `true`. The previous `== true` check made every save report
 		-- failure even on success. Use pcall + check the call itself.
-		if not DataStore.SetAsync then
-			return false, "DatastoreFail"
-		end
+		if not DataStore.SetAsync then return false, "DatastoreFail" end
 		local writeOk, writeErr = pcall(function()
 			DataStore:SetAsync(config.DataStoreName, makeKey(config.KeyPrefix, key), payloadOrErr)
 		end)
 		if not writeOk then
-			Logger:Log({
-				Level = "ERROR",
-				Message = string.format("Save failed for key '%s': %s", key, tostring(writeErr)),
-			})
+			Logger:Log({ Level = "ERROR", Message = string.format("Save failed for key '%s': %s", key, tostring(writeErr)) })
 			return false, "DatastoreFail"
 		end
 		Logger:Log({ Level = "INFO", Message = string.format("Saved persistent state for Entity with key '%s'", key) })
 		return true, nil
 	end
-
 	--[=[
-		Reads the DataStore entry at the composed key and, if present, deserializes
-		it via `entity:Deserialize(data)`. Returns `(true, data, nil)` on success,
-		`(true, nil, nil)` when no saved data exists (first-time load), or
-		`(false, nil, errorCode)` on failure.
-
-		@param entity any -- Entity instance; must expose `Deserialize(data)`.
-		@param key string -- Raw entity key.
-		@return boolean, { [string]: any }?, string? -- Success, decoded data, error code.
-		@reads DataStore entry at composed key
-		@writes entity state via `entity:Deserialize`
+		@description Implements `controller.Load`.
+		@param entity any -- `entity` input parameter.
+		@param key string -- `key` input parameter.
+		@return any -- Return value produced by the implementation, if any.
 	]=]
+
 	function controller:Load(entity: any, key: string)
 		local readOk, raw = pcall(function()
 			return DataStore:GetAsync(config.DataStoreName, makeKey(config.KeyPrefix, key))
@@ -203,25 +174,16 @@ function EntityPersistence.new(config: PersistenceConfig): EntityPersistence
 		if entity and type(entity.Deserialize) == "function" then
 			entity:Deserialize(data)
 		end
-		Logger:Log({
-			Level = "INFO",
-			Message = string.format("Restored persistent state for Entity with key '%s'", key),
-		})
+		Logger:Log({ Level = "INFO", Message = string.format("Restored persistent state for Entity with key '%s'", key) })
 		return true, data, nil
 	end
-
 	--[=[
-		Performs a read-modify-write on the DataStore entry at the composed key via
-		`UpdateAsync`. The existing payload is decoded, passed to `mutateFn`, and
-		the returned table is re-encoded and saved atomically. If `mutateFn` is nil
-		or returns nil, the existing data is re-written unchanged.
-
-		@param key string -- Raw entity key.
-		@param mutateFn (data: { [string]: any }) -> { [string]: any } -- Transform function for the existing data.
-		@return boolean, string? -- Success flag and optional error code ("DatastoreFail").
-		@reads DataStore entry at composed key
-		@writes DataStore entry at composed key
+		@description Implements `controller.Update`.
+		@param key string -- `key` input parameter.
+		@param mutateFn (data: { [string]: any }) -> { [string]: any } -- `mutateFn` input parameter.
+		@return any -- Return value produced by the implementation, if any.
 	]=]
+
 	function controller:Update(key: string, mutateFn: (data: { [string]: any }) -> { [string]: any })
 		-- UpdateAsync in Facade
 		local ok, result = pcall(function()
@@ -243,42 +205,28 @@ function EntityPersistence.new(config: PersistenceConfig): EntityPersistence
 			end)
 		end)
 		if not ok then
-			Logger:Log({
-				Level = "ERROR",
-				Message = string.format("Update failed for key '%s': %s", key, tostring(result)),
-			})
+			Logger:Log({ Level = "ERROR", Message = string.format("Update failed for key '%s': %s", key, tostring(result)) })
 			return false, "DatastoreFail"
 		end
-
+		
 		if result == nil then
 			return false, "DatastoreFail"
 		end
 		return true, nil
 	end
-
 	--[=[
-		Permanently removes the DataStore entry at the composed key via
-		`RemoveAsync`. Returns `(true, nil)` on success or
-		`(false, "DatastoreFail")` if the facade lacks `RemoveAsync` or the call
-		throws.
-
-		@param key string -- Raw entity key to delete.
-		@return boolean, string? -- Success flag and optional error code.
-		@reads DataStore entry at composed key
-		@writes DataStore entry at composed key removed
+		@description Implements `controller.Delete`.
+		@param key string -- `key` input parameter.
+		@return any -- Return value produced by the implementation, if any.
 	]=]
+
 	function controller:Delete(key: string)
-		if not DataStore.RemoveAsync then
-			return false, "DatastoreFail"
-		end
+		if not DataStore.RemoveAsync then return false, "DatastoreFail" end
 		local ok, err = pcall(function()
 			DataStore:RemoveAsync(config.DataStoreName, makeKey(config.KeyPrefix, key))
 		end)
 		if not ok then
-			Logger:Log({
-				Level = "ERROR",
-				Message = string.format("Delete failed for key '%s': %s", key, tostring(err)),
-			})
+			Logger:Log({ Level = "ERROR", Message = string.format("Delete failed for key '%s': %s", key, tostring(err)) })
 			return false, "DatastoreFail"
 		end
 
@@ -286,10 +234,7 @@ function EntityPersistence.new(config: PersistenceConfig): EntityPersistence
 		return true, nil
 	end
 
-	Logger:Log({
-		Level = "INFO",
-		Message = string.format("EntityPersistence controller created for DataStore '%s'", config.DataStoreName),
-	})
+	Logger:Log({ Level = "INFO", Message = string.format("EntityPersistence controller created for DataStore '%s'", config.DataStoreName) })
 	return controller
 end
 

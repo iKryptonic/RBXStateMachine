@@ -1,10 +1,8 @@
 --!strict
--- @Name ServiceManager/init.luau
--- @Author iKrypto
--- @Description Main entry point for the Nexus-Orchestrator Suite.
--- Wires all components: GlassGUI, ReactiveStore, ZAxisNavigator, AnimationController,
--- AnalyticsEngine, ServiceBrain, and all 6 subsystem modules. Handles client/server context,
--- server polling via ConnectionFSM, and scheduler integration.
+--[=[
+	@module ServiceManager
+	@description Defines the `ServiceManager` module and its exported API.
+]=]
 
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
@@ -54,17 +52,12 @@ local _logs: { { Level: string, Message: string, Timestamp: number } } = {}
 local _fpsAccum: number = 0
 local _fpsFrames: number = 0
 local _lastFPS: number = 60
+--[=[
+	@description Handles `Initialize` for `ServiceManager`.
+	@param Orchestrator any -- `Orchestrator` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- PUBLIC API
--- ══════════════════════════════════════════════════════════════
-
---[[
-	Initialize the Nexus-Orchestrator Suite.
-	Must be called from the client after the Orchestrator has been set up.
-	
-	@param Orchestrator any — The main Orchestrator module (shared.fsm backed)
-]]
 function ServiceManager.Initialize(Orchestrator: any)
 	if _initialized then return end
 	_initialized = true
@@ -334,10 +327,12 @@ function ServiceManager.Initialize(Orchestrator: any)
 
 	_Log("INFO", "ServiceManager initialized")
 end
+--[=[
+	@description Implements `ServiceManager.Show`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Show the ServiceManager GUI window.
-]]
 function ServiceManager.Show()
 	if _gui then
 		_gui:Show()
@@ -347,17 +342,21 @@ function ServiceManager.Show()
 		end
 	end
 end
+--[=[
+	@description Implements `ServiceManager.Hide`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Hide the ServiceManager GUI window.
-]]
 function ServiceManager.Hide()
 	if _gui then _gui:Hide() end
 end
+--[=[
+	@description Implements `ServiceManager.Toggle`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Toggle GUI visibility.
-]]
 function ServiceManager.Toggle()
 	if _gui then
 		if _gui:IsVisible() then
@@ -367,11 +366,12 @@ function ServiceManager.Toggle()
 		end
 	end
 end
+--[=[
+	@description Implements `ServiceManager.SwitchSubsystem`.
+	@param name string -- `name` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Switch to a different subsystem panel.
-	@param name string — One of: "TASKS", "FSM", "ENTITY", "NETWORK", "DATASTORE", "INSIGHTS"
-]]
 function ServiceManager.SwitchSubsystem(name: string)
 	if not _subsystemModules[name] then return end
 	_activeSubsystem = name
@@ -396,11 +396,12 @@ function ServiceManager.SwitchSubsystem(name: string)
 	-- Force immediate data refresh
 	_lastDataRefresh = 0
 end
+--[=[
+	@description Updates module state through `ServiceManager.SetContextMode`.
+	@param mode string -- `mode` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Switch between client and server context modes.
-	@param mode string — "client" or "server"
-]]
 function ServiceManager.SetContextMode(mode: string)
 	if mode ~= "client" and mode ~= "server" then return end
 	if mode == _contextMode then return end -- noop on same-mode click
@@ -481,17 +482,21 @@ function ServiceManager.SetContextMode(mode: string)
 
 	_Log("INFO", "Context mode switched to: " .. mode)
 end
+--[=[
+	@description Returns the data produced by `ServiceManager.GetStore`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Get the ReactiveStore for external subscriptions.
-]]
 function ServiceManager.GetStore(): any
 	return _store
 end
+--[=[
+	@description Implements `ServiceManager.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
---[[
-	Destroy the entire ServiceManager, cleaning up all resources.
-]]
 function ServiceManager.Destroy()
 	if _serverPollConnection then
 		_serverPollConnection:Disconnect()
@@ -606,10 +611,11 @@ function _TickBrain()
 		end
 	end
 end
-
--- ══════════════════════════════════════════════════════════════
--- PRIVATE: CLIENT CONTEXT SYNC
--- ══════════════════════════════════════════════════════════════
+--[=[
+	@description Implements `ServiceManager._SyncClientContext`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ServiceManager:_SyncClientContext()
 	-- Client mode: data comes directly from the Orchestrator module
@@ -749,17 +755,12 @@ end
 
 -- Now that _Log is defined, set it on the module table
 ServiceManager._Log = _Log
+--[=[
+	@description Handles `RegisterServerHandlers` for `ServiceManager`.
+	@param Orchestrator any -- `Orchestrator` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- ══════════════════════════════════════════════════════════════
--- SERVER-SIDE: Snapshot handler registration
--- ══════════════════════════════════════════════════════════════
-
---[[
-	RegisterServerHandlers should be called from the server boot script
-	to enable server-context polling from the client.
-	
-	@param Orchestrator any — The main Orchestrator module
-]]
 function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 	if not RunService:IsServer() then return end
 
@@ -865,6 +866,21 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 			EntityId = fsm.EntityId or fsm._entityId
 				or (fsm.Context and type(fsm.Context) == "table" and fsm.Context.EntityId),
 			Perf = fsm.Perf or {},
+			ManagedInstances = (function()
+				if type(fsm.GetManagedInstances) ~= "function" then return nil end
+				local ok3, managed = pcall(fsm.GetManagedInstances, fsm)
+				if not ok3 or not managed or #managed == 0 then return nil end
+				local list = {}
+				for _, entry in ipairs(managed) do
+					table.insert(list, {
+						Label = entry.Label,
+						ClassName = entry.Instance and entry.Instance.ClassName or "?",
+						Name = entry.Instance and entry.Instance.Name or "?",
+						CreatedAt = entry.CreatedAt,
+					})
+				end
+				return list
+			end)(),
 		}
 	end
 
@@ -1282,7 +1298,122 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 		snapshot.Memory = collectgarbage("count") -- KB
 		snapshot.Timestamp = os.clock()
 
-		-- Aggregate server log history. We pull from the Orchestrator's central
+		-- Instance memory audit — surfaces Roblox engine memory (mesh/texture data)
+		-- that gcinfo() can't see. Identifies heavy services and top offenders.
+		do
+			local instMem: { [string]: any } = { Services = {}, TopOffenders = {}, TotalDescendants = 0 }
+			local serviceNames = {"ReplicatedStorage", "Workspace", "ServerScriptService", "ServerStorage", "Lighting", "StarterGui", "StarterPlayer", "SoundService"}
+			for _, svcName in ipairs(serviceNames) do
+				local ok2, svc = pcall(function() return game:GetService(svcName) end)
+				if ok2 and svc then
+					local c = 0
+					for _ in svc:GetDescendants() do c += 1 end
+					instMem.Services[svcName] = c
+					instMem.TotalDescendants += c
+				end
+			end
+			-- Top offenders: children of RS/Workspace with many descendants
+			local rs2 = game:FindFirstChild("ReplicatedStorage")
+			if rs2 then
+				for _, child in rs2:GetChildren() do
+					local c = 0
+					for _ in child:GetDescendants() do c += 1 end
+					if c > 50 then
+						table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "RS" })
+					end
+				end
+			end
+			for _, child in game.Workspace:GetChildren() do
+				local c = 0
+				for _ in child:GetDescendants() do c += 1 end
+				if c > 100 then
+					table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "WS" })
+				end
+			end
+			table.sort(instMem.TopOffenders, function(a, b) return a.Count > b.Count end)
+			if #instMem.TopOffenders > 15 then
+				local trimmed = {}
+				for i = 1, 15 do trimmed[i] = instMem.TopOffenders[i] end
+				instMem.TopOffenders = trimmed
+			end
+			-- Count PlayerGui per player
+			for _, player in game.Players:GetPlayers() do
+				local pg = player:FindFirstChild("PlayerGui")
+				if pg then
+					local c = 0
+					for _ in pg:GetDescendants() do c += 1 end
+					instMem.Services["PlayerGui:" .. player.Name] = c
+					instMem.TotalDescendants += c
+				end
+			end
+			-- Detect duplicate assets (cloned multiple times)
+			local assetsFolder = rs2 and rs2:FindFirstChild("Assets")
+			if assetsFolder then
+				local nameCounts: {[string]: number} = {}
+				for _, child in assetsFolder:GetChildren() do
+					nameCounts[child.Name] = (nameCounts[child.Name] or 0) + 1
+				end
+				local dupes = {}
+				for name, count in pairs(nameCounts) do
+					if count > 1 then
+						table.insert(dupes, { Name = name, Count = count })
+					end
+				end
+				if #dupes > 0 then
+					table.sort(dupes, function(a, b) return a.Count > b.Count end)
+					instMem.DuplicateAssets = dupes
+				end
+			end
+			-- Aggregate managed Instance counts from active FSMs
+			local fsmInstanceOwnership = {}
+			if Factory and Factory.Registry then
+				pcall(function()
+					for fsmId, fsm in pairs(Factory.Registry.GetAllStateMachines()) do
+						if type(fsm.GetManagedInstances) == "function" then
+							local ok3, managed = pcall(fsm.GetManagedInstances, fsm)
+							if ok3 and managed and #managed > 0 then
+								fsmInstanceOwnership[fsmId] = #managed
+							end
+						end
+					end
+				end)
+			end
+			if next(fsmInstanceOwnership) then
+				instMem.FSMOwnership = fsmInstanceOwnership
+			end
+			-- Orphan detection: Workspace children that aren't characters, terrain,
+			-- camera, or known game objects — potential FSM leaks
+			local orphans = {}
+			local knownNames = { Camera = true, Terrain = true, Baseplate = true, SpawnLocation = true }
+			for _, child in game.Workspace:GetChildren() do
+				if child:IsA("Camera") or child:IsA("Terrain") then continue end
+				if knownNames[child.Name] then continue end
+				-- Characters are Models with a Humanoid
+				if child:IsA("Model") and child:FindFirstChildOfClass("Humanoid") then continue end
+				-- Folders are usually intentional
+				if child:IsA("Folder") then continue end
+				-- Check for suspicious objects (small parts, hitboxes, clones)
+				local desc = 0
+				for _ in child:GetDescendants() do desc += 1 end
+				local isSuspicious = child.Name:lower():find("hitbox")
+					or child.Name:lower():find("clone")
+					or child.Name:lower():find("projectile")
+					or (child:IsA("BasePart") and not child.Anchored and desc == 0)
+				if isSuspicious then
+					table.insert(orphans, {
+						Name = child.Name,
+						Class = child.ClassName,
+						Age = math.floor(os.clock() - (child:GetAttribute("_CreatedAt") or os.clock())),
+					})
+				end
+			end
+			if #orphans > 0 then
+				instMem.SuspectedOrphans = orphans
+			end
+			snapshot.InstanceMemory = instMem
+		end
+
+		-- Aggregate server log history.We pull from the Orchestrator's central
 		-- Logger and any per-subsystem Loggers we know about. Capped at 200
 		-- most-recent entries so the snapshot stays small.
 		do

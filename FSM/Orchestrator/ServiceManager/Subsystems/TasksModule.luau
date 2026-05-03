@@ -1,5 +1,8 @@
 --!strict
-
+--[=[
+	@module TasksModule
+	@description Defines the `TasksModule` module and its exported API.
+]=]
 
 local Theme = require(script.Parent.Parent.Theme)
 local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
@@ -7,8 +10,12 @@ local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
 local TasksModule = {}
 TasksModule.__index = TasksModule
 
-local SORT_MODES = {"Priority","Name","Status","Executions","AvgTime" }
-
+local SORT_MODES = { "Priority", "Name", "Status", "Executions", "AvgTime" }
+--[=[
+	@description Implements `TasksModule.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule.new(): any
 	local self = setmetatable({}, TasksModule)
@@ -67,7 +74,11 @@ local PERF_STABLE_THRESHOLD = {
 	ActiveTasks = 0.5,
 	FrameBudgetMs = 0.05,
 }
-
+--[=[
+	@description Implements `TasksModule._UpdateSmoothedPerf`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:_UpdateSmoothedPerf()
 	local raw = self._perfCache
@@ -101,7 +112,12 @@ function TasksModule:_UpdateSmoothedPerf()
 	prev.ActiveTasks = rawTasks
 	prev.FrameBudgetMs = rawBudget
 end
-
+--[=[
+	@description Implements `TasksModule._TickPerfStrip`.
+	@param nexus any -- `nexus` input parameter.
+	@param dt number -- `dt` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:_TickPerfStrip(nexus: any, dt: number)
 	-- Pull live raw values without invoking the heavy FetchData path.
@@ -152,7 +168,11 @@ function TasksModule:_TickPerfStrip(nexus: any, dt: number)
 
 	self:_UpdatePerfStripLabels(strip)
 end
-
+--[=[
+	@description Implements `TasksModule._UpdatePerfStripLabels`.
+	@param strip Frame -- `strip` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:_UpdatePerfStripLabels(strip: Frame)
 	local smooth = self._smoothPerf
@@ -218,9 +238,9 @@ local function dirGlyph(dir: number): string
 	-- Use arrow chars that Gotham covers (↑↓· are not in the typeface).
 	-- ↑ ↓ are universally supported. Stable: empty (no symbol) — the muted
 	-- color already conveys "no change".
-	if dir > 0 then return"↑"
-	elseif dir < 0 then return"↓"
-	else return""
+	if dir > 0 then return "↑"
+	elseif dir < 0 then return "↓"
+	else return ""
 	end
 end
 
@@ -232,7 +252,11 @@ local function dirColor(dir: number, higherIsBetter: boolean): Color3
 		return if dir > 0 then Theme.Colors.Danger else Theme.Colors.Success
 	end
 end
-
+--[=[
+	@description Implements `TasksModule.FetchData`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
@@ -338,7 +362,7 @@ function TasksModule:FetchData(nexus: any)
 					if not scheduler.Tasks[entry.Name] then
 						local status = entry.Status or "Completed"
 						local statusLower = string.lower(status)
-						self._completedTasks[entry.Name .."@" .. tostring(entry.Time or 0)] = {
+						self._completedTasks[entry.Name .. "@" .. tostring(entry.Time or 0)] = {
 							Name = entry.Name,
 							Status = statusLower,
 							Priority = 99,
@@ -455,10 +479,18 @@ function TasksModule:FetchData(nexus: any)
 	end)
 	self._lastFetchTime = os.clock()
 end
-
+--[=[
+	@description Implements `TasksModule.Render`.
+	@param _nexus any -- `_nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:Render(_nexus: any) end
-
+--[=[
+	@description Implements `TasksModule._GetSortedFilteredTasks`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return { { Name: string, Data: any } } -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:_GetSortedFilteredTasks(): { { Name: string, Data: any } }
 	local result = {}
@@ -486,7 +518,12 @@ function TasksModule:_GetSortedFilteredTasks(): { { Name: string, Data: any } }
 	end)
 	return result
 end
-
+--[=[
+	@description Creates the result managed by `TasksModule.BuildRootLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
@@ -608,7 +645,12 @@ function TasksModule:BuildRootLayer(frame: Frame, context: any)
 		)
 	end
 end
-
+--[=[
+	@description Implements `TasksModule._BuildToolbar`.
+	@param parent Frame -- `parent` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:_BuildToolbar(parent: Frame, nexus: any)
 	-- Idempotent: reuse if already built. Only the search text and toggle button
@@ -782,7 +824,12 @@ function TasksModule:_BuildToolbar(parent: Frame, nexus: any)
 		if nexus then nexus._lastDataRefresh = 0 end
 	end)
 end
-
+--[=[
+	@description Implements `TasksModule._BuildPerfStrip`.
+	@param parent Frame -- `parent` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:_BuildPerfStrip(parent: Frame, nexus: any)
 	-- Idempotent: reuse existing strip if present, only update values.
@@ -965,7 +1012,11 @@ function TasksModule:_BuildPerfStrip(parent: Frame, nexus: any)
 		end
 	end
 end
-
+--[=[
+	@description Implements `TasksModule._RenderSparkline`.
+	@param strip Frame -- `strip` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:_RenderSparkline(strip: Frame)
 	local spark = strip:FindFirstChild("Sparkline") :: Frame?
@@ -1188,7 +1239,15 @@ function TasksModule:_RenderSparkline(strip: Frame)
 		})
 	end
 end
-
+--[=[
+	@description Implements `TasksModule._BuildTaskRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param name string -- `name` input parameter.
+	@param taskData any -- `taskData` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param order number -- `order` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:_BuildTaskRow(parent: Frame, name: string, taskData: any, nexus: any, order: number): Frame
 	local statusColor = if taskData.Status == "running" then Theme.Colors.Accent
@@ -1278,7 +1337,7 @@ function TasksModule:_BuildTaskRow(parent: Frame, name: string, taskData: any, n
 	-- Pulse status dot for live tasks (running this instant or recently active)
 	local dot = row:FindFirstChild("StatusDot")
 	if dot and (taskData.Status == "running" or taskData.Status == "active") and nexus._animationController then
-		nexus._animationController:StartPulse("task_" .. name, dot,"BackgroundTransparency", 0.6)
+		nexus._animationController:StartPulse("task_" .. name, dot, "BackgroundTransparency", 0.6)
 	end
 
 	-- Hover glow on the click overlay
@@ -1289,7 +1348,12 @@ function TasksModule:_BuildTaskRow(parent: Frame, name: string, taskData: any, n
 
 	return row
 end
-
+--[=[
+	@description Implements `TasksModule._BuildTaskDetailLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:_BuildTaskDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -1441,7 +1505,15 @@ function TasksModule:_BuildTaskDetailLayer(frame: Frame, context: any)
 		self:_BuildPropRow(contentFrame, prop.Key, prop.Value, prop.Color, 50 + i)
 	end
 end
-
+--[=[
+	@description Implements `TasksModule._BuildPropRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param key string -- `key` input parameter.
+	@param value string -- `value` input parameter.
+	@param color Color3 -- `color` input parameter.
+	@param order number -- `order` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:_BuildPropRow(parent: Frame, key: string, value: string, color: Color3, order: number)
 	local propRow = Instance.new("Frame")
@@ -1464,7 +1536,12 @@ function TasksModule:_BuildPropRow(parent: Frame, key: string, value: string, co
 	Theme.CreateLabel({ Text = key, Size = UDim2.new(0.45, 0, 1, 0), Color = Theme.Colors.TextSecondary, FontSize = Theme.TextSize.Caption, Parent = propRow })
 	Theme.CreateLabel({ Text = value, Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.48, 0, 0, 0), Color = color, FontSize = Theme.TextSize.Body, FontFace = Theme.Font.Mono, Alignment = Enum.TextXAlignment.Right, Parent = propRow })
 end
-
+--[=[
+	@description Implements `TasksModule._BuildPerfDetailLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:_BuildPerfDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -1640,7 +1717,11 @@ function TasksModule:_BuildPerfDetailLayer(frame: Frame, context: any)
 		end
 	end
 end
-
+--[=[
+	@description Implements `TasksModule.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function TasksModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end

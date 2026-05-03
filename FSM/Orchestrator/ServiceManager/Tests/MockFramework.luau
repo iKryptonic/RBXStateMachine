@@ -1,5 +1,8 @@
 --!strict
-
+--[=[
+	@module MockFramework
+	@description Defines the `MockFramework` module and its exported API.
+]=]
 
 local MockEntity = require(script.Parent.Mocks.MockEntity)
 local MockOrchestrator = require(script.Parent.Mocks.MockOrchestrator)
@@ -15,7 +18,11 @@ MockFramework.MockOrchestrator = MockOrchestrator
 MockFramework.MockCharacter = MockCharacter
 MockFramework.TransitionRecorder = TransitionRecorder
 MockFramework.Helpers = MockHelpers
-
+--[=[
+	@description Implements `MockFramework.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MockFramework.new()
 	local self = setmetatable({
@@ -32,7 +39,13 @@ function MockFramework.new()
 
 	return self
 end
-
+--[=[
+	@description Creates the result managed by `MockFramework.CreateEntity`.
+	@param entityClass any -- `entityClass` input parameter.
+	@param entityId string? -- `entityId` input parameter.
+	@param initialData any? -- `initialData` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MockFramework:CreateEntity(entityClass: any, entityId: string?, initialData: any?)
 	local resolvedEntityId = entityId or MockHelpers.generateEntityId()
@@ -40,17 +53,32 @@ function MockFramework:CreateEntity(entityClass: any, entityId: string?, initial
 	self.entities[resolvedEntityId] = entity
 	return entity
 end
-
+--[=[
+	@description Creates the result managed by `MockFramework.CreateCharacterEntity`.
+	@param entityId string -- `entityId` input parameter.
+	@param data any? -- `data` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MockFramework:CreateCharacterEntity(entityId: string, data: any?): any
 	return MockHelpers.CreateCharacterEntity(self, entityId, data)
 end
-
+--[=[
+	@description Creates the result managed by `MockFramework.CreatePlayerEntity`.
+	@param entityId string -- `entityId` input parameter.
+	@param data any? -- `data` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MockFramework:CreatePlayerEntity(entityId: string, data: any?): any
 	return MockHelpers.CreatePlayerEntity(self, entityId, data)
 end
-
+--[=[
+	@description Creates the result managed by `MockFramework.CreateFSM`.
+	@param fsmClass any -- `fsmClass` input parameter.
+	@param context any? -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MockFramework:CreateFSM(fsmClass: any, context: any?)
 	local BaseStateMachine = select(1, MockHelpers.getBaseModules())
@@ -94,28 +122,48 @@ function MockFramework:CreateFSM(fsmClass: any, context: any?)
 	self._transitionRecorder:SyncMachine(machine)
 	return machine
 end
-
+--[=[
+	@description Returns the data produced by `MockFramework.GetOrchestrator`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MockFramework:GetOrchestrator()
 	return self._orchestrator
 end
-
+--[=[
+	@description Implements `MockFramework.StepFrames`.
+	@param count number -- `count` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MockFramework:StepFrames(count: number)
 	MockHelpers.StepFrames(self, count)
 end
-
+--[=[
+	@description Returns the data produced by `MockFramework.GetTransitions`.
+	@param fsmId string? -- `fsmId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MockFramework:GetTransitions(fsmId: string?)
 	self._transitionRecorder:SyncAll(self.stateMachines)
 	return self._transitionRecorder:GetTransitions(fsmId)
 end
-
+--[=[
+	@description Returns the data produced by `MockFramework.GetCommands`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MockFramework:GetCommands()
 	return self.commands
 end
-
+--[=[
+	@description Implements `MockFramework.Reset`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function MockFramework:Reset()
 	self._transitionRecorder:SyncAll(self.stateMachines)

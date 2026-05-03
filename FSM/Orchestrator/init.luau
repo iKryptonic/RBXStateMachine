@@ -1,7 +1,8 @@
 --!strict
--- @Name Orchestrator
--- @Author iKrypto
--- @Description Factory and Registry for managing unique StateMachine instances by ID.
+--[=[
+	@module Core
+	@description Defines the `Core` module and its exported API.
+]=]
 
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -76,10 +77,11 @@ local function ValidateRequest(context: string)
 		return true
 	end
 end
-
--------------------------------------------------------------------------------------------
----------------------------------- BEGIN SHARED METHODS -----------------------------------
--------------------------------------------------------------------------------------------
+--[=[
+	@description Handles `RegisterComponents` for `Orchestrator`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator:RegisterComponents()
 	local initialized = Initialize()
@@ -99,6 +101,11 @@ function Orchestrator:RegisterComponents()
 
 	return initialized
 end
+--[=[
+	@description Implements `Orchestrator.StartServiceManager`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator:StartServiceManager()
 	if Orchestrator._serviceManager then return Orchestrator._serviceManager end
@@ -120,10 +127,20 @@ function Orchestrator:StartServiceManager()
 	Orchestrator._serviceManager = serviceManager
 	return serviceManager
 end
+--[=[
+	@description Returns the data produced by `Orchestrator.GetServiceManager`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator:GetServiceManager()
 	return Orchestrator and Orchestrator._serviceManager or nil
 end
+--[=[
+	@description Creates the result managed by `Orchestrator.CreateEntity`.
+	@param params { EntityClass: any, EntityId: string, Context: {any}?, Persistent: boolean?, PersistenceKey: string? } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.CreateEntity(params: { EntityClass: any, EntityId: string, Context: {any}?, Persistent: boolean?, PersistenceKey: string? })
 	ValidateRequest()
@@ -131,17 +148,34 @@ function Orchestrator.CreateEntity(params: { EntityClass: any, EntityId: string,
 	params.Context._Orchestrator = Orchestrator
 	return Core.Factory.CreateEntity(params)
 end
+--[=[
+	@description Creates the result managed by `Orchestrator.CreateStateMachine`.
+	@param params { StateMachineClass: any, StateMachineId: string, Context: {any}? } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.CreateStateMachine(params: { StateMachineClass: any, StateMachineId: string, Context: {any}? })
 	ValidateRequest()
 	if not params.Context then params.Context = {} end
 	params.Context._Orchestrator = Orchestrator
+	params.Context.Orchestrator = Orchestrator  -- backward compat for framework FSMs
 	return Core.Factory.CreateStateMachine(params)
 end
+--[=[
+	@description Handles `RegisterModule` for `Orchestrator`.
+	@param name string -- `name` input parameter.
+	@param module any -- `module` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.RegisterModule(name: string, module: any)
 	_moduleRegistry[name] = module
 end
+--[=[
+	@description Returns the data produced by `Orchestrator.GetModule`.
+	@param name string -- `name` input parameter.
+	@return any? -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.GetModule(name: string): any?
 	if _moduleRegistry[name] then
@@ -160,16 +194,31 @@ function Orchestrator.GetModule(name: string): any?
 
 	return nil
 end
+--[=[
+	@description Returns the data produced by `Orchestrator.GetStateMachine`.
+	@param stateMachineId string -- `stateMachineId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.GetStateMachine(stateMachineId: string)
 	ValidateRequest()
 	return Core.Factory.Registry.GetStateMachine(stateMachineId)
 end
+--[=[
+	@description Returns the data produced by `Orchestrator.GetEntity`.
+	@param entityId string -- `entityId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.GetEntity(entityId: string)
 	ValidateRequest()
 	return Core.Factory.Registry.GetEntity(entityId)
 end
+--[=[
+	@description Returns whether `Orchestrator` cancel state machine.
+	@param stateMachineId string -- `stateMachineId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.CancelStateMachine(stateMachineId: string)
 	ValidateRequest()
@@ -180,6 +229,11 @@ function Orchestrator.CancelStateMachine(stateMachineId: string)
 	end
 	return false
 end
+--[=[
+	@description Implements `Orchestrator.RetryStateMachine`.
+	@param stateMachineId string -- `stateMachineId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.RetryStateMachine(stateMachineId: string)
 	ValidateRequest()
@@ -207,6 +261,11 @@ function Orchestrator.RetryStateMachine(stateMachineId: string)
 	})
 	return true
 end
+--[=[
+	@description Implements `Orchestrator.DeleteEntity`.
+	@param entityId string -- `entityId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.DeleteEntity(entityId: string)
 	ValidateRequest()
@@ -215,6 +274,11 @@ function Orchestrator.DeleteEntity(entityId: string)
 	entity:Destroy() -- Entity.Destroy triggers Registry cleanup via signal in Factory
 	return true
 end
+--[=[
+	@description Implements `Orchestrator.DeleteAllEntities`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.DeleteAllEntities()
 	ValidateRequest()
@@ -226,6 +290,11 @@ function Orchestrator.DeleteAllEntities()
 	end
 	return true
 end
+--[=[
+	@description Returns whether `Orchestrator` cancel all.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.CancelAll()
 	ValidateRequest()
@@ -237,18 +306,32 @@ function Orchestrator.CancelAll()
 	end
 	return true
 end
+--[=[
+	@description Returns the data produced by `Orchestrator.GetEntities`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.GetEntities()
 	ValidateRequest()
 	return Core.Factory.Registry.GetAllEntities()
 end
+--[=[
+	@description Returns the data produced by `Orchestrator.GetStateMachines`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.GetStateMachines()
 	ValidateRequest()
 	return Core.Factory.Registry.GetAllStateMachines()
 end
+--[=[
+	@description Implements `Orchestrator.PoolEntity`.
+	@param entityId string -- `entityId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
--- Pooling Delegates
 function Orchestrator.PoolEntity(entityId: string)
 	ValidateRequest()
 	local entity = Core.Factory.Registry.GetEntity(entityId)
@@ -267,27 +350,50 @@ function Orchestrator.PoolEntity(entityId: string)
 	Core.Factory.Registry.PoolEntity(className, entity)
 	return true
 end
-
--------------------------------------------------------------------------------------------
----------------------------------- REMOTE WRAPPERS ----------------------------------------
--------------------------------------------------------------------------------------------
+--[=[
+	@description Handles `RegisterEntityCommandCallback` for `Orchestrator`.
+	@param entityId string -- `entityId` input parameter.
+	@param command string -- `command` input parameter.
+	@param handler (Player, ...any) -> () -- `handler` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.RegisterEntityCommandCallback(entityId: string, command: string, handler: (Player, ...any) -> ())
 	ValidateRequest() -- Allow both contexts
 	Core.NetworkManager.RegisterEntityCommand(entityId, command, handler)
 	return true
 end
+--[=[
+	@description Implements `Orchestrator.ServerCommandEntity`.
+	@param entityId string -- `entityId` input parameter.
+	@param command string -- `command` input parameter.
+	@param ... any -- `...` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.ServerCommandEntity(entityId: string, command: string, ...: any)
 	ValidateRequest("Client")
 	Core.NetworkManager.ServerCommandEntity(entityId, command, ...)
 end
+--[=[
+	@description Handles `RegisterServerRequestCallback` for `Orchestrator`.
+	@param requestName string -- `requestName` input parameter.
+	@param handler (Player, ...any) -> any -- `handler` input parameter.
+	@param aSync boolean -- `aSync` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.RegisterServerRequestCallback(requestName: string, handler: (Player, ...any) -> any, aSync: boolean)
 	ValidateRequest("Server")
 	Core.NetworkManager.RegisterServerRequest(requestName, handler, aSync)
 	return true
 end
+--[=[
+	@description Implements `Orchestrator.ServerRequest`.
+	@param requestName string -- `requestName` input parameter.
+	@param ... any -- `...` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.ServerRequest(requestName: string, ...: any)
 	ValidateRequest("Client")
@@ -296,38 +402,78 @@ end
 
 -- Convenience alias used throughout the codebase
 Orchestrator.Request = Orchestrator.ServerRequest
+--[=[
+	@description Implements `Orchestrator.ServerRequestAsync`.
+	@param requestName string -- `requestName` input parameter.
+	@param ... any -- `...` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.ServerRequestAsync(requestName: string, ...: any)
 	ValidateRequest("Client")
 	return Core.NetworkManager.ServerRequestAsync(requestName, ...)
 end
+--[=[
+	@description Implements `Orchestrator.BroadcastEntityCommand`.
+	@param requestType string -- `requestType` input parameter.
+	@param entityId string -- `entityId` input parameter.
+	@param ... any -- `...` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.BroadcastEntityCommand(requestType: string, entityId: string, ...: any)
 	ValidateRequest("Server")
 	Core.NetworkManager.BroadcastEntityCommand(entityId, requestType, ...)
 	return true
 end
-
--------------------------------------------------------------------------------------------
----------------------------------- EVENT BUS ----------------------------------------------
--------------------------------------------------------------------------------------------
+--[=[
+	@description Handles `RegisterEventBus` for `Orchestrator`.
+	@param name string -- `name` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function Orchestrator.RegisterEventBus(name: string)
 	ValidateRequest()
 	return Core.NetworkManager.RegisterEventBus(name)
 end
+--[=[
+	@description Returns the data produced by `Orchestrator.GetEventBus`.
+	@param name string -- `name` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
+
 function Orchestrator.GetEventBus(name: string) 
 	ValidateRequest()
 	return Core.NetworkManager.GetEventBus(name) 
 end
+--[=[
+	@description Implements `Orchestrator.FireEventBus`.
+	@param name string -- `name` input parameter.
+	@param ... any -- `...` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
+
 function Orchestrator.FireEventBus(name: string, ...) 
 	ValidateRequest()
 	return Core.NetworkManager.FireEventBus(name, ...) 
 end
+--[=[
+	@description Implements `Orchestrator.AwaitEventBus`.
+	@param name string -- `name` input parameter.
+	@param timeout number? -- `timeout` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
+
 function Orchestrator.AwaitEventBus(name: string, timeout: number?)
 	ValidateRequest()
 	return Core.NetworkManager.AwaitEventBus(name, timeout)
 end
+--[=[
+	@description Implements `Orchestrator.UnregisterEventBus`.
+	@param name string -- `name` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
+
 function Orchestrator.UnregisterEventBus(name: string) 
 	ValidateRequest()
 	return Core.NetworkManager.UnregisterEventBus(name) 

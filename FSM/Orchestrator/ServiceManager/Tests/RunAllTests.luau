@@ -1,5 +1,8 @@
 --!strict
-
+--[=[
+	@module RunAllTests
+	@description Defines the `RunAllTests` module and its exported API.
+]=]
 
 local TestRunner = require(script.Parent.TestRunner)
 

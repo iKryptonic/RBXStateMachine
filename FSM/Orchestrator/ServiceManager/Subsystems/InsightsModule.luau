@@ -1,11 +1,18 @@
 --!strict
-
+--[=[
+	@module InsightsModule
+	@description Defines the `InsightsModule` module and its exported API.
+]=]
 
 local Theme = require(script.Parent.Parent.Theme)
 
 local InsightsModule = {}
 InsightsModule.__index = InsightsModule
-
+--[=[
+	@description Implements `InsightsModule.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function InsightsModule.new(): any
 	local self = setmetatable({}, InsightsModule)
@@ -13,7 +20,11 @@ function InsightsModule.new(): any
 	self._historyInsights = {} :: { any }
 	return self
 end
-
+--[=[
+	@description Implements `InsightsModule.FetchData`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function InsightsModule:FetchData(nexus: any)
 	local analytics = nexus._analyticsEngine
@@ -36,10 +47,19 @@ function InsightsModule:FetchData(nexus: any)
 		nexus.Store:Set("insights.activeCount", #self._activeInsights)
 	end)
 end
-
+--[=[
+	@description Implements `InsightsModule.Render`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function InsightsModule:Render(nexus: any) end
-
+--[=[
+	@description Creates the result managed by `InsightsModule.BuildRootLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function InsightsModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
@@ -101,7 +121,7 @@ function InsightsModule:BuildRootLayer(frame: Frame, context: any)
 	}
 
 	local order = 0
-	for _, sev in ipairs({"CRITICAL","WARNING","INFO","SUGGESTION" }) do
+	for _, sev in ipairs({ "CRITICAL", "WARNING", "INFO", "SUGGESTION" }) do
 		local badge = Theme.CreateBadge(
 			string.format("%s %d", sev:sub(1, 4), severityCounts[sev]),
 			severityColors[sev]
@@ -187,7 +207,14 @@ function InsightsModule:BuildRootLayer(frame: Frame, context: any)
 		)
 	end
 end
-
+--[=[
+	@description Implements `InsightsModule._BuildInsightRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param insight any -- `insight` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param order number -- `order` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
+]=]
 
 function InsightsModule:_BuildInsightRow(parent: Frame, insight: any, nexus: any, order: number): Frame
 	local severityColors = {
@@ -317,7 +344,7 @@ function InsightsModule:_BuildInsightRow(parent: Frame, insight: any, nexus: any
 			hintBtn.BackgroundColor3 = Theme.Colors.GlassOverlay
 			hintBtn.BackgroundTransparency = 0.4
 			hintBtn.BorderSizePixel = 0
-			hintBtn.Text = "  " .. hint.Label .."  "
+			hintBtn.Text = "  " .. hint.Label .. "  "
 			hintBtn.TextColor3 = Theme.Colors.Accent
 			hintBtn.TextSize = Theme.TextSize.Caption
 			hintBtn.FontFace = Theme.Font.Bold
@@ -342,7 +369,7 @@ function InsightsModule:_BuildInsightRow(parent: Frame, insight: any, nexus: any
 					end
 					-- Switch to console so user sees the result
 					if nexus.SwitchSubsystem then
-						pcall(nexus.SwitchSubsystem,"CONSOLE")
+						pcall(nexus.SwitchSubsystem, "CONSOLE")
 					end
 				elseif hint.Command then
 					-- Fallback: parse "switch X" pattern
@@ -361,7 +388,13 @@ function InsightsModule:_BuildInsightRow(parent: Frame, insight: any, nexus: any
 
 	return row
 end
-
+--[=[
+	@description Implements `InsightsModule._BuildHistoryRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param insight any -- `insight` input parameter.
+	@param order number -- `order` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
+]=]
 
 function InsightsModule:_BuildHistoryRow(parent: Frame, insight: any, order: number): Frame
 	local row = Instance.new("Frame")
@@ -409,7 +442,12 @@ function InsightsModule:_BuildHistoryRow(parent: Frame, insight: any, order: num
 
 	return row
 end
-
+--[=[
+	@description Implements `InsightsModule._BuildInsightDetailLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function InsightsModule:_BuildInsightDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -446,8 +484,8 @@ function InsightsModule:_BuildInsightDetailLayer(frame: Frame, context: any)
 
 	-- Header
 	Theme.CreateLabel({
-		Text = string.format('<font color="#%s">●</font> %s',
-			string.format("%02X%02X%02X",
+		Text = string.format('<font color="#%s">●</font> %s', 
+			string.format("%02X%02X%02X", 
 				math.floor(color.R * 255), math.floor(color.G * 255), math.floor(color.B * 255)),
 			insight.Title or "Unknown"),
 		Size = UDim2.new(1, 0, 0, 22),
@@ -459,12 +497,12 @@ function InsightsModule:_BuildInsightDetailLayer(frame: Frame, context: any)
 
 	-- Properties
 	local props = {
-		{"Severity", insight.Severity, color },
-		{"Subsystem", insight.Subsystem, Theme.Colors.TextPrimary },
-		{"Description", insight.Description, Theme.Colors.TextSecondary },
-		{"Metric", tostring(insight.Metric or "N/A"), Theme.Colors.Cyan },
-		{"Threshold", tostring(insight.Threshold or "N/A"), Theme.Colors.Warning },
-		{"Timestamp", string.format("%.3fs", insight.Timestamp or 0), Theme.Colors.TextMuted },
+		{ "Severity", insight.Severity, color },
+		{ "Subsystem", insight.Subsystem, Theme.Colors.TextPrimary },
+		{ "Description", insight.Description, Theme.Colors.TextSecondary },
+		{ "Metric", tostring(insight.Metric or "N/A"), Theme.Colors.Cyan },
+		{ "Threshold", tostring(insight.Threshold or "N/A"), Theme.Colors.Warning },
+		{ "Timestamp", string.format("%.3fs", insight.Timestamp or 0), Theme.Colors.TextMuted },
 	}
 
 	for i, prop in ipairs(props) do
@@ -542,7 +580,11 @@ function InsightsModule:_BuildInsightDetailLayer(frame: Frame, context: any)
 		end
 	end)
 end
-
+--[=[
+	@description Implements `InsightsModule.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function InsightsModule:Destroy()
 	table.clear(self._activeInsights)

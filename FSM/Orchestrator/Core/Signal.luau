@@ -1,18 +1,15 @@
 --!strict
-
-
 --[=[
 	@module Signal
-	@description Lightweight, Roblox-compatible signal implementation. Supports persistent connections, one-shot listeners, asynchronous fire, coroutine-yielding wait, and full teardown. Handler snapshotting on `Fire` makes it safe to disconnect or destroy the signal from within a handler.
+	@description Defines the `Signal` module and its exported API.
 ]=]
 
 local Signal = {}
 Signal.__index = Signal
-
-
 --[=[
-	@description Creates a new Signal instance backed by an empty `_handlers` array. The returned object uses `Signal` as its metatable.
-	@return Signal -- New Signal with no connected handlers.
+	@description Implements `Signal.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function Signal.new(): any
@@ -21,13 +18,10 @@ function Signal.new(): any
 	}, Signal)
 	return (self :: any)
 end
-
-
 --[=[
-	@description Appends a connection object to `self._handlers` and returns it. The connection exposes a `Disconnect` method that removes itself from the handler list and nils its back-references, making it safe to call more than once.
-	@param handler (...any) -> () -- Callback invoked with the payload of each subsequent `Fire`.
-	@return Connection -- Connection object with a `Disconnect()` method.
-	@writes self._handlers
+	@description Implements `Signal.Connect`.
+	@param handler (...any) -> () -- `handler` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function Signal:Connect(handler: (...any) -> ()): any
@@ -47,15 +41,12 @@ function Signal:Connect(handler: (...any) -> ()): any
 		end,
 	}
 	table.insert(self._handlers, connection)
-	return (connection :: any)
+	return (connection :: any)	
 end
-
-
 --[=[
-	@description Connects a handler that automatically disconnects itself the first time it fires. Internally wraps the provided handler in a `Connect` call; the returned connection can still be used to cancel the subscription before it fires.
-	@param handler (...any) -> () -- Callback invoked at most once with the next fire's payload.
-	@return Connection -- Connection that will self-disconnect on first invocation.
-	@writes self._handlers
+	@description Implements `Signal.Once`.
+	@param handler (...any) -> () -- `handler` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function Signal:Once(handler: (...any) -> ())
@@ -67,9 +58,9 @@ function Signal:Once(handler: (...any) -> ())
 	return connection
 end
 --[=[
-	@description Dispatches an event to every currently connected handler. The handler list is snapshotted before iteration so listeners may disconnect themselves or destroy the signal during this emission without skipping other callbacks. Each handler is resumed asynchronously with `task.spawn`.
-	@param ... any -- Payload values forwarded to every active connection for this fire.
-	@reads self._handlers
+	@description Implements `Signal.Fire`.
+	@param ... any -- `...` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function Signal:Fire(...: any)
@@ -83,13 +74,10 @@ function Signal:Fire(...: any)
 		end
 	end
 end
-
-
 --[=[
-	@description Suspends the calling coroutine until the next `Fire`. Uses `Once` to register a one-shot listener that resumes the thread via `task.spawn`, then yields with `coroutine.yield`. Returns all values passed to the matching `Fire` call.
-	@return ...any -- Payload values forwarded from the next `Fire` call on this signal.
-	@reads self._handlers
-	@writes self._handlers
+	@description Implements `Signal.Wait`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return ...any -- Return value produced by the implementation, if any.
 ]=]
 
 function Signal:Wait(): ...any
@@ -99,11 +87,10 @@ function Signal:Wait(): ...any
 	end)
 	return coroutine.yield()
 end
-
-
 --[=[
-	@description Severs all handler connections and clears the handler table. Iterates `_handlers`, nils the `_signal` back-reference on each entry to break cycles, then calls `table.clear`. Connections that were already stored by callers become inert after this call.
-	@writes self._handlers
+	@description Implements `Signal.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function Signal:Destroy()

@@ -1,5 +1,8 @@
 --!strict
-
+--[=[
+	@module LogsModule
+	@description Defines the `LogsModule` module and its exported API.
+]=]
 
 local TweenService = game:GetService("TweenService")
 
@@ -26,8 +29,12 @@ local LogsModule = {}
 LogsModule.__index = LogsModule
 
 local MAX_DISPLAY_LOGS = 200
-local LEVEL_ORDER = {"ALL","DEBUG","INFO","WARN","ERROR" }
-
+local LEVEL_ORDER = { "ALL", "DEBUG", "INFO", "WARN", "ERROR" }
+--[=[
+	@description Implements `LogsModule.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LogsModule.new(): any
 	local self = setmetatable({}, LogsModule)
@@ -44,7 +51,11 @@ function LogsModule.new(): any
 	self._lastServerLogCount = 0
 	return self
 end
-
+--[=[
+	@description Implements `LogsModule.FetchData`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LogsModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
@@ -134,10 +145,18 @@ function LogsModule:FetchData(nexus: any)
 		nexus.Store:Set("logs.filter", self._activeFilter)
 	end)
 end
-
+--[=[
+	@description Implements `LogsModule.Render`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LogsModule:Render(nexus: any) end
-
+--[=[
+	@description Implements `LogsModule._ApplyFilters`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LogsModule:_ApplyFilters()
 	self._filteredLogs = {}
@@ -166,7 +185,12 @@ function LogsModule:_ApplyFilters()
 		table.remove(self._filteredLogs, 1)
 	end
 end
-
+--[=[
+	@description Creates the result managed by `LogsModule.BuildRootLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LogsModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
@@ -422,7 +446,11 @@ function LogsModule:BuildRootLayer(frame: Frame, context: any)
 	-- Render initial logs
 	self:_RenderLogs()
 end
-
+--[=[
+	@description Implements `LogsModule._UpdateFilterVisuals`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LogsModule:_UpdateFilterVisuals()
 	local levelColors = {
@@ -442,7 +470,11 @@ function LogsModule:_UpdateFilterVisuals()
 		}):Play()
 	end
 end
-
+--[=[
+	@description Implements `LogsModule._RenderLogs`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LogsModule:_RenderLogs()
 	local scroll = self._scrollFrame
@@ -568,7 +600,11 @@ function LogsModule:_RenderLogs()
 		end)
 	end
 end
-
+--[=[
+	@description Implements `LogsModule.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function LogsModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end

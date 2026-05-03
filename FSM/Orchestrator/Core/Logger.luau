@@ -1,9 +1,7 @@
 --!strict
-
-
 --[=[
 	@module Logger
-	@description Structured logger with per-instance message history, level-based filtering, and optional RichText formatting. Module-level `Settings` are shared across all instances and must be seeded via `Logger.Initialize` before use.
+	@description Defines the `Logger` module and its exported API.
 ]=]
 
 local Logger = {}
@@ -25,12 +23,10 @@ local MAX_LOG_HISTORY = 50
 local MAX_SUMMARY_HISTORY = 200 -- compressed summaries for long-term analysis
 
 local Initialized, Settings = false, nil
-
-
 --[=[
-	@description One-time initialization that reads `Util.Settings.Logger` into the module-level `Settings` table and sets the `Initialized` guard. Silently no-ops on subsequent calls. Must be called before `Logger.new` or any log operation.
-	@param Util table -- Shared utility table; `Util.Settings.Logger` must contain `DebuggingEnabled: boolean` and `MinimumLoggingLevel: number`.
-	@writes Initialized, Settings
+	@description Handles `Initialize` for `Logger`.
+	@param Util any -- `Util` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function Logger.Initialize(Util)
@@ -40,17 +36,15 @@ function Logger.Initialize(Util)
 end
 
 local function ValidateRequest()
-	assert(Initialized,"Logger not initialized")
-	assert(type(Settings) == "table","Logger not initialized")
-	assert(type(Settings.DebuggingEnabled) == "boolean","Logger not initialized")
-	assert(type(Settings.MinimumLoggingLevel) == "number","Logger not initialized")
+	assert(Initialized, "Logger not initialized")
+	assert(type(Settings) == "table", "Logger not initialized")
+	assert(type(Settings.DebuggingEnabled) == "boolean", "Logger not initialized")
+	assert(type(Settings.MinimumLoggingLevel) == "number", "Logger not initialized")
 end
-
-
 --[=[
-	@description Creates a new Logger instance with an empty `History` ring and an optional source name label. When `params.Name` is absent the constructor auto-detects the calling script's short name via `debug.info(2, "s")` and strips the leading dot-path prefix.
-	@param params { Name: string? } -- Optional table; `Name` becomes `self.Source` and appears in every formatted log line.
-	@return Logger -- New Logger instance with `Source` and `History` initialised.
+	@description Implements `Logger.new`.
+	@param params { Name: string? } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function Logger.new(params: { Name: string? })
@@ -59,22 +53,19 @@ function Logger.new(params: { Name: string? })
 
 	if not sourceName then
 		-- Attempt to automatically detect the calling script's name
-		local source = debug.info(2,"s")
+		local source = debug.info(2, "s")
 		-- Parse the script name from the path (e.g. "game.ServerScriptService.Manager" -> "Manager")
-		sourceName = source and string.match(source,"([^%.]+)$") or source
+		sourceName = source and string.match(source, "([^%.]+)$") or source
 	end
 
 	self.Source = sourceName
 	self.History = {} :: {LogEntry}
 	return self
 end
-
-
 --[=[
-	@description Appends a `LogEntry` to `self.History`, evicting the oldest entry into a compressed `self.Summary` ring when the history exceeds `MAX_LOG_HISTORY` (50). Skips output when `Settings.DebuggingEnabled` is false or the level falls below `Settings.MinimumLoggingLevel`. WARN and ERROR levels route through `warn()`; INFO/DEBUG use `print()`, optionally wrapped in a RichText color tag when `USE_RICH_TEXT` is true.
-	@param params { Level: string, Message: string, OperationId: string?, Data: any? } -- `Level` must be one of `"INFO"`, `"WARN"`, `"ERROR"`, or `"DEBUG"`.
-	@reads Settings.DebuggingEnabled, Settings.MinimumLoggingLevel
-	@writes self.History, self.Summary
+	@description Implements `Logger.Log`.
+	@param params { Level: string, Message: string, OperationId: string?, Data: any? } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function Logger:Log(params: { Level: string, Message: string, OperationId: string?, Data: any? })
@@ -98,7 +89,7 @@ function Logger:Log(params: { Level: string, Message: string, OperationId: strin
 		local evicted = table.remove(self.History, 1)
 		if not self.Summary then self.Summary = {} end
 		local shortMsg = if #evicted.Message > 60
-			then string.sub(evicted.Message, 1, 57) .."..."
+			then string.sub(evicted.Message, 1, 57) .. "..."
 			else evicted.Message
 		table.insert(self.Summary, string.format("[%s] %s %s", evicted.Level, os.date("%H:%M:%S", evicted.Timestamp), shortMsg))
 		if #self.Summary > MAX_SUMMARY_HISTORY then
@@ -131,7 +122,7 @@ function Logger:Log(params: { Level: string, Message: string, OperationId: strin
 	end
 
 	-- Construct Message
-	local opIdStr = operationId ~= nil and typeof(operationId) == "string" and string.format(" (%s)", operationId) or ""
+	local opIdStr = operationId~=nil and typeof(operationId)=="string" and string.format(" (%s)", operationId) or ""
 	local finalMsg = string.format("%s%s [%s]%s %s", timeStr, header, self.Source, opIdStr, message)
 
 	-- Print
@@ -153,20 +144,18 @@ function Logger:Log(params: { Level: string, Message: string, OperationId: strin
 	end
 end
 --[=[
-	@description Overrides the shared logger threshold used by every `Logger:Log` call after initialization. Lower values allow more severe logs only, while higher values enable increasingly verbose output such as debug messages.
-	@param level number -- Minimum logging level written into `Settings.MinimumLoggingLevel` for subsequent log filtering.
-	@writes Settings.MinimumLoggingLevel
+	@description Updates module state through `Logger.SetMinimumLoggingLevel`.
+	@param level number -- `level` input parameter.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function Logger:SetMinimumLoggingLevel(level: number)
 	Settings.MinimumLoggingLevel = level
 end
-
-
 --[=[
-	@description Returns the instance's in-memory `History` array containing up to `MAX_LOG_HISTORY` (50) recent `LogEntry` objects, each with `Timestamp`, `Level`, `Message`, `OperationId?`, and `Data?` fields. Older entries are compressed into `self.Summary` and are not included.
-	@return { LogEntry } -- Direct reference to the live history array.
-	@reads self.History
+	@description Returns the data produced by `Logger.GetHistory`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function Logger:GetHistory()

@@ -1,5 +1,8 @@
 --!strict
-
+--[=[
+	@module ZAxisNavigator
+	@description Defines the `ZAxisNavigator` module and its exported API.
+]=]
 
 local TweenService = game:GetService("TweenService")
 
@@ -19,7 +22,11 @@ export type LayerEntry = {
 	IsExpanded: boolean,
 	Timestamp: number,
 }
-
+--[=[
+	@description Implements `ZAxisNavigator.new`.
+	@param rootContainer Frame -- `rootContainer` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator.new(rootContainer: Frame): any
 	local self = setmetatable({}, ZAxisNavigator)
@@ -33,7 +40,13 @@ function ZAxisNavigator.new(rootContainer: Frame): any
 	self._onBreadcrumbChanged = nil :: ((crumbs: { any }) -> ())?
 	return self
 end
-
+--[=[
+	@description Handles `RegisterRootLayer` for `ZAxisNavigator`.
+	@param id string -- `id` input parameter.
+	@param label string -- `label` input parameter.
+	@param builder (frame: Frame, context: any) -> () -- `builder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:RegisterRootLayer(id: string, label: string, builder: (frame: Frame, context: any) -> ())
 	self._layers[id] = {
@@ -48,7 +61,11 @@ function ZAxisNavigator:RegisterRootLayer(id: string, label: string, builder: (f
 		Timestamp = 0,
 	}
 end
-
+--[=[
+	@description Implements `ZAxisNavigator.ExpandLayer`.
+	@param params { Id: string, ParentId: string, Label: string, Builder: (frame: Frame, context: any) -> (), Context: any?, } -- `params` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:ExpandLayer(params: {
 	Id: string,
@@ -56,7 +73,7 @@ function ZAxisNavigator:ExpandLayer(params: {
 	Label: string,
 	Builder: (frame: Frame, context: any) -> (),
 	Context: any?,
-	})
+})
 	if self._animating then return end
 	if #self._layerStack >= self._maxDepth then return end
 
@@ -94,7 +111,11 @@ function ZAxisNavigator:ExpandLayer(params: {
 	self:_AnimateExpand(frame, newDepth)
 	self:_RebuildBreadcrumbs()
 end
-
+--[=[
+	@description Implements `ZAxisNavigator.CollapseToLayer`.
+	@param layerId string -- `layerId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:CollapseToLayer(layerId: string)
 	local layer = self._layers[layerId]
@@ -102,7 +123,11 @@ function ZAxisNavigator:CollapseToLayer(layerId: string)
 	self:_CollapseToDepth(layer.Depth)
 	self:_RebuildBreadcrumbs()
 end
-
+--[=[
+	@description Implements `ZAxisNavigator.NavigateToRoot`.
+	@param layerId string -- `layerId` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:NavigateToRoot(layerId: string)
 	-- Collapse everything
@@ -124,7 +149,11 @@ function ZAxisNavigator:NavigateToRoot(layerId: string)
 	self:_AnimateExpand(frame, 0)
 	self:_RebuildBreadcrumbs()
 end
-
+--[=[
+	@description Returns the data produced by `ZAxisNavigator.GetCurrentDepth`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return number -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:GetCurrentDepth(): number
 	if #self._layerStack == 0 then return 0 end
@@ -132,17 +161,29 @@ function ZAxisNavigator:GetCurrentDepth(): number
 	local topLayer = self._layers[topId]
 	return topLayer and topLayer.Depth or 0
 end
-
+--[=[
+	@description Returns the data produced by `ZAxisNavigator.GetBreadcrumbs`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return { { Id: string, Label: string, Depth: number } } -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:GetBreadcrumbs(): { { Id: string, Label: string, Depth: number } }
 	return self._breadcrumbs
 end
-
+--[=[
+	@description Implements `ZAxisNavigator.OnBreadcrumbChanged`.
+	@param callback (crumbs: { any }) -> () -- `callback` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:OnBreadcrumbChanged(callback: (crumbs: { any }) -> ())
 	self._onBreadcrumbChanged = callback
 end
-
+--[=[
+	@description Implements `ZAxisNavigator.RebuildCurrentLayer`.
+	@param context any? -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:RebuildCurrentLayer(context: any?)
 	if #self._layerStack == 0 then return end
@@ -164,14 +205,22 @@ function ZAxisNavigator:RebuildCurrentLayer(context: any?)
 
 	layer.Builder(layer.Frame, layer.Context)
 end
-
+--[=[
+	@description Returns the data produced by `ZAxisNavigator.GetCurrentLayer`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return LayerEntry? -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:GetCurrentLayer(): LayerEntry?
 	if #self._layerStack == 0 then return nil end
 	local topId = self._layerStack[#self._layerStack]
 	return self._layers[topId]
 end
-
+--[=[
+	@description Implements `ZAxisNavigator.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:Destroy()
 	self:_CollapseToDepth(-1)
@@ -179,7 +228,11 @@ function ZAxisNavigator:Destroy()
 	table.clear(self._layerStack)
 	table.clear(self._breadcrumbs)
 end
-
+--[=[
+	@description Implements `ZAxisNavigator._CreateSubPaneFrame`.
+	@param layer LayerEntry -- `layer` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:_CreateSubPaneFrame(layer: LayerEntry): Frame
 	local frame = Instance.new("Frame")
@@ -233,7 +286,12 @@ function ZAxisNavigator:_CreateSubPaneFrame(layer: LayerEntry): Frame
 
 	return frame
 end
-
+--[=[
+	@description Implements `ZAxisNavigator._AnimateExpand`.
+	@param frame Frame -- `frame` input parameter.
+	@param depth number -- `depth` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:_AnimateExpand(frame: Frame, depth: number)
 	self._animating = true
@@ -262,7 +320,12 @@ function ZAxisNavigator:_AnimateExpand(frame: Frame, depth: number)
 		self._animating = false
 	end)
 end
-
+--[=[
+	@description Implements `ZAxisNavigator._AnimateCollapse`.
+	@param frame Frame -- `frame` input parameter.
+	@param callback (() -> ())? -- `callback` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:_AnimateCollapse(frame: Frame, callback: (() -> ())?)
 	local content = frame:FindFirstChild("Content") :: Frame?
@@ -281,7 +344,11 @@ function ZAxisNavigator:_AnimateCollapse(frame: Frame, callback: (() -> ())?)
 		if callback then callback() end
 	end
 end
-
+--[=[
+	@description Implements `ZAxisNavigator._CollapseToDepth`.
+	@param targetDepth number -- `targetDepth` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:_CollapseToDepth(targetDepth: number)
 	-- Remove all layers above targetDepth from the stack
@@ -302,7 +369,11 @@ function ZAxisNavigator:_CollapseToDepth(targetDepth: number)
 		end
 	end
 end
-
+--[=[
+	@description Implements `ZAxisNavigator._RebuildBreadcrumbs`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ZAxisNavigator:_RebuildBreadcrumbs()
 	table.clear(self._breadcrumbs)

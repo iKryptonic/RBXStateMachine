@@ -1,7 +1,10 @@
 --!strict
+--[=[
+	@module Types
+	@description Defines the `Types` module and its exported API.
+]=]
 
-
-export type LogLevel = "INFO" |"WARN" |"ERROR" |"DEBUG"
+export type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG"
 
 -- Z-Axis depth layer descriptor
 export type DepthLayer = {
@@ -39,7 +42,7 @@ export type SubsystemDescriptor = {
 }
 
 -- Insight severity for analytics engine
-export type InsightSeverity = "CRITICAL" |"WARNING" |"INFO" |"SUGGESTION"
+export type InsightSeverity = "CRITICAL" | "WARNING" | "INFO" | "SUGGESTION"
 
 -- Diagnostic insight produced by the analytics engine
 export type Insight = {

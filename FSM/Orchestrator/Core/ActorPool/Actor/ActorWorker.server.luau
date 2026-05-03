@@ -1,10 +1,14 @@
 --!strict
---[[
+--[=[
+	@module Jobs
+	@description Defines the `Jobs` module and its exported API.
+]=]
+
 	@Name ActorWorker
 	@Author iKrypto
 	@Description Worker script running inside an Actor. Receives jobs via
 	"RunJob" message, executes them in a parallel (desynchronized) context,
-	then sends results back via"JobResult". Only pure-compute functions
+	then sends results back via "JobResult". Only pure-compute functions
 	should be registered here — no Instance creation or Roblox API calls.
 ]]
 local actor = script:GetActor()
@@ -17,20 +21,20 @@ local Jobs = {}
 	@return { { [string]: any } } -- The sorted list.
 ]]
 Jobs.SortByKey = function(input)
-	-- input = { list = {...}, key = "time", descending = true }
-	local list = table.clone(input.list)
-	local key = input.key
-	local desc = input.descending
+    -- input = { list = {...}, key = "time", descending = true }
+    local list = table.clone(input.list)
+    local key = input.key
+    local desc = input.descending
 
-	table.sort(list, function(a, b)
-		local av, bv = a[key], b[key]
-		if av == nil then return false end
-		if bv == nil then return true end
-		if desc then return av > bv end
-		return av < bv
-	end)
+    table.sort(list, function(a, b)
+        local av, bv = a[key], b[key]
+        if av == nil then return false end
+        if bv == nil then return true end
+        if desc then return av > bv end
+        return av < bv
+    end)
 
-	return list
+    return list
 end
 
 --[[
@@ -39,17 +43,17 @@ end
 	@return { count: number, avg: number } -- Aggregated result.
 ]]
 Jobs.AggregatePerf = function(input)
-	-- input = { samples = {...} }
-	local sum = 0
-	local n = 0
-	for _, v in ipairs(input.samples) do
-		sum += v
-		n += 1
-	end
-	return {
-		count = n,
-		avg = (n > 0) and (sum / n) or 0,
-	}
+    -- input = { samples = {...} }
+    local sum = 0
+    local n = 0
+    for _, v in ipairs(input.samples) do
+        sum += v
+        n += 1
+    end
+    return {
+        count = n,
+        avg = (n > 0) and (sum / n) or 0,
+    }
 end
 
 -- Listens for "RunJob" messages from the pool, executes the named job
@@ -58,15 +62,15 @@ actor:BindToMessage("RunJob", function(jobId: number, jobName: string, jobInput:
 	-- Enter parallel
 	task.desynchronize()
 
-	local ok, out = pcall(function()
-		local fn = Jobs[jobName]
-		if not fn then
-			error(("Unknown job '%s'"):format(jobName))
-		end
-		return fn(jobInput)
-	end)
+    local ok, out = pcall(function()
+        local fn = Jobs[jobName]
+        if not fn then
+            error(("Unknown job '%s'"):format(jobName))
+        end
+        return fn(jobInput)
+    end)
 
-	-- Back to serial for messaging (safer for engine interactions)
-	task.synchronize()
-	actor:SendMessage("JobResult", jobId, ok, out)
+    -- Back to serial for messaging (safer for engine interactions)
+    task.synchronize()
+    actor:SendMessage("JobResult", jobId, ok, out)
 end)

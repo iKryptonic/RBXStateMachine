@@ -1,5 +1,8 @@
 --!strict
-
+--[=[
+	@module ProfilerModule
+	@description Defines the `ProfilerModule` module and its exported API.
+]=]
 
 local Theme = require(script.Parent.Parent.Theme)
 
@@ -7,7 +10,11 @@ local ProfilerModule = {}
 ProfilerModule.__index = ProfilerModule
 
 local MAX_HOT_ITEMS = 10
-
+--[=[
+	@description Implements `ProfilerModule.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule.new(): any
 	local self = setmetatable({}, ProfilerModule)
@@ -24,7 +31,11 @@ function ProfilerModule.new(): any
 	self._showInstanceMemory = true
 	return self
 end
-
+--[=[
+	@description Implements `ProfilerModule.FetchData`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
@@ -47,14 +58,23 @@ function ProfilerModule:FetchData(nexus: any)
 		nexus.Store:Set("profiler.fsmCount", self:_CountTable(self._fsmPerf))
 	end)
 end
-
+--[=[
+	@description Implements `ProfilerModule._CountTable`.
+	@param t { [any]: any } -- `t` input parameter.
+	@return number -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_CountTable(t: { [any]: any }): number
 	local n = 0
 	for _ in pairs(t) do n += 1 end
 	return n
 end
-
+--[=[
+	@description Implements `ProfilerModule._FetchClient`.
+	@param orchestrator any -- `orchestrator` input parameter.
+	@param nexus any? -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_FetchClient(orchestrator: any, nexus: any?)
 	-- Tasks
@@ -123,12 +143,12 @@ function ProfilerModule:_FetchClient(orchestrator: any, nexus: any?)
 			if perf then
 				self._fsmPerf[id] = {
 					Id = id,
-					State = rawget(fsm,"_activeStateName") or rawget(fsm,"State") or "?",
+					State = rawget(fsm, "_activeStateName") or rawget(fsm, "State") or "?",
 					AvgMs = (perf.AvgUpdateTime or 0) * 1000,
 					MaxMs = (perf.MaxUpdateTime or 0) * 1000,
 					UpdateCount = perf.UpdateCount or 0,
 					MemDeltaKB = perf.MaxMemKBDelta or 0,
-					IsActive = rawget(fsm,"IsActive") or false,
+					IsActive = rawget(fsm, "IsActive") or false,
 				}
 			end
 		end
@@ -143,7 +163,11 @@ function ProfilerModule:_FetchClient(orchestrator: any, nexus: any?)
 	-- Instance memory (client-side)
 	self:_FetchInstanceMemoryLocal()
 end
-
+--[=[
+	@description Implements `ProfilerModule._FetchServer`.
+	@param serverData any? -- `serverData` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_FetchServer(serverData: any?)
 	self._taskPerf = {}
@@ -234,7 +258,11 @@ function ProfilerModule:_FetchServer(serverData: any?)
 		self._instanceMemory = serverData.InstanceMemory
 	end
 end
-
+--[=[
+	@description Implements `ProfilerModule._FetchNetworkClient`.
+	@param nm any? -- `nm` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_FetchNetworkClient(nm: any?)
 	self._networkTraffic = {}
@@ -257,11 +285,15 @@ function ProfilerModule:_FetchNetworkClient(nm: any?)
 	addStats(nm._invokeStats)
 	table.sort(self._networkTraffic, function(a, b) return a.Count > b.Count end)
 end
-
+--[=[
+	@description Implements `ProfilerModule._FetchInstanceMemoryLocal`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_FetchInstanceMemoryLocal()
 	local instMem: { [string]: any } = { Services = {}, TopOffenders = {}, TotalDescendants = 0 }
-	local serviceNames = {"ReplicatedStorage","Workspace","Lighting","SoundService"}
+	local serviceNames = {"ReplicatedStorage", "Workspace", "Lighting", "SoundService"}
 	for _, svcName in ipairs(serviceNames) do
 		local ok, svc = pcall(function() return game:GetService(svcName) end)
 		if ok and svc then
@@ -328,10 +360,18 @@ function ProfilerModule:_FetchInstanceMemoryLocal()
 	end
 	self._instanceMemory = instMem
 end
-
+--[=[
+	@description Implements `ProfilerModule.Render`.
+	@param _nexus any -- `_nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:Render(_nexus: any) end
-
+--[=[
+	@description Implements `ProfilerModule._GetSortedTasks`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return { any } -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_GetSortedTasks(): { any }
 	local result = {}
@@ -350,7 +390,11 @@ function ProfilerModule:_GetSortedTasks(): { any }
 	end)
 	return result
 end
-
+--[=[
+	@description Implements `ProfilerModule._GetSortedFSMs`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return { any } -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_GetSortedFSMs(): { any }
 	local result = {}
@@ -369,7 +413,12 @@ function ProfilerModule:_GetSortedFSMs(): { any }
 	end)
 	return result
 end
-
+--[=[
+	@description Creates the result managed by `ProfilerModule.BuildRootLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
@@ -412,7 +461,12 @@ function ProfilerModule:BuildRootLayer(frame: Frame, context: any)
 	-- ── DIAGNOSTICS (collapsed) ───────────────────────────────
 	self:_BuildDiagnosticsSection(contentFrame, nexus, nextOrder())
 end
-
+--[=[
+	@description Implements `ProfilerModule._BuildBudgetBar`.
+	@param parent Frame -- `parent` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildBudgetBar(parent: Frame, layoutOrder: number)
 	local fb = self._frameBudget
@@ -475,7 +529,7 @@ function ProfilerModule:_BuildBudgetBar(parent: Frame, layoutOrder: number)
 
 	-- Memory badge (Lua heap + Instance count)
 	local totalInst = self._instanceMemory.TotalDescendants or 0
-	local instColor = if totalInst > 5000 then"#FF4444" elseif totalInst > 2000 then"#FFAA00" else"#888"
+	local instColor = if totalInst > 5000 then "#FF4444" elseif totalInst > 2000 then "#FFAA00" else "#888"
 	Theme.CreateLabel({
 		Text = string.format('<font color="#666">LUA</font> %.1fMB  <font color="%s">INST</font> <font color="%s">%s</font>',
 			self._gcStats.MemoryMB, instColor, instColor,
@@ -490,7 +544,13 @@ function ProfilerModule:_BuildBudgetBar(parent: Frame, layoutOrder: number)
 		Parent = container,
 	})
 end
-
+--[=[
+	@description Implements `ProfilerModule._BuildHotTasksSection`.
+	@param parent Frame -- `parent` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildHotTasksSection(parent: Frame, nexus: any, layoutOrder: number)
 	local sorted = self:_GetSortedTasks()
@@ -509,7 +569,7 @@ function ProfilerModule:_BuildHotTasksSection(parent: Frame, nexus: any, layoutO
 	-- Header row
 	local headerOrder = layoutOrder * 100 + 1
 	self:_BuildTableHeader(parent, headerOrder,
-		{"Name","AvgMs","MaxMs","×Runs","MemKB","Pri" },
+		{ "Name", "AvgMs", "MaxMs", "×Runs", "MemKB", "Pri" },
 		{ 0.35, 0.13, 0.13, 0.13, 0.13, 0.08 })
 
 	for i, task in ipairs(sorted) do
@@ -542,7 +602,13 @@ function ProfilerModule:_BuildHotTasksSection(parent: Frame, nexus: any, layoutO
 		}).LayoutOrder = layoutOrder * 100 + 2
 	end
 end
-
+--[=[
+	@description Implements `ProfilerModule._BuildHotFSMsSection`.
+	@param parent Frame -- `parent` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOrder: number)
 	local sorted = self:_GetSortedFSMs()
@@ -561,7 +627,7 @@ function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOr
 	-- Header
 	local headerOrder = layoutOrder * 100 + 1
 	self:_BuildTableHeader(parent, headerOrder,
-		{"FSM Id","State","AvgMs","MaxMs","×Updates","MemΔ" },
+		{ "FSM Id", "State", "AvgMs", "MaxMs", "×Updates", "MemΔ" },
 		{ 0.30, 0.15, 0.13, 0.13, 0.13, 0.11 })
 
 	for i, fsm in ipairs(sorted) do
@@ -574,7 +640,7 @@ function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOr
 
 		-- Truncate FSM id for display
 		local displayId = fsm.Id or "?"
-		if #displayId > 30 then displayId = displayId:sub(1, 28) ..".." end
+		if #displayId > 30 then displayId = displayId:sub(1, 28) .. ".." end
 
 		self:_BuildTableRow(parent, rowOrder, {
 			{ Text = displayId, Width = 0.30, Color = if fsm.IsActive then Theme.Colors.TextPrimary else Theme.Colors.TextMuted },
@@ -598,7 +664,13 @@ function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOr
 		}).LayoutOrder = layoutOrder * 100 + 2
 	end
 end
-
+--[=[
+	@description Implements `ProfilerModule._BuildInstanceMemorySection`.
+	@param parent Frame -- `parent` input parameter.
+	@param _nexus any -- `_nexus` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildInstanceMemorySection(parent: Frame, _nexus: any, layoutOrder: number)
 	local im = self._instanceMemory
@@ -620,7 +692,7 @@ function ProfilerModule:_BuildInstanceMemorySection(parent: Frame, _nexus: any, 
 	btn.Parent = parent
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, Theme.Radius.Xs)
 
-	local chevron = if self._showInstanceMemory then"▾" else"▸"
+	local chevron = if self._showInstanceMemory then "▾" else "▸"
 	Theme.CreateLabel({
 		Text = string.format(
 			'<font color="#FF8C00">%s</font> INSTANCE MEMORY <font color="#666">(%s total descendants)</font>',
@@ -669,10 +741,10 @@ function ProfilerModule:_BuildInstanceMemorySection(parent: Frame, _nexus: any, 
 	table.sort(services, function(a, b) return a.Count > b.Count end)
 
 	for i, svc in ipairs(services) do
-		local svcColor = if svc.Count > 3000 then"#FF4444"
-			elseif svc.Count > 1000 then"#FFAA00"
-			elseif svc.Count > 500 then"#FFD700"
-			else"#888"
+		local svcColor = if svc.Count > 3000 then "#FF4444"
+			elseif svc.Count > 1000 then "#FFAA00"
+			elseif svc.Count > 500 then "#FFD700"
+			else "#888"
 		Theme.CreateLabel({
 			Text = string.format('  <font color="%s">%-28s</font> <font color="%s">%s</font>',
 				"#9DC9FF", svc.Name, svcColor,
@@ -701,7 +773,7 @@ function ProfilerModule:_BuildInstanceMemorySection(parent: Frame, _nexus: any, 
 
 		-- Header
 		self:_BuildTableHeader(parent, layoutOrder * 100 + 51,
-			{"Name","Class","Descendants","Service" },
+			{ "Name", "Class", "Descendants", "Service" },
 			{ 0.35, 0.20, 0.25, 0.15 })
 
 		for i, off in ipairs(offenders) do
@@ -771,9 +843,9 @@ function ProfilerModule:_BuildInstanceMemorySection(parent: Frame, _nexus: any, 
 
 		for i, entry in ipairs(sorted) do
 			if i > 8 then break end
-			local countColor = if entry.Count > 5 then"#FF4444" elseif entry.Count > 2 then"#FFAA00" else"#888"
+			local countColor = if entry.Count > 5 then "#FF4444" elseif entry.Count > 2 then "#FFAA00" else "#888"
 			local displayId = entry.Id
-			if #displayId > 35 then displayId = displayId:sub(1, 33) ..".." end
+			if #displayId > 35 then displayId = displayId:sub(1, 33) .. ".." end
 			Theme.CreateLabel({
 				Text = string.format('  <font color="#9DC9FF">%s</font>  <font color="%s">×%d instances</font>',
 					displayId, countColor, entry.Count),
@@ -816,7 +888,13 @@ function ProfilerModule:_BuildInstanceMemorySection(parent: Frame, _nexus: any, 
 		end
 	end
 end
-
+--[=[
+	@description Implements `ProfilerModule._BuildDiagnosticsSection`.
+	@param parent Frame -- `parent` input parameter.
+	@param _nexus any -- `_nexus` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildDiagnosticsSection(parent: Frame, _nexus: any, layoutOrder: number)
 	local btn = Instance.new("TextButton")
@@ -831,7 +909,7 @@ function ProfilerModule:_BuildDiagnosticsSection(parent: Frame, _nexus: any, lay
 	btn.Parent = parent
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, Theme.Radius.Xs)
 
-	local chevron = if self._showDiagnostics then"▾" else"▸"
+	local chevron = if self._showDiagnostics then "▾" else "▸"
 	Theme.CreateLabel({
 		Text = string.format('<font color="#666">%s</font> DIAGNOSTICS', chevron),
 		Size = UDim2.new(1, -8, 1, 0),
@@ -929,7 +1007,14 @@ function ProfilerModule:_BuildDiagnosticsSection(parent: Frame, _nexus: any, lay
 		}).LayoutOrder = layoutOrder * 100 + 4
 	end
 end
-
+--[=[
+	@description Implements `ProfilerModule._BuildTableHeader`.
+	@param parent Frame -- `parent` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@param columns { string } -- `columns` input parameter.
+	@param widths { number } -- `widths` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildTableHeader(parent: Frame, layoutOrder: number, columns: { string }, widths: { number })
 	local row = Instance.new("Frame")
@@ -955,7 +1040,13 @@ function ProfilerModule:_BuildTableHeader(parent: Frame, layoutOrder: number, co
 		xOff += w
 	end
 end
-
+--[=[
+	@description Implements `ProfilerModule._BuildTableRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@param cells { { Text: string, Width: number, Color: Color3 } } -- `cells` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:_BuildTableRow(parent: Frame, layoutOrder: number, cells: { { Text: string, Width: number, Color: Color3 } })
 	local row = Instance.new("Frame")
@@ -983,7 +1074,11 @@ function ProfilerModule:_BuildTableRow(parent: Frame, layoutOrder: number, cells
 		xOff += w
 	end
 end
-
+--[=[
+	@description Implements `ProfilerModule.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function ProfilerModule:Destroy()
 	table.clear(self._taskPerf)

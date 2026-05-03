@@ -1,5 +1,8 @@
 --!strict
-
+--[=[
+	@module NetworkModule
+	@description Defines the `NetworkModule` module and its exported API.
+]=]
 
 local Theme = require(script.Parent.Parent.Theme)
 local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
@@ -7,18 +10,22 @@ local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
 local NetworkModule = {}
 NetworkModule.__index = NetworkModule
 
-local SORT_MODES = {"Name","Type","Subscribers","Messages" }
+local SORT_MODES = { "Name", "Type", "Subscribers", "Messages" }
 
 local TYPE_COLORS: { [string]: Color3 } = {
-	EntityCommand = Color3.fromRGB(100, 200, 255), -- Cyan-blue
-	RemoteFunction = Color3.fromRGB(180, 140, 255), -- Purple
-	RemoteEvent = Color3.fromRGB(120, 170, 255), -- Lighter blue
-	NetworkCommand = Color3.fromRGB(255, 180, 80), -- Orange
-	EventBus = Color3.fromRGB(60, 210, 120), -- Green
-	ServerRequest = Color3.fromRGB(255, 100, 100), -- Red
-	Unknown = Color3.fromRGB(140, 140, 160), -- Gray
+	EntityCommand = Color3.fromRGB(100, 200, 255),     -- Cyan-blue
+	RemoteFunction = Color3.fromRGB(180, 140, 255),     -- Purple
+	RemoteEvent = Color3.fromRGB(120, 170, 255),        -- Lighter blue
+	NetworkCommand = Color3.fromRGB(255, 180, 80),      -- Orange
+	EventBus = Color3.fromRGB(60, 210, 120),            -- Green
+	ServerRequest = Color3.fromRGB(255, 100, 100),      -- Red
+	Unknown = Color3.fromRGB(140, 140, 160),            -- Gray
 }
-
+--[=[
+	@description Implements `NetworkModule.new`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule.new(): any
 	local self = setmetatable({}, NetworkModule)
@@ -31,7 +38,11 @@ function NetworkModule.new(): any
 	self._nexusRef = nil :: any?
 	return self
 end
-
+--[=[
+	@description Implements `NetworkModule.FetchData`.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
@@ -117,7 +128,7 @@ function NetworkModule:FetchData(nexus: any)
 			for entityId, commands in pairs(entityCbs) do
 				if type(commands) == "table" then
 					for cmdName, _ in pairs(commands) do
-						local fullName = entityId ..":" .. cmdName
+						local fullName = entityId .. ":" .. cmdName
 						self._commandCache[fullName] = {
 							Name = fullName,
 							Type = "EntityCommand",
@@ -134,7 +145,7 @@ function NetworkModule:FetchData(nexus: any)
 			end
 
 			-- Remote instances
-			local remoteNames = {"OrchestratorEvent","OrchestratorFunction","EntityUpdateEvent","EntityCommandEvent" }
+			local remoteNames = { "OrchestratorEvent", "OrchestratorFunction", "EntityUpdateEvent", "EntityCommandEvent" }
 			local remoteStats = nm._remoteStats or {}
 			for _, remoteName in ipairs(remoteNames) do
 				local remote = nm[remoteName]
@@ -238,20 +249,29 @@ function NetworkModule:FetchData(nexus: any)
 		nexus.Store:Set("network.callbacks", self._serverCallbacks)
 	end)
 end
-
+--[=[
+	@description Implements `NetworkModule._DetectCommandType`.
+	@param name string -- `name` input parameter.
+	@param cmd any -- `cmd` input parameter.
+	@return string -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_DetectCommandType(name: string, cmd: any): string
-	if type(cmd) ~= "table" then return"Unknown" end
+	if type(cmd) ~= "table" then return "Unknown" end
 	if cmd.Type then return cmd.Type end
 
 	local nameLower = string.lower(name)
-	if nameLower:find("entity") then return"EntityCommand" end
-	if cmd.IsRemote or cmd._isRemote then return"RemoteFunction" end
-	if cmd.ServerRequestCallbacks or cmd._serverCallback then return"ServerRequest" end
-	if cmd.Subscribers or cmd._subscribers then return"EventBus" end
-	return"NetworkCommand"
+	if nameLower:find("entity") then return "EntityCommand" end
+	if cmd.IsRemote or cmd._isRemote then return "RemoteFunction" end
+	if cmd.ServerRequestCallbacks or cmd._serverCallback then return "ServerRequest" end
+	if cmd.Subscribers or cmd._subscribers then return "EventBus" end
+	return "NetworkCommand"
 end
-
+--[=[
+	@description Implements `NetworkModule._CountSubscribers`.
+	@param obj any -- `obj` input parameter.
+	@return number -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_CountSubscribers(obj: any): number
 	if type(obj) ~= "table" then return 0 end
@@ -264,7 +284,11 @@ function NetworkModule:_CountSubscribers(obj: any): number
 	if type(subs) == "number" then return subs end
 	return 0
 end
-
+--[=[
+	@description Implements `NetworkModule._ExtractCmdProperties`.
+	@param cmd any -- `cmd` input parameter.
+	@return { [string]: any } -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_ExtractCmdProperties(cmd: any): { [string]: any }
 	local props = {}
@@ -278,7 +302,11 @@ function NetworkModule:_ExtractCmdProperties(cmd: any): { [string]: any }
 	end
 	return props
 end
-
+--[=[
+	@description Implements `NetworkModule._ExtractBusProperties`.
+	@param bus any -- `bus` input parameter.
+	@return { [string]: any } -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_ExtractBusProperties(bus: any): { [string]: any }
 	local props = {}
@@ -292,10 +320,18 @@ function NetworkModule:_ExtractBusProperties(bus: any): { [string]: any }
 	end
 	return props
 end
-
+--[=[
+	@description Implements `NetworkModule.Render`.
+	@param _nexus any -- `_nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:Render(_nexus: any) end
-
+--[=[
+	@description Implements `NetworkModule._GetAllItems`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return { { Name: string, Data: any } } -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_GetAllItems(): { { Name: string, Data: any } }
 	local result = {}
@@ -338,7 +374,12 @@ function NetworkModule:_GetAllItems(): { { Name: string, Data: any } }
 	end)
 	return result
 end
-
+--[=[
+	@description Creates the result managed by `NetworkModule.BuildRootLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
@@ -378,7 +419,7 @@ function NetworkModule:BuildRootLayer(frame: Frame, context: any)
 
 	local itemsToAnimate = {}
 	local order = 20
-	local typeOrder = {"EntityCommand","NetworkCommand","RemoteEvent","RemoteFunction","EventBus","ServerRequest","Unknown" }
+	local typeOrder = { "EntityCommand", "NetworkCommand", "RemoteEvent", "RemoteFunction", "EventBus", "ServerRequest", "Unknown" }
 
 	for _, typeName in ipairs(typeOrder) do
 		local group = byType[typeName]
@@ -414,7 +455,11 @@ function NetworkModule:BuildRootLayer(frame: Frame, context: any)
 		)
 	end
 end
-
+--[=[
+	@description Implements `NetworkModule._BuildSummaryStrip`.
+	@param parent Frame -- `parent` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_BuildSummaryStrip(parent: Frame)
 	local strip = Instance.new("Frame")
@@ -502,7 +547,12 @@ function NetworkModule:_BuildSummaryStrip(parent: Frame)
 		end
 	end
 end
-
+--[=[
+	@description Implements `NetworkModule._BuildToolbar`.
+	@param parent Frame -- `parent` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_BuildToolbar(parent: Frame, nexus: any)
 	local toolbar = Instance.new("Frame")
@@ -613,7 +663,15 @@ function NetworkModule:_BuildToolbar(parent: Frame, nexus: any)
 		if nexus then nexus._lastDataRefresh = 0 end
 	end)
 end
-
+--[=[
+	@description Implements `NetworkModule._BuildNetworkRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param name string -- `name` input parameter.
+	@param data any -- `data` input parameter.
+	@param nexus any -- `nexus` input parameter.
+	@param order number -- `order` input parameter.
+	@return Frame -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_BuildNetworkRow(parent: Frame, name: string, data: any, nexus: any, order: number): Frame
 	local typeColor = TYPE_COLORS[data.Type] or TYPE_COLORS.Unknown
@@ -679,7 +737,12 @@ function NetworkModule:_BuildNetworkRow(parent: Frame, name: string, data: any, 
 
 	return row
 end
-
+--[=[
+	@description Implements `NetworkModule._BuildNetworkDetailLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_BuildNetworkDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -736,7 +799,7 @@ function NetworkModule:_BuildNetworkDetailLayer(frame: Frame, context: any)
 		or itemData.Type == "RemoteEvent"
 		or itemData.Type == "NetworkCommand"
 	local fireBtn = Theme.CreateIconButton({
-		Label = if canFire then"↯ Fire" else"↯ Fire (n/a)",
+		Label = if canFire then "↯ Fire" else "↯ Fire (n/a)",
 		Size = UDim2.new(0, 80, 0, 26),
 		Color = if canFire then Theme.Colors.Warning else Theme.Colors.GlassTertiary,
 		Parent = actionBar,
@@ -863,7 +926,7 @@ function NetworkModule:_BuildNetworkDetailLayer(frame: Frame, context: any)
 		{ Key = "Last Invoked", Value = (function()
 			local t = itemData.LastInvoked or itemData.LastFired or 0
 			if t > 0 then return string.format("%.1fs ago", os.clock() - t) end
-			return"never"
+			return "never"
 		end)(), Color = Theme.Colors.TextSecondary },
 	}
 	for i, s in ipairs(stats) do
@@ -893,7 +956,15 @@ function NetworkModule:_BuildNetworkDetailLayer(frame: Frame, context: any)
 		end
 	end
 end
-
+--[=[
+	@description Implements `NetworkModule._BuildPropRow`.
+	@param parent Frame -- `parent` input parameter.
+	@param key string -- `key` input parameter.
+	@param value string -- `value` input parameter.
+	@param color Color3 -- `color` input parameter.
+	@param order number -- `order` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_BuildPropRow(parent: Frame, key: string, value: string, color: Color3, order: number)
 	local propRow = Instance.new("Frame")
@@ -913,7 +984,11 @@ function NetworkModule:_BuildPropRow(parent: Frame, key: string, value: string, 
 	Theme.CreateLabel({ Text = key, Size = UDim2.new(0.45, 0, 1, 0), Color = Theme.Colors.TextSecondary, FontSize = Theme.TextSize.Caption, Parent = propRow })
 	Theme.CreateLabel({ Text = value, Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.48, 0, 0, 0), Color = color, FontSize = Theme.TextSize.Body, FontFace = Theme.Font.Mono, Alignment = Enum.TextXAlignment.Right, Parent = propRow })
 end
-
+--[=[
+	@description Implements `NetworkModule.Destroy`.
+	@param none nil -- This function does not accept explicit parameters.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end
@@ -921,7 +996,12 @@ function NetworkModule:Destroy()
 	table.clear(self._eventBusCache)
 	table.clear(self._serverCallbacks)
 end
-
+--[=[
+	@description Implements `NetworkModule._BuildCallsHistoryLayer`.
+	@param frame Frame -- `frame` input parameter.
+	@param context any -- `context` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_BuildCallsHistoryLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -1048,7 +1128,7 @@ function NetworkModule:_BuildCallsHistoryLayer(frame: Frame, context: any)
 		-- Escape angle brackets so RichText doesn't parse them as font tags.
 		-- Historic call entries (captured before the [...] formatting fix)
 		-- may still contain "<userdata:...>" / "<Vector3>" — escape defensively.
-		local argsStr = rawArgsStr:gsub("<","&lt;"):gsub(">","&gt;")
+		local argsStr = rawArgsStr:gsub("<", "&lt;"):gsub(">", "&gt;")
 		local chevron = hasNested and '<font color="#666">▸</font> ' or ''
 		local argLabel = Theme.CreateLabel({
 			Text = '<font color="#3898FF">▶</font>  ' .. chevron .. (argsStr or "()"),
@@ -1120,7 +1200,13 @@ function NetworkModule:_BuildCallsHistoryLayer(frame: Frame, context: any)
 		end
 	end
 end
-
+--[=[
+	@description Implements `NetworkModule._RenderStructuredArgs`.
+	@param parent Frame -- `parent` input parameter.
+	@param args any -- `args` input parameter.
+	@param depth number -- `depth` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_RenderStructuredArgs(parent: Frame, args: any, depth: number)
 	-- argCount must fall back to #args because RemoteFunction serialization
@@ -1128,7 +1214,7 @@ function NetworkModule:_RenderStructuredArgs(parent: Frame, args: any, depth: nu
 	local argCount = args.n or #args
 	for i = 1, argCount do
 		local v = args[i]
-		self:_RenderStructuredArg(parent,"[" .. i .."]", v, depth, i)
+		self:_RenderStructuredArg(parent, "[" .. i .. "]", v, depth, i)
 	end
 	if args.truncated then
 		Theme.CreateLabel({
@@ -1143,7 +1229,15 @@ function NetworkModule:_RenderStructuredArgs(parent: Frame, args: any, depth: nu
 		}).LayoutOrder = argCount + 1
 	end
 end
-
+--[=[
+	@description Implements `NetworkModule._RenderStructuredArg`.
+	@param parent Frame -- `parent` input parameter.
+	@param key string -- `key` input parameter.
+	@param value any -- `value` input parameter.
+	@param depth number -- `depth` input parameter.
+	@param layoutOrder number -- `layoutOrder` input parameter.
+	@return any -- Return value produced by the implementation, if any.
+]=]
 
 function NetworkModule:_RenderStructuredArg(parent: Frame, key: string, value: any, depth: number, layoutOrder: number)
 	local indent = depth * 12
@@ -1160,7 +1254,7 @@ function NetworkModule:_RenderStructuredArg(parent: Frame, key: string, value: a
 	-- Escape angle brackets in keys/values so RichText labels render them
 	-- visibly instead of treating them as font tags.
 	local function escape(s: string): string
-		return (s:gsub("<","&lt;"):gsub(">","&gt;"))
+		return (s:gsub("<", "&lt;"):gsub(">", "&gt;"))
 	end
 	local safeKey = escape(tostring(key))
 
