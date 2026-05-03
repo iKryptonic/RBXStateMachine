@@ -99,20 +99,9 @@ function EquipJob:RegisterStates()
 				return
 			end
 
-			-- Inventory ownership check (skip in sandbox mode when inventory is empty)
-			local bag = playerEntity.BagContents
-			local inventory = playerEntity.Inventory
-			local hasBag = typeof(bag) == "table" and #bag > 0
-			local hasInventory = typeof(inventory) == "table" and #inventory > 0
-			if hasBag or hasInventory then
-				local found = false
-				if hasBag and table.find(bag, itemId) then found = true end
-				if not found and hasInventory and table.find(inventory, itemId) then found = true end
-				if not found then
-					fsm:Fail("Item " .. itemId .. " not in inventory")
-					return
-				end
-			end
+			-- NOTE: Inventory ownership check disabled — items come from Assets folder
+			-- which acts as a universal catalog. Re-enable when a proper loot/shop
+			-- system populates BagContents.
 
 			fsm.Context.Hand = hand
 			fsm.Context.ItemId = itemId
