@@ -235,19 +235,15 @@ function EquipJob:RegisterStates()
 					if weld and weld.Part1 then
 						local existingItem = weld.Part1.Parent
 						if existingItem then
-							local existingData = equipHelpers.GetItemData(existingItem)
-							fsm.Context._previousItem = existingItem
-							fsm.Context._previousItemData = existingData
 							fsm.Context._previousItemId = currentEquipped
-							fsm.Context._previousItemAction = if existingData and existingData.Stowable then "Stow" else "Drop"
-							if existingData and existingData.Stowable then
-								equipHelpers.StowItem(existingItem, character, weld, existingData)
-							else
-								equipHelpers.DropItem(existingItem, weld)
-							end
+							-- Always destroy the old clone when swapping via inventory
+							weld:Destroy()
+							existingItem:Destroy()
 						end
 					end
 				end
+				-- Clear stowed duplicate if any
+				equipHelpers.ClearStowedDuplicate(character, currentEquipped)
 			end
 
 			fsm.State = "CloneAsset"
@@ -337,7 +333,7 @@ function EquipJob:RegisterStates()
 			local hand = fsm.Hand :: string
 			local propertyName = getHandProperty(hand)
 			charEntity[propertyName] = fsm.ItemId
-			charEntity:UpdateEntity()
+			pcall(function() charEntity:UpdateEntity() end)
 
 			local equipped = if typeof(playerEntity.Equipped) == "table" then table.clone(playerEntity.Equipped) else {}
 			equipped[hand] = fsm.ItemId
@@ -345,16 +341,27 @@ function EquipJob:RegisterStates()
 			if hand == "Right" then
 				playerEntity.WeaponEqp = fsm.ItemId
 			end
-			local inventory = playerEntity.Inventory
-			if typeof(inventory) == "table" then
-				local idx = table.find(inventory, fsm.ItemId)
-				if idx then
-					inventory = table.clone(inventory)
-					table.remove(inventory, idx)
-					playerEntity.Inventory = inventory
+
+			local inventory = if typeof(playerEntity.Inventory) == "table"
+				then table.clone(playerEntity.Inventory)
+				else {}
+
+			-- Return previously equipped item to inventory
+			local prevItemId = fsm.Context._previousItemId
+			if typeof(prevItemId) == "string" and prevItemId ~= "" then
+				if not table.find(inventory, prevItemId) then
+					table.insert(inventory, prevItemId)
 				end
 			end
-			playerEntity:UpdateEntity()
+
+			-- Remove newly equipped item from inventory
+			local newIdx = table.find(inventory, fsm.ItemId)
+			if newIdx then
+				table.remove(inventory, newIdx)
+			end
+
+			playerEntity.Inventory = inventory
+			pcall(function() playerEntity:UpdateEntity() end)
 
 			fsm.State = "EmitIntent"
 		end,
