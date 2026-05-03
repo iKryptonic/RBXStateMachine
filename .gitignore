@@ -1,6 +1,40 @@
 # Legacy rewrite drafts (archived to branch `archive/fsm-entity-rewrite`)
 FSM and Entity Rewrite/
 
+# Game-specific code (excluded from framework branch)
+FSM/StateMachines/
+FSM/Entities/CharacterEntity.luau
+FSM/Entities/PlayerEntity.luau
+FSM/Helpers/CombatHelpers.luau
+FSM/Helpers/CrowdControlHelpers.luau
+FSM/Helpers/IntentHelpers.luau
+FSM/Helpers/ResourceHelpers.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/ClientFSMs.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/CombatFSMTermination.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/CombatFSMs.mock.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/CombatFSMs.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/EntitySchemas.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/EquipLocking.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/EquipmentFSMs.mock.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/GUIMocks.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/InputFSMs.mock.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/InventoryConsistency.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/InventoryEquip.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/InventoryManagement.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/InventoryUnequip.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/LifecycleFSMs.mock.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/MockSpecHelpers.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/MovementFSMs.mock.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/RPGSystems.mock.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/RPGSystems.spec.luau
+FSM/Orchestrator/ServiceManager/Tests/Specs/ToggleWeapon.spec.luau
+FSM/Tests/Unit/Test_AttackTimelinePurity.luau
+FSM/Tests/Unit/Test_DamageJob.luau
+FSM/Tests/Unit/Test_DamageJob_HitNonceDedup.luau
+FSM/Tests/Unit/Test_EquipJob.luau
+FSM/Tests/Unit/Test_LastActionDelivery.luau
+FSM/Tests/Unit/Test_PlayerEntityPersistence.luau
+
 # Rojo build artifacts
 *.rbxlx
 *.rbxl
