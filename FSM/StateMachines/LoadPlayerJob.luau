@@ -43,7 +43,7 @@ local DEFAULT_INVENTORY = {
 	"Zephyr", "ZephyrUnleash",
 }
 
-local COMMAND_COOLDOWN = 0.1 -- 100ms between commands per player
+local COMMAND_COOLDOWN = 0.4 -- 400ms between commands per player
 local lastCommandTime: { [number]: number } = {} -- userId → os.clock()
 
 local function isRateLimited(userId: number): boolean
