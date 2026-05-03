@@ -154,8 +154,9 @@ function ToggleWeaponJob:RegisterStates()
 				fsm:Fail("No weapon selected to equip")
 				return
 			end
+			-- Skip inventory check in sandbox mode (empty inventory)
 			local inventory = fsm.PlayerEntity.Inventory
-			if typeof(inventory) == "table" and not table.find(inventory, itemId) then
+			if typeof(inventory) == "table" and #inventory > 0 and not table.find(inventory, itemId) then
 				fsm:Fail("Weapon " .. itemId .. " not in inventory")
 				return
 			end
