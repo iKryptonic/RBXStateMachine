@@ -177,13 +177,13 @@ function MeleeAttackJob:RegisterStates()
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
 			if not charEntity:AcquireLock(fsm.Id) then
-				fsm:Fail("Character is already performing another action")
+				fsm.State = "Complete"
 				return
 			end
 			fsm.Context._lockHeld = true
 			fsm.State = "ValidateStamina"
 		end,
-	}, { "ValidateStamina", "Failed" })
+	}, { "ValidateStamina", "Complete", "Failed" })
 
 	self:AddState("ValidateStamina", {
 		OnEnter = function(_, fsm)
