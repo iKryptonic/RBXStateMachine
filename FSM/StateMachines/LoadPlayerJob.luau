@@ -34,7 +34,14 @@ local LoadPlayerJob = {
 	initialState = "Start",
 }
 
-local DEFAULT_INVENTORY = { "1", "2", "3", "4", "5", "6", "7" }
+local DEFAULT_INVENTORY = {
+	"1", "2", "3", "4", "5", "6", "7", "8",
+	"Artura", "ArturaUnleash",
+	"Gale", "GaleUnleash",
+	"Kama", "KamaUnleash",
+	"Shade", "ShadeUnleash",
+	"Zephyr", "ZephyrUnleash",
+}
 
 local COMMAND_COOLDOWN = 0.1 -- 100ms between commands per player
 local lastCommandTime: { [number]: number } = {} -- userId → os.clock()
@@ -101,6 +108,20 @@ local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player:
 	if typeof(playerEntity.Inventory) ~= "table" or #playerEntity.Inventory == 0 then
 		playerEntity.Inventory = table.clone(DEFAULT_INVENTORY)
 		dirty = true
+	else
+		-- Ensure all default items are present (migration for existing saves)
+		local inv = playerEntity.Inventory
+		local added = false
+		for _, itemId in ipairs(DEFAULT_INVENTORY) do
+			if not table.find(inv, itemId) then
+				table.insert(inv, itemId)
+				added = true
+			end
+		end
+		if added then
+			playerEntity.Inventory = inv
+			dirty = true
+		end
 	end
 
 	if typeof(playerEntity.Equipped) ~= "table" then
