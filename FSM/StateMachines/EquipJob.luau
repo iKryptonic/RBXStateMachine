@@ -146,21 +146,24 @@ function EquipJob:RegisterStates()
 			local equipLock = if typeof(charEntity.EquipLock) == "table" then table.clone(charEntity.EquipLock) else {}
 			if equipLock[hand] then
 				local retryCount = tonumber(fsm.Context._equipLockRetryCount) or 0
-				if retryCount < 5 then
+				if retryCount < 3 then
 					fsm.Context._equipLockRetryCount = retryCount + 1
-					fsm.WaitSpan = 0.3
+					fsm.WaitSpan = 0.2
 					fsm.State = "AcquireEquipLock"
 				else
-					fsm:Fail("Timed out waiting for EquipLock for hand: " .. hand)
+					-- Force-clear stale lock after retries
+					equipLock[hand] = nil
+					charEntity.EquipLock = equipLock
+					pcall(function() charEntity:UpdateEntity() end)
 				end
-				return
+				if equipLock[hand] then return end
 			end
 
 			fsm.Context._equipLockRetryCount = 0
 			fsm.Context._equipLockHeld = true
 			equipLock[hand] = true
 			charEntity.EquipLock = equipLock
-			charEntity:UpdateEntity()
+			pcall(function() charEntity:UpdateEntity() end)
 			fsm.State = "ResolveItemMeta"
 		end,
 	}, { "ResolveItemMeta", "Rollback", "Failed" })
