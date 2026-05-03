@@ -206,6 +206,7 @@ function JumpFSM:RegisterStates()
 			bodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
 			bodyVelocity.Velocity = Vector3.new(0, UPWARD_VELOCITY, 0)
 			bodyVelocity.Parent = rootPart
+			fsm:TrackInstance(bodyVelocity, "FlipBodyVelocity")
 			fsm.Context._bodyVelocity = bodyVelocity
 			fsm.State = "RotateCharacter"
 		end,

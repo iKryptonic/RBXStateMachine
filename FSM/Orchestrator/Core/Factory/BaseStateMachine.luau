@@ -167,6 +167,7 @@ function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {
 	self._states = {} :: { [string]: any }
 	self._transitions = {} :: { [string]: {string} }
 	self._cleanupTasks = {} :: { any }
+	self._managedInstances = {} :: { { Instance: Instance, Label: string, CreatedAt: number } }
 	self._legacyCleanup = {} :: {[(() -> ())?]: any}?
 	self._connection = nil :: RBXScriptConnection?
 	-- Ring buffer of transitions for the visualizer's history panel.
@@ -500,6 +501,47 @@ end
 function BaseStateMachine:Manage(object: any)
 	table.insert(self._cleanupTasks, object)
 	return object
+end
+
+--[=[
+	@description Registers a Roblox Instance for tracked cleanup when the FSM is destroyed.
+	Unlike Manage(), TrackInstance provides profiler-visible metadata (label, creation time)
+	so the ServiceManager can report which FSMs own which Instances and detect orphans.
+	The Instance is also added to _cleanupTasks for automatic destruction on Destroy().
+
+	@param inst Instance -- The Roblox Instance to track
+	@param label string? -- Optional human-readable label (e.g., "WeaponClone", "Hitbox")
+	@return Instance -- The same Instance (for inline chaining)
+	@writes self._managedInstances, self._cleanupTasks
+]=]
+function BaseStateMachine:TrackInstance(inst: Instance, label: string?): Instance
+	table.insert(self._managedInstances, {
+		Instance = inst,
+		Label = label or inst.Name,
+		CreatedAt = os.clock(),
+	})
+	table.insert(self._cleanupTasks, inst)
+	return inst
+end
+
+--[=[
+	@description Returns the list of tracked Instances this FSM currently owns.
+	Used by the ServiceManager Profiler to display per-FSM Instance ownership
+	and detect potential leaks.
+
+	@return { { Instance: Instance, Label: string, CreatedAt: number } }
+	@reads self._managedInstances
+]=]
+function BaseStateMachine:GetManagedInstances(): { any }
+	-- Prune destroyed Instances before returning
+	local alive = {}
+	for _, entry in ipairs(self._managedInstances) do
+		if entry.Instance and entry.Instance.Parent ~= nil then
+			table.insert(alive, entry)
+		end
+	end
+	self._managedInstances = alive
+	return alive
 end
 
 -- RUNTIME
@@ -1509,6 +1551,19 @@ function BaseStateMachine:Destroy()
     end
 
 	self:_Teardown()
+	-- Log managed Instance cleanup count for diagnostics
+	if #self._managedInstances > 0 then
+		local aliveCount = 0
+		for _, entry in ipairs(self._managedInstances) do
+			if entry.Instance and entry.Instance.Parent ~= nil then
+				aliveCount += 1
+			end
+		end
+		if aliveCount > 0 then
+			self:Log { Level = "DEBUG", Message = string.format("Cleaning up %d managed Instances", aliveCount) }
+		end
+	end
+	self._managedInstances = {}
 	for _, cleanupTask in ipairs(self._cleanupTasks) do
 		pcall(function()
 			if typeof(cleanupTask) == "Instance" then cleanupTask:Destroy()

@@ -865,6 +865,21 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 			EntityId = fsm.EntityId or fsm._entityId
 				or (fsm.Context and type(fsm.Context) == "table" and fsm.Context.EntityId),
 			Perf = fsm.Perf or {},
+			ManagedInstances = (function()
+				if type(fsm.GetManagedInstances) ~= "function" then return nil end
+				local ok3, managed = pcall(fsm.GetManagedInstances, fsm)
+				if not ok3 or not managed or #managed == 0 then return nil end
+				local list = {}
+				for _, entry in ipairs(managed) do
+					table.insert(list, {
+						Label = entry.Label,
+						ClassName = entry.Instance and entry.Instance.ClassName or "?",
+						Name = entry.Instance and entry.Instance.Name or "?",
+						CreatedAt = entry.CreatedAt,
+					})
+				end
+				return list
+			end)(),
 		}
 	end
 
@@ -1347,6 +1362,52 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 					table.sort(dupes, function(a, b) return a.Count > b.Count end)
 					instMem.DuplicateAssets = dupes
 				end
+			end
+			-- Aggregate managed Instance counts from active FSMs
+			local fsmInstanceOwnership = {}
+			if Factory and Factory.Registry then
+				pcall(function()
+					for fsmId, fsm in pairs(Factory.Registry.GetAllStateMachines()) do
+						if type(fsm.GetManagedInstances) == "function" then
+							local ok3, managed = pcall(fsm.GetManagedInstances, fsm)
+							if ok3 and managed and #managed > 0 then
+								fsmInstanceOwnership[fsmId] = #managed
+							end
+						end
+					end
+				end)
+			end
+			if next(fsmInstanceOwnership) then
+				instMem.FSMOwnership = fsmInstanceOwnership
+			end
+			-- Orphan detection: Workspace children that aren't characters, terrain,
+			-- camera, or known game objects — potential FSM leaks
+			local orphans = {}
+			local knownNames = { Camera = true, Terrain = true, Baseplate = true, SpawnLocation = true }
+			for _, child in game.Workspace:GetChildren() do
+				if child:IsA("Camera") or child:IsA("Terrain") then continue end
+				if knownNames[child.Name] then continue end
+				-- Characters are Models with a Humanoid
+				if child:IsA("Model") and child:FindFirstChildOfClass("Humanoid") then continue end
+				-- Folders are usually intentional
+				if child:IsA("Folder") then continue end
+				-- Check for suspicious objects (small parts, hitboxes, clones)
+				local desc = 0
+				for _ in child:GetDescendants() do desc += 1 end
+				local isSuspicious = child.Name:lower():find("hitbox")
+					or child.Name:lower():find("clone")
+					or child.Name:lower():find("projectile")
+					or (child:IsA("BasePart") and not child.Anchored and desc == 0)
+				if isSuspicious then
+					table.insert(orphans, {
+						Name = child.Name,
+						Class = child.ClassName,
+						Age = math.floor(os.clock() - (child:GetAttribute("_CreatedAt") or os.clock())),
+					})
+				end
+			end
+			if #orphans > 0 then
+				instMem.SuspectedOrphans = orphans
 			end
 			snapshot.InstanceMemory = instMem
 		end

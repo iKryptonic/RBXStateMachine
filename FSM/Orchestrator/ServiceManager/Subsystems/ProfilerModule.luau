@@ -799,6 +799,74 @@ function ProfilerModule:_BuildInstanceMemorySection(parent: Frame, _nexus: any, 
 			}).LayoutOrder = dupeOrder + i
 		end
 	end
+
+	-- FSM Instance ownership
+	local ownership = im.FSMOwnership
+	if ownership and next(ownership) then
+		local ownOrder = layoutOrder * 100 + 82
+		Theme.CreateLabel({
+			Text = '<font color="#888">FSM INSTANCE OWNERSHIP</font>',
+			Size = UDim2.new(1, 0, 0, 14),
+			Color = Theme.Colors.TextSecondary,
+			FontSize = Theme.TextSize.Tiny,
+			FontFace = Theme.Font.Bold,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = parent,
+		}).LayoutOrder = ownOrder
+
+		-- Sort by count descending
+		local sorted = {}
+		for fsmId, count in pairs(ownership) do
+			table.insert(sorted, { Id = fsmId, Count = count })
+		end
+		table.sort(sorted, function(a, b) return a.Count > b.Count end)
+
+		for i, entry in ipairs(sorted) do
+			if i > 8 then break end
+			local countColor = if entry.Count > 5 then "#FF4444" elseif entry.Count > 2 then "#FFAA00" else "#888"
+			local displayId = entry.Id
+			if #displayId > 35 then displayId = displayId:sub(1, 33) .. ".." end
+			Theme.CreateLabel({
+				Text = string.format('  <font color="#9DC9FF">%s</font>  <font color="%s">×%d instances</font>',
+					displayId, countColor, entry.Count),
+				Size = UDim2.new(1, 0, 0, 14),
+				Color = Theme.Colors.TextSecondary,
+				FontSize = Theme.TextSize.Tiny,
+				FontFace = Theme.Font.Mono,
+				Alignment = Enum.TextXAlignment.Left,
+				Parent = parent,
+			}).LayoutOrder = ownOrder + i
+		end
+	end
+
+	-- Suspected orphans
+	local orphans = im.SuspectedOrphans
+	if orphans and #orphans > 0 then
+		local orphOrder = layoutOrder * 100 + 92
+		Theme.CreateLabel({
+			Text = string.format('<font color="#FF8C00">⚠ SUSPECTED ORPHAN INSTANCES (%d found)</font>', #orphans),
+			Size = UDim2.new(1, 0, 0, 16),
+			Color = Theme.Colors.Warning,
+			FontSize = Theme.TextSize.Caption,
+			FontFace = Theme.Font.Bold,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = parent,
+		}).LayoutOrder = orphOrder
+
+		for i, orphan in ipairs(orphans) do
+			if i > 8 then break end
+			Theme.CreateLabel({
+				Text = string.format('  <font color="#FFB347">%s</font> (%s)  <font color="#666">age: %ds</font>',
+					orphan.Name, orphan.Class, orphan.Age or 0),
+				Size = UDim2.new(1, 0, 0, 14),
+				Color = Theme.Colors.TextSecondary,
+				FontSize = Theme.TextSize.Tiny,
+				FontFace = Theme.Font.Mono,
+				Alignment = Enum.TextXAlignment.Left,
+				Parent = parent,
+			}).LayoutOrder = orphOrder + i
+		end
+	end
 end
 
 -- ══════════════════════════════════════════════════════════════

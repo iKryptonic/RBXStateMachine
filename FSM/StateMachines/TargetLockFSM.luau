@@ -93,6 +93,7 @@ local function ensureIndicator(fsm: any, targetCharacter: Model)
 	billboard.StudsOffset = Vector3.new(0, 2.5, 0)
 	billboard.ResetOnSpawn = false
 	billboard.Parent = adornPart
+	fsm:TrackInstance(billboard, "LockOnIndicator")
 
 	local label = Instance.new("TextLabel")
 	label.Name = "Diamond"
