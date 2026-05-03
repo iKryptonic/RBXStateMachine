@@ -217,9 +217,11 @@ function UnEquipJob:RegisterStates()
 				else {}
 			equipped[hand] = nil
 			playerEntity.Equipped = equipped
-			if hand == "Right" then
+			if hand == "Right" and not fsm.Context._resolvedItemId then
+				-- Only clear WeaponEqp if no item was resolved (shouldn't happen normally)
 				playerEntity.WeaponEqp = ""
 			end
+			-- Keep WeaponEqp set so Z-key can re-equip the last weapon
 			local inventory = playerEntity.Inventory
 			if typeof(inventory) == "table" and fsm.Context._resolvedItemId and fsm.Context._resolvedItemId ~= "" then
 				if not table.find(inventory, fsm.Context._resolvedItemId) then
