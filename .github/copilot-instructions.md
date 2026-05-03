@@ -366,3 +366,76 @@ When editing dashboard code, keep row builders, detail layers, store updates, an
 - When touching Network or dashboard code, check both client mode and server snapshot mode.
 - When touching FSM internals, verify `ScheduleTransition`, `WaitSpan`, transition history, and cleanup behavior still work.
 - When touching dashboard subsystems, consider whether tests should be added under `src/ReplicatedStorage/Orchestrator/ServiceManager/Tests/Specs/`.
+
+## Documentation Standards
+
+### Function Documentation
+Every exported function MUST have a `--[=[` block comment with:
+- `@description` — What the function does, edge cases, side effects
+- `@param paramName type` — For each parameter
+- `@return type` — Return value and when it might be nil
+- `@reads` — What state/fields it reads (optional but encouraged)
+- `@writes` — What state/fields it modifies (optional but encouraged)
+
+Example:
+```lua
+--[=[
+    @description Deducts mana from the player entity, clamping at zero.
+    Returns false if insufficient mana without deducting.
+
+    @param playerEntity any -- The PlayerEntity to deduct from
+    @param amount number -- Mana to deduct (must be >= 0)
+    @return boolean -- true if deduction succeeded, false if insufficient
+    @reads playerEntity.Mana
+    @writes playerEntity.Mana
+]=]
+function ResourceHelpers.deductMana(playerEntity: any, amount: number): boolean
+```
+
+### Module Documentation
+Every module file MUST have a top-level `--[=[` block comment with:
+- `@Name` — Module name
+- `@Author` — Author (iKrypto)
+- `@Description` — What the module does, who uses it, key invariants
+
+### State Machine Documentation
+Every FSM state's OnEnter MUST be preceded by:
+- `@state StateName` — State name
+- `@description` — What happens on entry
+- `@transitions` — Valid next states and conditions
+- `@failure` — Error/rollback behavior
+
+### Entity Documentation
+Every entity schema field MUST have an inline comment documenting:
+- Type, purpose, replication mode, persistence mode
+
+### Test Requirements
+- Every Helper module must have a corresponding `.spec.luau` in Tests/Specs/
+- Every FSM must have transition tests covering happy path + failure paths
+- Tests must use the MockFramework pattern (MockEntity, MockOrchestrator, TransitionRecorder)
+- New features must include tests before merging
+
+## Code Style
+
+### Indentation
+- Use TABS for indentation (Roblox Studio default)
+- Consistent nesting depth
+
+### Naming
+- Modules: PascalCase (e.g., `CombatHelpers`, `EquipJob`)
+- Functions: camelCase for helpers, PascalCase for module methods
+- Constants: UPPER_SNAKE_CASE
+- Entity fields: PascalCase (e.g., `EquippedRight`, `TalentSelections`)
+- FSM states: PascalCase (e.g., `ValidateRequest`, `CommitState`)
+
+### FSM Patterns
+- Terminal states: always `"Completed"` and `"Failed"` (never `"Complete"`)
+- State transitions via `fsm.State = "NextState"` (polled, not immediate)
+- Use `StateTransitionHelpers.queueRollback(fsm, reason)` for error paths
+- Track created Instances with `fsm:TrackInstance(inst, label, trackOnly?)`
+- Use `fsm:Manage(resource)` for connections and cleanup functions
+
+### Instance Tracking
+- Use `TrackInstance(inst, label)` for Instances that should be destroyed with the FSM
+- Use `TrackInstance(inst, label, true)` for Instances that outlive the FSM (monitor only)
+- Never create Roblox Instances without either TrackInstance, Manage, or Debris:AddItem
