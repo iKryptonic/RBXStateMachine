@@ -9,14 +9,17 @@ local EntityHelpers = require(script.Parent.EntityHelpers)
 
 local CombatHelpers = {}
 --[=[
-	@description Implements `CombatHelpers.scanVictims`.
-	@param orchestrator any -- `orchestrator` input parameter.
-	@param sourceEntityId string -- `sourceEntityId` input parameter.
-	@param origin Vector3 -- `origin` input parameter.
-	@param radius number -- `radius` input parameter.
-	@return { any } -- Return value produced by the implementation, if any.
-]=]
+	@description Finds all living character entities within a spherical radius from an origin
+	point, excluding the source entity. Returns entries sorted by distance (closest first).
+	Each entry contains { Entity, EntityId, Distance }.
 
+	@param orchestrator any — Orchestrator instance (must expose GetAllEntities or GetEntities)
+	@param sourceEntityId string — Entity ID of the attacker (excluded from results)
+	@param origin Vector3 — Center point for the radius scan
+	@param radius number — Maximum distance in studs to include targets
+	@return { { Entity: any, EntityId: string, Distance: number } } — Sorted victim list
+	@reads All registered entities via orchestrator, each entity's character/humanoid/root
+]=]
 function CombatHelpers.scanVictims(orchestrator: any, sourceEntityId: string, origin: Vector3, radius: number): { any }
 	local victims = {}
 	local getAllEntities = orchestrator and (orchestrator.GetAllEntities or orchestrator.GetEntities)
@@ -45,14 +48,16 @@ function CombatHelpers.scanVictims(orchestrator: any, sourceEntityId: string, or
 	return victims
 end
 --[=[
-	@description Implements `CombatHelpers.scanForwardVictims`.
-	@param orchestrator any -- `orchestrator` input parameter.
-	@param sourceEntityId string -- `sourceEntityId` input parameter.
-	@param attackerRoot BasePart -- `attackerRoot` input parameter.
-	@param radius number -- `radius` input parameter.
-	@return { any } -- Return value produced by the implementation, if any.
-]=]
+	@description Filters scanVictims results to only include targets in front of the attacker.
+	Uses the attacker's LookVector dot product with the direction to each target —
+	positive dot means the target is in the forward hemisphere.
 
+	@param orchestrator any — Orchestrator instance
+	@param sourceEntityId string — Attacker entity ID (excluded from results)
+	@param attackerRoot BasePart — The attacker's HumanoidRootPart (provides position + facing)
+	@param radius number — Maximum distance in studs
+	@return { any } — Array of Entity tables (not wrapped in { Entity, Distance } like scanVictims)
+]=]
 function CombatHelpers.scanForwardVictims(orchestrator: any, sourceEntityId: string, attackerRoot: BasePart, radius: number): { any }
 	local victims = {}
 	for _, entry in ipairs(CombatHelpers.scanVictims(orchestrator, sourceEntityId, attackerRoot.Position, radius)) do
@@ -67,14 +72,19 @@ function CombatHelpers.scanForwardVictims(orchestrator: any, sourceEntityId: str
 	return victims
 end
 --[=[
-	@description Implements `CombatHelpers.createDamageJob`.
-	@param orchestrator any -- `orchestrator` input parameter.
-	@param attackerEntityId string -- `attackerEntityId` input parameter.
-	@param victim any -- `victim` input parameter.
-	@param attackName string -- `attackName` input parameter.
-	@param damage number? -- `damage` input parameter.
-	@param hitNonce string? -- `hitNonce` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Creates and starts a DamageJob state machine for a confirmed hit. The helper accepts
+	either a victim entity table or a raw user id, derives a stable Damage_<attacker>_<victim>_<nonce>
+	identifier, and seeds the job context with attacker ids, victim ids, attack metadata, base damage,
+	and a hit nonce for deduplication.
+
+	@param orchestrator any -- Orchestrator that can create state machines through CreateStateMachine.
+	@param attackerEntityId string -- Character/entity id credited as the attack source.
+	@param victim any -- Victim entity table or numeric user id used to identify who should receive damage.
+	@param attackName string -- Attack or ability name recorded in the DamageJob context.
+	@param damage number? -- Optional base damage forwarded to the job for downstream calculations.
+	@param hitNonce string? -- Optional unique hit id; when omitted a GUID is generated automatically.
+	@return any -- Started DamageJob instance, or nil when the victim cannot be resolved to a numeric user id.
+	@writes orchestrator state-machine registry via CreateStateMachine
 ]=]
 
 function CombatHelpers.createDamageJob(

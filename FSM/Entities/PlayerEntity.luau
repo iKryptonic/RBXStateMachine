@@ -236,9 +236,13 @@ DataVersion = { Type = "number", Replicate = false, Persist = true },
 },
 }
 --[=[
-	@description Returns the data produced by `PlayerEntity.GetContext`.
-	@param params { [any]: any } -- `params` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Builds the default persistent profile payload for a PlayerEntity. The helper accepts either
+	a raw context table or a wrapper with Context, resolves UserId from explicit input or Instance.UserId,
+	and fills in starter progression, inventory, ability/talent tables, bindings, quick slots, and runtime
+	cooldown mirrors when those values are not already supplied.
+
+	@param params { [any]: any } -- Context table (or wrapper containing Context) with optional persisted profile overrides.
+	@return any -- Player profile data table seeded with starter inventory/loadout defaults, persistent progression fields, and session-only runtime caches.
 ]=]
 
 function PlayerEntity:GetContext(params: { [any]: any })
@@ -280,9 +284,12 @@ DataVersion = context.DataVersion or 1,
 }
 end
 --[=[
-	@description Implements `PlayerEntity.ApplyChanges`.
-	@param _changes { [string]: any } -- `_changes` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Intentionally ignores replicated field changes because PlayerEntity is pure data with no
+	client-side visual side effects. The method exists only to satisfy the entity interface expected by the
+	orchestrator.
+
+	@param _changes { [string]: any } -- Unused change-set payload supplied by the entity replication pipeline.
+	@return nil
 ]=]
 
 function PlayerEntity:ApplyChanges(_changes: { [string]: any })

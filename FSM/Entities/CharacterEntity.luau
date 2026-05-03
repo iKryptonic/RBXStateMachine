@@ -257,9 +257,13 @@ Instance = { Type = "any", Replicate = false, Persist = false },
 },
 }
 --[=[
-	@description Returns the data produced by `CharacterEntity.GetContext`.
-	@param params { [any]: any } -- `params` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Builds the default runtime state for a freshly spawned CharacterEntity. The helper accepts
+	either a raw context table or a wrapper with Context, derives UserId and PlayerEntityId when missing,
+	and seeds combat resources, equipment state, locks, action replication fields, and animation labels to
+	their spawn-time defaults.
+
+	@param params { [any]: any } -- Context table (or wrapper containing Context) with optional UserId and PlayerEntityId overrides.
+	@return any -- New character-entity data table containing baseline health, stamina, mana, locks, equipment, recent-action state, and animation fields.
 ]=]
 
 function CharacterEntity:GetContext(params: { [any]: any })
@@ -302,9 +306,15 @@ InputMode = "Combat",
 }
 end
 --[=[
-	@description Implements `CharacterEntity.ApplyChanges`.
-	@param changes { [string]: any } -- `changes` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Applies replicated CharacterEntity deltas on the client by forwarding them into local
+	rendering systems. RecentActions/ActionSeq changes are sent to the render router, equipment changes
+	trigger equip-visual updates, and MoveSpeedCap updates are mirrored onto the live humanoid WalkSpeed.
+	The method is a no-op on the server.
+
+	@param changes { [string]: any } -- Replicated field changes that may affect action rendering, equip visuals, or local humanoid speed.
+	@return nil
+	@reads self._renderRouter, self.RecentActions, self.ActionSeq, self.Instance
+	@writes humanoid.WalkSpeed on the client when MoveSpeedCap changes
 ]=]
 
 function CharacterEntity:ApplyChanges(changes: { [string]: any })

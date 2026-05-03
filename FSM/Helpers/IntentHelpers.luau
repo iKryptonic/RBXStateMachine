@@ -8,10 +8,14 @@ local ModuleLoader = require(script.Parent.ModuleLoader)
 
 local IntentHelpers = {}
 --[=[
-	@description Implements `IntentHelpers.buildIntentPayload`.
-	@param kind string -- `kind` input parameter.
-	@param rawIntent { [string]: any } -- `rawIntent` input parameter.
-	@return { [string]: any }? -- Return value produced by the implementation, if any.
+	@description Normalizes raw intent definitions into the payload shape expected by IntentSchema. Each
+	supported kind applies its own validation and defaults: Animation requires a name plus default speed/
+	fade, Sound requires an id and coerces it to a string, and Effect clones the original table while
+	normalizing EffectName into Name.
+
+	@param kind string -- Intent kind to normalize (currently Animation, Sound, or Effect).
+	@param rawIntent { [string]: any } -- Raw intent definition that may contain alternate field names and optional tuning values.
+	@return { [string]: any }? -- Normalized payload table for the requested kind, or nil when the definition is incomplete or unsupported.
 ]=]
 
 function IntentHelpers.buildIntentPayload(kind: string, rawIntent: { [string]: any }): { [string]: any }?
@@ -48,15 +52,19 @@ function IntentHelpers.buildIntentPayload(kind: string, rawIntent: { [string]: a
 	return nil
 end
 --[=[
-	@description Implements `IntentHelpers.appendIntent`.
-	@param orchestrator any -- `orchestrator` input parameter.
-	@param characterEntity any -- `characterEntity` input parameter.
-	@param kind string -- `kind` input parameter.
-	@param payload { [string]: any } -- `payload` input parameter.
-	@param sourceCharId string? -- `sourceCharId` input parameter.
-	@param targetCharId string? -- `targetCharId` input parameter.
-	@param lockId string? -- `lockId` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Appends a fully formed presentation intent onto a character entity through the shared
+	IntentSchema module. The helper packages kind, payload, source id, and target id into the schema's
+	expected envelope and defaults TargetCharId to the source when no explicit target is supplied.
+
+	@param orchestrator any -- Orchestrator used to resolve the shared IntentSchema module.
+	@param characterEntity any -- Character entity that will receive the appended intent entry.
+	@param kind string -- Intent category recorded in the schema entry.
+	@param payload { [string]: any } -- Already-normalized intent payload to attach.
+	@param sourceCharId string? -- Character id that originated the intent.
+	@param targetCharId string? -- Optional target character id; defaults to sourceCharId when omitted.
+	@param lockId string? -- Optional lock identifier forwarded to IntentSchema.AppendIntent.
+	@return nil
+	@writes characterEntity intent state via IntentSchema.AppendIntent
 ]=]
 
 function IntentHelpers.appendIntent(
@@ -77,14 +85,17 @@ function IntentHelpers.appendIntent(
 	}, lockId)
 end
 --[=[
-	@description Implements `IntentHelpers.appendOptionalIntent`.
-	@param orchestrator any -- `orchestrator` input parameter.
-	@param characterEntity any -- `characterEntity` input parameter.
-	@param intentDef any -- `intentDef` input parameter.
-	@param sourceCharId string -- `sourceCharId` input parameter.
-	@param lockId string? -- `lockId` input parameter.
-	@param targetCharId string? -- `targetCharId` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Safely appends an intent definition only when it is well formed. Non-table values,
+	definitions without a string Kind, and payloads that fail buildIntentPayload validation are ignored;
+	otherwise the normalized payload is forwarded to appendIntent.
+
+	@param orchestrator any -- Orchestrator used to resolve IntentSchema when an intent is actually appended.
+	@param characterEntity any -- Character entity that should receive the optional intent.
+	@param intentDef any -- Raw intent definition table that may or may not describe a supported intent.
+	@param sourceCharId string -- Character id treated as the source of the intent.
+	@param lockId string? -- Optional lock identifier passed through to appendIntent.
+	@param targetCharId string? -- Optional explicit target character id for the intent envelope.
+	@return nil
 ]=]
 
 function IntentHelpers.appendOptionalIntent(

@@ -6,12 +6,16 @@
 ]=]
 local StateTransitionHelpers = {}
 --[=[
-	@description Implements `StateTransitionHelpers.scheduleTransitionCompat`.
-	@param fsm any -- `fsm` input parameter.
-	@param seconds number -- `seconds` input parameter.
-	@param targetState string -- `targetState` input parameter.
-	@param expectedState string? -- `expectedState` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Schedules a delayed state change while supporting FSM implementations with or without a
+	native ScheduleTransition method. When the method exists it is delegated directly; otherwise a task.delay
+	fallback waits the requested duration and only overwrites fsm.State if the FSM is still active and still
+	in the expected state.
+
+	@param fsm any -- FSM instance whose state should change after a delay.
+	@param seconds number -- Delay in seconds before the transition is attempted.
+	@param targetState string -- State name to enter after the delay elapses.
+	@param expectedState string? -- Optional state the FSM must still be in for the fallback transition to apply; defaults to targetState.
+	@return nil
 ]=]
 
 function StateTransitionHelpers.scheduleTransitionCompat(
@@ -32,11 +36,15 @@ function StateTransitionHelpers.scheduleTransitionCompat(
 	end)
 end
 --[=[
-	@description Implements `StateTransitionHelpers.failOrRelease`.
-	@param fsm any -- `fsm` input parameter.
-	@param reason string -- `reason` input parameter.
-	@param options { [string]: any }? -- `options` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Routes a failure either into a lock-release cleanup state or directly into fsm:Fail. If the
+	configured lock field is currently set, the failure reason is stored on the FSM and execution moves to a
+	release state so cleanup can happen before termination; otherwise the FSM fails immediately.
+
+	@param fsm any -- FSM instance that may need to release a held lock before failing.
+	@param reason string -- Failure reason recorded on the FSM or passed to fsm:Fail.
+	@param options { [string]: any }? -- Optional override fields for lockField, failureField, and releaseState.
+	@return nil
+	@writes fsm state and failure metadata
 ]=]
 
 function StateTransitionHelpers.failOrRelease(fsm: any, reason: string, options: { [string]: any }?)
@@ -52,12 +60,16 @@ function StateTransitionHelpers.failOrRelease(fsm: any, reason: string, options:
 	end
 end
 --[=[
-	@description Implements `StateTransitionHelpers.queueRelease`.
-	@param fsm any -- `fsm` input parameter.
-	@param nextState string -- `nextState` input parameter.
-	@param reason string? -- `reason` input parameter.
-	@param options { [string]: any }? -- `options` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Queues a lock-release state by storing where the FSM should go afterward and why. The next
+	state and optional reason are written into configurable Context fields, then the FSM is moved into the
+	release state so another state can perform the actual unlock work.
+
+	@param fsm any -- FSM instance whose Context will carry release metadata.
+	@param nextState string -- State to enter after the release step finishes.
+	@param reason string? -- Optional reason recorded for release/cleanup handlers.
+	@param options { [string]: any }? -- Optional override fields for releaseState, targetField, and reasonField.
+	@return nil
+	@writes fsm.Context, fsm.State
 ]=]
 
 function StateTransitionHelpers.queueRelease(fsm: any, nextState: string, reason: string?, options: { [string]: any }?)
@@ -70,11 +82,15 @@ function StateTransitionHelpers.queueRelease(fsm: any, nextState: string, reason
 	fsm.State = releaseState
 end
 --[=[
-	@description Implements `StateTransitionHelpers.queueRollback`.
-	@param fsm any -- `fsm` input parameter.
-	@param reason string -- `reason` input parameter.
-	@param options { [string]: any }? -- `options` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Marks an FSM for rollback by recording the failure reason, optionally logging it, and then
+	switching into a rollback state. This keeps failure context available to cleanup logic instead of losing
+	the original reason before the rollback sequence runs.
+
+	@param fsm any -- FSM instance that should enter its rollback path.
+	@param reason string -- Human-readable failure reason stored in Context and optionally emitted through Log.
+	@param options { [string]: any }? -- Optional override fields for failureField and rollbackState.
+	@return nil
+	@writes fsm.Context, fsm.State
 ]=]
 
 function StateTransitionHelpers.queueRollback(fsm: any, reason: string, options: { [string]: any }?)

@@ -9,10 +9,14 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local ModuleLoader = {}
 --[=[
-	@description Implements `ModuleLoader.getSharedModule`.
-	@param orchestrator any -- `orchestrator` input parameter.
-	@param name string -- `name` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Resolves a shared module by name using the loader's fallback chain. It first asks the
+	orchestrator for an already-registered module, then checks ReplicatedStorage.shared for a direct child,
+	and finally performs a recursive ReplicatedStorage search before warning and returning nil.
+
+	@param orchestrator any -- Optional orchestrator that may expose GetModule for pre-registered shared modules.
+	@param name string -- Module name to resolve.
+	@return any -- Module value returned by orchestrator.GetModule or require(...), or nil when no matching ModuleScript exists.
+	@reads orchestrator.GetModule, ReplicatedStorage
 ]=]
 
 function ModuleLoader.getSharedModule(orchestrator: any, name: string): any
@@ -40,10 +44,13 @@ function ModuleLoader.getSharedModule(orchestrator: any, name: string): any
 	return nil
 end
 --[=[
-	@description Implements `ModuleLoader.requireSharedModule`.
-	@param orchestrator any -- `orchestrator` input parameter.
-	@param name string -- `name` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Resolves a shared module exactly like getSharedModule, but enforces that the dependency
+	exists. Missing modules raise an error immediately so callers fail fast instead of proceeding with nil.
+
+	@param orchestrator any -- Optional orchestrator used during shared-module lookup.
+	@param name string -- Module name that must be present.
+	@return any -- Resolved shared module value.
+	@throws Error when the requested module cannot be found.
 ]=]
 
 function ModuleLoader.requireSharedModule(orchestrator: any, name: string): any

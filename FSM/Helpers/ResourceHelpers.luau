@@ -24,32 +24,42 @@ local function deductResource(charEntity: any, field: string, cost: number): boo
 	return true
 end
 --[=[
-	@description Implements `ResourceHelpers.deductStamina`.
-	@param charEntity any -- `charEntity` input parameter.
-	@param cost number -- `cost` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
+	@description Attempts to spend stamina from a character entity by delegating to deductResource. The
+	operation succeeds only when the entity's current Stamina value is at least the requested cost.
+
+	@param charEntity any -- Character entity whose Stamina field should be reduced.
+	@param cost number -- Amount of stamina to consume.
+	@return boolean -- True when stamina was deducted, or false when the entity does not have enough stamina.
+	@writes charEntity.Stamina
 ]=]
 
 function ResourceHelpers.deductStamina(charEntity: any, cost: number): boolean
 	return deductResource(charEntity, "Stamina", cost)
 end
 --[=[
-	@description Implements `ResourceHelpers.deductMana`.
-	@param charEntity any -- `charEntity` input parameter.
-	@param cost number -- `cost` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
+	@description Attempts to spend mana from a character entity by delegating to deductResource. The helper
+	refuses to overdraw the Mana field and leaves it unchanged when the requested cost cannot be paid.
+
+	@param charEntity any -- Character entity whose Mana field should be reduced.
+	@param cost number -- Amount of mana to consume.
+	@return boolean -- True when mana was deducted, or false when available mana is below cost.
+	@writes charEntity.Mana
 ]=]
 
 function ResourceHelpers.deductMana(charEntity: any, cost: number): boolean
 	return deductResource(charEntity, "Mana", cost)
 end
 --[=[
-	@description Implements `ResourceHelpers.restoreResource`.
-	@param charEntity any -- `charEntity` input parameter.
-	@param field string -- `field` input parameter.
-	@param amount number -- `amount` input parameter.
-	@param maxField string -- `maxField` input parameter.
-	@return number -- Return value produced by the implementation, if any.
+	@description Restores a numeric resource toward its configured maximum. Current and max values are read
+	from the provided fields, coerced through tonumber, increased by the requested amount, and then capped
+	so the resource never exceeds maxField.
+
+	@param charEntity any -- Character entity whose resource field should be increased.
+	@param field string -- Field name holding the current resource value to restore.
+	@param amount number -- Amount to add before max clamping.
+	@param maxField string -- Field name holding the maximum allowed value for the resource.
+	@return number -- Final clamped value written back to charEntity[field].
+	@writes charEntity[field]
 ]=]
 
 function ResourceHelpers.restoreResource(charEntity: any, field: string, amount: number, maxField: string): number
@@ -60,9 +70,13 @@ function ResourceHelpers.restoreResource(charEntity: any, field: string, amount:
 	return newVal
 end
 --[=[
-	@description Implements `ResourceHelpers.clampResources`.
-	@param charEntity any -- `charEntity` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Clamps the entity's Health, Stamina, and Mana into safe runtime ranges using their matching
+	max fields. Missing or non-numeric values fall back to default caps (100 health, 100 stamina, 50 mana)
+	so malformed entity data is normalized instead of propagating impossible resource values.
+
+	@param charEntity any -- Character entity whose primary resources should be normalized in place.
+	@return nil
+	@writes charEntity.Health, charEntity.Stamina, charEntity.Mana
 ]=]
 
 function ResourceHelpers.clampResources(charEntity: any)

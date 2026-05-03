@@ -6,9 +6,13 @@
 ]=]
 local CrowdControlHelpers = {}
 --[=[
-	@description Implements `CrowdControlHelpers.acquireCCLock`.
-	@param charEntity any -- `charEntity` input parameter.
-	@return (boolean, string?) -- Return value produced by the implementation, if any.
+	@description Acquires the character's crowd-control lock before a stun/knock mutation is applied. The
+	helper refuses to proceed when another CC flow already holds the lock, and it rolls the in-memory flag
+	back if UpdateEntity fails so callers do not keep a stale lock locally.
+
+	@param charEntity any -- Character entity whose CCLock flag should be claimed and persisted.
+	@return (boolean, string?) -- True when the lock is successfully persisted; otherwise false plus the reason acquisition failed.
+	@writes charEntity.CCLock
 ]=]
 
 function CrowdControlHelpers.acquireCCLock(charEntity: any): (boolean, string?)
@@ -24,10 +28,14 @@ function CrowdControlHelpers.acquireCCLock(charEntity: any): (boolean, string?)
 	return true, nil
 end
 --[=[
-	@description Implements `CrowdControlHelpers.applyFlags`.
-	@param charEntity any -- `charEntity` input parameter.
-	@param flags { [string]: any } -- `flags` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
+	@description Applies a batch of crowd-control-related fields to the character entity and then persists
+	the updated entity in one UpdateEntity call. This is typically used to flip flags such as IsStunned,
+	IsKnocked, or movement permissions after a CC lock has already been acquired.
+
+	@param charEntity any -- Character entity that should receive the provided flag mutations.
+	@param flags { [string]: any } -- Map of field names to values that should be written onto the entity.
+	@return boolean -- True when UpdateEntity succeeds, or false when persistence/replication fails.
+	@writes charEntity[flagName] for each provided flag
 ]=]
 
 function CrowdControlHelpers.applyFlags(charEntity: any, flags: { [string]: any }): boolean
@@ -37,9 +45,12 @@ function CrowdControlHelpers.applyFlags(charEntity: any, flags: { [string]: any 
 	return charEntity:UpdateEntity() ~= false
 end
 --[=[
-	@description Implements `CrowdControlHelpers.releaseCCLock`.
-	@param charEntity any -- `charEntity` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
+	@description Releases the character's crowd-control lock and persists the unlocked state through
+	UpdateEntity. Callers typically use this after CC flags have been applied or rolled back.
+
+	@param charEntity any -- Character entity whose CCLock flag should be cleared.
+	@return boolean -- True when the unlocked state is persisted, or false when UpdateEntity reports failure.
+	@writes charEntity.CCLock
 ]=]
 
 function CrowdControlHelpers.releaseCCLock(charEntity: any): boolean

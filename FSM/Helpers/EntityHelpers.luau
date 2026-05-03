@@ -26,9 +26,13 @@ local function resolveCharacter(charEntity: any): Instance?
 	return nil
 end
 --[=[
-	@description Implements `EntityHelpers.getHumanoidAndRoot`.
-	@param subject any -- `subject` input parameter.
-	@return (Humanoid?, BasePart?) -- Return value produced by the implementation, if any.
+	@description Resolves the Humanoid and movement root for either a character model instance or an
+	entity-like table. Table inputs are first normalized through resolveCharacter, then the helper looks
+	for the first Humanoid plus HumanoidRootPart, falling back to PrimaryPart when no explicit root exists.
+
+	@param subject any -- Character model instance or entity table that can be resolved to one.
+	@return (Humanoid?, BasePart?) -- The resolved Humanoid and root BasePart, or nil values when the subject is not a character model.
+	@reads subject, character children, character.PrimaryPart
 ]=]
 
 function EntityHelpers.getHumanoidAndRoot(subject: any): (Humanoid?, BasePart?)
@@ -45,9 +49,13 @@ function EntityHelpers.getHumanoidAndRoot(subject: any): (Humanoid?, BasePart?)
 	return humanoid, root :: BasePart?
 end
 --[=[
-	@description Implements `EntityHelpers.getCharacterParts`.
-	@param charEntity any -- `charEntity` input parameter.
-	@return (Instance?, Humanoid?, BasePart?) -- Return value produced by the implementation, if any.
+	@description Resolves an entity to its character model and then returns the three pieces most gameplay
+	systems need: the model itself, its Humanoid, and its root part. Missing entities or subjects that do
+	not resolve to a Model produce all-nil results.
+
+	@param charEntity any -- Entity table whose Instance (or client fallback character) should represent a living character model.
+	@return (Instance?, Humanoid?, BasePart?) -- Character model, Humanoid, and root BasePart in that order; nils when resolution fails.
+	@reads charEntity.Instance, Players.LocalPlayer.Character, character descendants
 ]=]
 
 function EntityHelpers.getCharacterParts(charEntity: any): (Instance?, Humanoid?, BasePart?)
@@ -62,9 +70,12 @@ function EntityHelpers.getCharacterParts(charEntity: any): (Instance?, Humanoid?
 	return character, humanoid, root
 end
 --[=[
-	@description Implements `EntityHelpers.validateCharacterAlive`.
-	@param charEntity any -- `charEntity` input parameter.
-	@return (boolean, string?) -- Return value produced by the implementation, if any.
+	@description Verifies that an entity can participate in gameplay by checking for a character model,
+	a living Humanoid, and a usable root part. The first missing requirement returns false together with
+	a human-readable failure reason that callers can surface in logs or transition failures.
+
+	@param charEntity any -- Entity table expected to resolve to an active character.
+	@return (boolean, string?) -- True when the character model, Humanoid, and root part all exist and the Humanoid is alive; otherwise false plus a failure reason.
 ]=]
 
 function EntityHelpers.validateCharacterAlive(charEntity: any): (boolean, string?)
@@ -81,18 +92,26 @@ function EntityHelpers.validateCharacterAlive(charEntity: any): (boolean, string
 	return true, nil
 end
 --[=[
-	@description Implements `EntityHelpers.isCrowdControlled`.
-	@param charEntity any -- `charEntity` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
+	@description Reports whether a character entity is currently under hard crowd control by checking the
+	replicated stun and knock flags used throughout combat and movement FSMs.
+
+	@param charEntity any -- Character entity exposing IsStunned and/or IsKnocked flags.
+	@return boolean -- True when either IsStunned or IsKnocked is set to true.
+	@reads charEntity.IsStunned, charEntity.IsKnocked
 ]=]
 
 function EntityHelpers.isCrowdControlled(charEntity: any): boolean
 	return charEntity.IsStunned == true or charEntity.IsKnocked == true
 end
 --[=[
-	@description Implements `EntityHelpers.syncHumanoidFromEntity`.
-	@param charEntity any -- `charEntity` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Pushes replicated health values from a character entity onto the live Humanoid. MaxHealth
+	is applied first when valid, then Health is clamped into the Humanoid's current max range, written back
+	onto the entity, and mirrored to Humanoid.Health so server and character model stay in sync.
+
+	@param charEntity any -- Character entity whose Health and MaxHealth fields should drive the live Humanoid.
+	@return nil
+	@reads charEntity.Health, charEntity.MaxHealth, character humanoid
+	@writes charEntity.Health, humanoid.MaxHealth, humanoid.Health
 ]=]
 
 function EntityHelpers.syncHumanoidFromEntity(charEntity: any)
