@@ -107,8 +107,37 @@ function ToggleWeaponJob:RegisterStates()
 
 	self:AddState("ResolveCurrentState", {
 		OnEnter = function(_, fsm)
+			local selectedItemId = fsm.PlayerEntity.WeaponEqp
 			local equippedRight = fsm.CharacterEntity.EquippedRight
-			fsm.IsEquipped = type(equippedRight) == "string" and equippedRight ~= ""
+			local equippedLeft = fsm.CharacterEntity.EquippedLeft
+			local rightItemId = if type(equippedRight) == "string" and equippedRight ~= "" then equippedRight else nil
+			local leftItemId = if type(equippedLeft) == "string" and equippedLeft ~= "" then equippedLeft else nil
+			local equippedItemId: string? = nil
+			local equippedHand = "Right"
+
+			if type(selectedItemId) == "string" and selectedItemId ~= "" then
+				if rightItemId == selectedItemId then
+					equippedItemId = rightItemId
+					equippedHand = "Right"
+				elseif leftItemId == selectedItemId then
+					equippedItemId = leftItemId
+					equippedHand = "Left"
+				end
+			end
+
+			if equippedItemId == nil then
+				if rightItemId ~= nil then
+					equippedItemId = rightItemId
+					equippedHand = "Right"
+				elseif leftItemId ~= nil then
+					equippedItemId = leftItemId
+					equippedHand = "Left"
+				end
+			end
+
+			fsm.Hand = equippedHand
+			fsm.EquippedItemId = equippedItemId
+			fsm.IsEquipped = equippedItemId ~= nil
 			fsm.State = "ChooseBranch"
 		end,
 	}, { "ChooseBranch", "Failed" })
@@ -123,6 +152,11 @@ function ToggleWeaponJob:RegisterStates()
 			local itemId = fsm.PlayerEntity.WeaponEqp
 			if type(itemId) ~= "string" or itemId == "" then
 				fsm:Fail("No weapon selected to equip")
+				return
+			end
+			local inventory = fsm.PlayerEntity.Inventory
+			if typeof(inventory) == "table" and not table.find(inventory, itemId) then
+				fsm:Fail("Weapon " .. itemId .. " not in inventory")
 				return
 			end
 
@@ -147,7 +181,7 @@ function ToggleWeaponJob:RegisterStates()
 			beginChildJob(fsm, fsm:GetOrchestrator(), "RunUnEquip", "UnEquipJob", "ValidateRequest", {
 				CharacterEntityId = fsm.CharacterEntityId,
 				PlayerEntityId = fsm.PlayerEntityId,
-				ItemId = fsm.CharacterEntity.EquippedRight,
+				ItemId = fsm.EquippedItemId,
 				Hand = fsm.Hand,
 			}, "Sub-unequip")
 		end,

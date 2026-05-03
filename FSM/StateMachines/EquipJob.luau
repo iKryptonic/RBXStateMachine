@@ -52,6 +52,20 @@ local function getHandProperty(hand: string): string
 	return if hand == "Right" then "EquippedRight" else "EquippedLeft"
 end
 
+local function ensureEntitiesAlive(fsm): (any?, any?, any?)
+	local orchestrator = fsm:GetOrchestrator()
+	local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
+	local playerEntity = orchestrator.GetEntity(fsm.PlayerEntityId)
+	if not charEntity or not playerEntity then
+		return nil, nil, nil
+	end
+	local character = charEntity.Instance
+	if not character or not character.Parent then
+		return nil, nil, nil
+	end
+	return charEntity, playerEntity, character
+end
+
 function EquipJob:RegisterStates()
 	self:AddState("ValidateRequest", {
 		OnEnter = function(_, fsm)
@@ -70,6 +84,12 @@ function EquipJob:RegisterStates()
 			local itemId = tostring(fsm.ItemId or "")
 			if itemId == "" then
 				fsm:Fail("No ItemId provided")
+				return
+			end
+
+			local assets = ReplicatedStorage:FindFirstChild("Assets")
+			if not assets or not assets:FindFirstChild(itemId, true) then
+				fsm:Fail("Asset not found for item: " .. itemId)
 				return
 			end
 
@@ -103,10 +123,19 @@ function EquipJob:RegisterStates()
 			local hand = fsm.Hand :: string
 			local equipLock = if typeof(charEntity.EquipLock) == "table" then table.clone(charEntity.EquipLock) else {}
 			if equipLock[hand] then
-				fsm:Fail("EquipLock already held for hand: " .. hand)
+				local retryCount = tonumber(fsm.Context._equipLockRetryCount) or 0
+				if retryCount < 5 then
+					fsm.Context._equipLockRetryCount = retryCount + 1
+					fsm.WaitSpan = 0.3
+					fsm.State = "AcquireEquipLock"
+				else
+					fsm:Fail("Timed out waiting for EquipLock for hand: " .. hand)
+				end
 				return
 			end
 
+			fsm.Context._equipLockRetryCount = 0
+			fsm.Context._equipLockHeld = true
 			equipLock[hand] = true
 			charEntity.EquipLock = equipLock
 			charEntity:UpdateEntity()
@@ -182,6 +211,10 @@ function EquipJob:RegisterStates()
 						local existingItem = weld.Part1.Parent
 						if existingItem then
 							local existingData = equipHelpers.GetItemData(existingItem)
+							fsm.Context._previousItem = existingItem
+							fsm.Context._previousItemData = existingData
+							fsm.Context._previousItemId = currentEquipped
+							fsm.Context._previousItemAction = if existingData and existingData.Stowable then "Stow" else "Drop"
 							if existingData and existingData.Stowable then
 								equipHelpers.StowItem(existingItem, character, weld, existingData)
 							else
@@ -249,24 +282,30 @@ function EquipJob:RegisterStates()
 
 	self:AddState("MountItem", {
 		OnEnter = function(_, fsm)
+			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
+			if not charEntity or not playerEntity or not character then
+				StateTransitionHelpers.queueRollback(fsm, "Entities no longer alive during MountItem")
+				return
+			end
+
 			local orchestrator = fsm:GetOrchestrator()
 			local equipHelpers = getEquipHelpers(orchestrator)
-			equipHelpers.MountItem(fsm.Context._clonedItem, fsm.Context._handPart)
+			local ok, err = pcall(function()
+				equipHelpers.MountItem(fsm.Context._clonedItem, fsm.Context._handPart)
+			end)
+			if not ok then
+				StateTransitionHelpers.queueRollback(fsm, "MountItem failed: " .. tostring(err))
+				return
+			end
 			fsm.State = "CommitState"
 		end,
 	}, { "CommitState", "Rollback", "Failed" })
 
 	self:AddState("CommitState", {
 		OnEnter = function(_, fsm)
-			local orchestrator = fsm:GetOrchestrator()
-			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-			local playerEntity = orchestrator.GetEntity(fsm.PlayerEntityId)
-			if not charEntity then
-				StateTransitionHelpers.queueRollback(fsm, "CharacterEntity no longer exists")
-				return
-			end
-			if not playerEntity then
-				StateTransitionHelpers.queueRollback(fsm, "PlayerEntity no longer exists")
+			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
+			if not charEntity or not playerEntity or not character then
+				StateTransitionHelpers.queueRollback(fsm, "Entities no longer alive during CommitState")
 				return
 			end
 
@@ -281,6 +320,15 @@ function EquipJob:RegisterStates()
 			if hand == "Right" then
 				playerEntity.WeaponEqp = fsm.ItemId
 			end
+			local inventory = playerEntity.Inventory
+			if typeof(inventory) == "table" then
+				local idx = table.find(inventory, fsm.ItemId)
+				if idx then
+					inventory = table.clone(inventory)
+					table.remove(inventory, idx)
+					playerEntity.Inventory = inventory
+				end
+			end
 			playerEntity:UpdateEntity()
 
 			fsm.State = "EmitIntent"
@@ -289,14 +337,14 @@ function EquipJob:RegisterStates()
 
 	self:AddState("EmitIntent", {
 		OnEnter = function(_, fsm)
-			local orchestrator = fsm:GetOrchestrator()
-			local intentSchema = getIntentSchema(orchestrator)
-			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-			if not charEntity then
-				StateTransitionHelpers.queueRollback(fsm, "CharacterEntity no longer exists")
+			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
+			if not charEntity or not playerEntity or not character then
+				StateTransitionHelpers.queueRollback(fsm, "Entities no longer alive during EmitIntent")
 				return
 			end
 
+			local orchestrator = fsm:GetOrchestrator()
+			local intentSchema = getIntentSchema(orchestrator)
 			intentSchema.AppendIntent(charEntity, {
 				Kind = "Equip",
 				Payload = {
@@ -313,13 +361,14 @@ function EquipJob:RegisterStates()
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-			if charEntity then
+			if charEntity and fsm.Context._equipLockHeld then
 				local equipLock = if typeof(charEntity.EquipLock) == "table"
 					then table.clone(charEntity.EquipLock)
 					else {}
 				equipLock[fsm.Hand] = nil
 				charEntity.EquipLock = equipLock
 				charEntity:UpdateEntity()
+				fsm.Context._equipLockHeld = false
 			end
 
 			if fsm.Context._failureReason then
@@ -337,6 +386,72 @@ function EquipJob:RegisterStates()
 			if clonedItem and clonedItem.Parent then
 				clonedItem:Destroy()
 			end
+
+			local previousItem = fsm.Context._previousItem
+			if previousItem then
+				local action = tostring(fsm.Context._previousItemAction or "unknown action")
+				local function logRollbackWarning(message: string)
+					if type(fsm.Log) == "function" then
+						fsm:Log({ Level = "WARN", Message = message })
+					else
+						warn(message)
+					end
+				end
+
+				local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
+				if charEntity and playerEntity and character and previousItem.Parent then
+					local orchestrator = fsm:GetOrchestrator()
+					local equipHelpers = getEquipHelpers(orchestrator)
+					local handPart = equipHelpers.GetHandPart(character, fsm.Hand)
+					local previousData = fsm.Context._previousItemData or equipHelpers.GetItemData(previousItem)
+					local handle = previousItem:FindFirstChild("Handle")
+					if not handle or not handle:IsA("BasePart") then
+						handle = previousItem.PrimaryPart
+						if not handle then
+							for _, child in previousItem:GetChildren() do
+								if child:IsA("BasePart") then
+									handle = child
+									break
+								end
+							end
+						end
+					end
+
+					if handPart and handle and handle:IsA("BasePart") then
+						local ok, err = pcall(function()
+							equipHelpers.CreateWeld(handPart, handle, if previousData then previousData.GripC1 or CFrame.new() else CFrame.new())
+							equipHelpers.MountItem(previousItem, handPart)
+						end)
+						if not ok then
+							logRollbackWarning(
+								string.format(
+									"Equip rollback could not restore previous item '%s' after %s: %s",
+									tostring(fsm.Context._previousItemId or previousItem.Name),
+									action,
+									tostring(err)
+								)
+							)
+						end
+					else
+						logRollbackWarning(
+							string.format(
+								"Equip rollback could not restore previous item '%s' after %s: missing hand part or handle",
+								tostring(fsm.Context._previousItemId or previousItem.Name),
+								action
+							)
+						)
+					end
+				else
+					logRollbackWarning(
+						string.format(
+							"Equip rollback may have lost previous item '%s' after %s",
+							tostring(fsm.Context._previousItemId or previousItem.Name),
+							action
+						)
+					)
+				end
+			end
+
 			fsm.State = "ReleaseEquipLock"
 		end,
 	}, { "ReleaseEquipLock" })

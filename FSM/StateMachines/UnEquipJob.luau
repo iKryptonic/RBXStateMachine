@@ -49,6 +49,31 @@ local function getHandProperty(hand: string): string
 	return if hand == "Right" then "EquippedRight" else "EquippedLeft"
 end
 
+local function ensureEntitiesAlive(fsm): (any?, any?, any?)
+	local orchestrator = fsm:GetOrchestrator()
+	local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
+	if not charEntity then
+		return nil, nil, nil
+	end
+
+	local playerEntityId = fsm.PlayerEntityId
+	if type(playerEntityId) ~= "string" or playerEntityId == "" then
+		playerEntityId = charEntity.PlayerEntityId
+	end
+	local playerEntity = if type(playerEntityId) == "string" and playerEntityId ~= ""
+		then orchestrator.GetEntity(playerEntityId)
+		else nil
+	if not playerEntity then
+		return nil, nil, nil
+	end
+
+	local character = charEntity.Instance
+	if not character or not character.Parent then
+		return nil, nil, nil
+	end
+	return charEntity, playerEntity, character
+end
+
 function UnEquipJob:RegisterStates()
 	self:AddState("ValidateRequest", {
 		OnEnter = function(_, fsm)
@@ -82,10 +107,19 @@ function UnEquipJob:RegisterStates()
 			local hand = fsm.Hand :: string
 			local equipLock = if typeof(charEntity.EquipLock) == "table" then table.clone(charEntity.EquipLock) else {}
 			if equipLock[hand] then
-				fsm:Fail("EquipLock already held for hand: " .. hand)
+				local retryCount = tonumber(fsm.Context._equipLockRetryCount) or 0
+				if retryCount < 5 then
+					fsm.Context._equipLockRetryCount = retryCount + 1
+					fsm.WaitSpan = 0.3
+					fsm.State = "AcquireEquipLock"
+				else
+					fsm:Fail("Timed out waiting for EquipLock for hand: " .. hand)
+				end
 				return
 			end
 
+			fsm.Context._equipLockRetryCount = 0
+			fsm.Context._equipLockHeld = true
 			equipLock[hand] = true
 			charEntity.EquipLock = equipLock
 			charEntity:UpdateEntity()
@@ -95,20 +129,14 @@ function UnEquipJob:RegisterStates()
 
 	self:AddState("ResolveExistingItem", {
 		OnEnter = function(_, fsm)
+			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
+			if not charEntity or not playerEntity or not character then
+				StateTransitionHelpers.queueRollback(fsm, "Entities no longer alive during ResolveExistingItem")
+				return
+			end
+
 			local orchestrator = fsm:GetOrchestrator()
 			local equipHelpers = getEquipHelpers(orchestrator)
-			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-			if not charEntity then
-				StateTransitionHelpers.queueRollback(fsm, "CharacterEntity no longer exists")
-				return
-			end
-
-			local character = charEntity.Instance
-			if not character or not character:IsA("Model") then
-				StateTransitionHelpers.queueRollback(fsm, "Character model is unavailable")
-				return
-			end
-
 			local hand = fsm.Hand :: string
 			local handPart = equipHelpers.GetHandPart(character, hand)
 			if not handPart then
@@ -135,24 +163,30 @@ function UnEquipJob:RegisterStates()
 
 	self:AddState("DoUnEquip", {
 		OnEnter = function(_, fsm)
+			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
+			if not charEntity or not playerEntity or not character then
+				StateTransitionHelpers.queueRollback(fsm, "Entities no longer alive during DoUnEquip")
+				return
+			end
+
 			local orchestrator = fsm:GetOrchestrator()
 			local equipHelpers = getEquipHelpers(orchestrator)
-			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-			if not charEntity then
-				StateTransitionHelpers.queueRollback(fsm, "CharacterEntity no longer exists")
-				return
-			end
-
-			local character = charEntity.Instance
-			if not character or not character:IsA("Model") then
-				StateTransitionHelpers.queueRollback(fsm, "Character model is unavailable")
-				return
-			end
-
 			local weld = fsm.Context._resolvedWeld
 			local item = fsm.Context._resolvedItem
 			local itemData = fsm.Context._resolvedItemData
-			if weld and item then
+			if not weld or not item then
+				local message = string.format(
+					"UnEquipJob proceeding without physical item for hand %s (weld=%s, item=%s)",
+					tostring(fsm.Hand),
+					tostring(weld ~= nil),
+					tostring(item ~= nil)
+				)
+				if type(fsm.Log) == "function" then
+					fsm:Log({ Level = "WARN", Message = message })
+				else
+					warn(message)
+				end
+			else
 				if itemData and itemData.Stowable then
 					equipHelpers.StowItem(item, character, weld, itemData)
 				else
@@ -166,10 +200,9 @@ function UnEquipJob:RegisterStates()
 
 	self:AddState("CommitState", {
 		OnEnter = function(_, fsm)
-			local orchestrator = fsm:GetOrchestrator()
-			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-			if not charEntity then
-				StateTransitionHelpers.queueRollback(fsm, "CharacterEntity no longer exists")
+			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
+			if not charEntity or not playerEntity or not character then
+				StateTransitionHelpers.queueRollback(fsm, "Entities no longer alive during CommitState")
 				return
 			end
 
@@ -177,18 +210,23 @@ function UnEquipJob:RegisterStates()
 			charEntity[getHandProperty(hand)] = ""
 			charEntity:UpdateEntity()
 
-			local playerEntityId = charEntity.PlayerEntityId
-			if type(playerEntityId) == "string" and playerEntityId ~= "" then
-				local playerEntity = orchestrator.GetEntity(playerEntityId)
-				if playerEntity then
-					local equipped = if typeof(playerEntity.Equipped) == "table"
-						then table.clone(playerEntity.Equipped)
-						else {}
-					equipped[hand] = nil
-					playerEntity.Equipped = equipped
-					playerEntity:UpdateEntity()
+			local equipped = if typeof(playerEntity.Equipped) == "table"
+				then table.clone(playerEntity.Equipped)
+				else {}
+			equipped[hand] = nil
+			playerEntity.Equipped = equipped
+			if hand == "Right" then
+				playerEntity.WeaponEqp = ""
+			end
+			local inventory = playerEntity.Inventory
+			if typeof(inventory) == "table" and fsm.Context._resolvedItemId and fsm.Context._resolvedItemId ~= "" then
+				if not table.find(inventory, fsm.Context._resolvedItemId) then
+					inventory = table.clone(inventory)
+					table.insert(inventory, fsm.Context._resolvedItemId)
+					playerEntity.Inventory = inventory
 				end
 			end
+			playerEntity:UpdateEntity()
 
 			fsm.State = "EmitIntent"
 		end,
@@ -196,14 +234,14 @@ function UnEquipJob:RegisterStates()
 
 	self:AddState("EmitIntent", {
 		OnEnter = function(_, fsm)
-			local orchestrator = fsm:GetOrchestrator()
-			local intentSchema = getIntentSchema(orchestrator)
-			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-			if not charEntity then
-				StateTransitionHelpers.queueRollback(fsm, "CharacterEntity no longer exists")
+			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
+			if not charEntity or not playerEntity or not character then
+				StateTransitionHelpers.queueRollback(fsm, "Entities no longer alive during EmitIntent")
 				return
 			end
 
+			local orchestrator = fsm:GetOrchestrator()
+			local intentSchema = getIntentSchema(orchestrator)
 			intentSchema.AppendIntent(charEntity, {
 				Kind = "UnEquip",
 				Payload = {
@@ -220,13 +258,14 @@ function UnEquipJob:RegisterStates()
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
-			if charEntity then
+			if charEntity and fsm.Context._equipLockHeld then
 				local equipLock = if typeof(charEntity.EquipLock) == "table"
 					then table.clone(charEntity.EquipLock)
 					else {}
 				equipLock[fsm.Hand] = nil
 				charEntity.EquipLock = equipLock
 				charEntity:UpdateEntity()
+				fsm.Context._equipLockHeld = false
 			end
 
 			if fsm.Context._failureReason then

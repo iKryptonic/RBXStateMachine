@@ -36,6 +36,19 @@ local LoadPlayerJob = {
 
 local DEFAULT_INVENTORY = { "1", "2", "3", "4", "5", "6", "7" }
 
+local COMMAND_COOLDOWN = 0.1 -- 100ms between commands per player
+local lastCommandTime: { [number]: number } = {} -- userId → os.clock()
+
+local function isRateLimited(userId: number): boolean
+	local now = os.clock()
+	local last = lastCommandTime[userId]
+	if last and (now - last) < COMMAND_COOLDOWN then
+		return true
+	end
+	lastCommandTime[userId] = now
+	return false
+end
+
 local function registerEntityCommand(
 	orchestrator: any,
 	entityId: string,
@@ -95,7 +108,7 @@ local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player:
 		dirty = true
 	end
 
-	if type(playerEntity.WeaponEqp) ~= "string" then
+	if type(playerEntity.WeaponEqp) ~= "string" or playerEntity.WeaponEqp == "1" then
 		playerEntity.WeaponEqp = ""
 		dirty = true
 	end
@@ -521,6 +534,12 @@ function LoadPlayerJob:RegisterStates()
 				if not isAuthorized(player) then
 					return
 				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
+					return
+				end
 				createAndStartStateMachine(
 					orchestrator,
 					"AttackJob",
@@ -536,6 +555,12 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestMeleeAttack", function(player, comboSlot)
 				if not isAuthorized(player) then
+					return
+				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
 					return
 				end
 				createAndStartStateMachine(
@@ -559,6 +584,12 @@ function LoadPlayerJob:RegisterStates()
 					if not isAuthorized(player) then
 						return
 					end
+					if isRateLimited(player.UserId) then
+						return
+					end
+					if not player.Parent then
+						return
+					end
 					createAndStartStateMachine(
 						orchestrator,
 						"DamageJob",
@@ -575,6 +606,12 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "SetBlocking", function(player, isBlocking)
 				if not isAuthorized(player) then
+					return
+				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
 					return
 				end
 				local charEntity = orchestrator.GetEntity(charEntityId)
@@ -601,6 +638,12 @@ function LoadPlayerJob:RegisterStates()
 				if not isAuthorized(player) then
 					return
 				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
+					return
+				end
 				createAndStartStateMachine(
 					orchestrator,
 					"EquipJob",
@@ -619,6 +662,12 @@ function LoadPlayerJob:RegisterStates()
 				if not isAuthorized(player) then
 					return
 				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
+					return
+				end
 				createAndStartStateMachine(
 					orchestrator,
 					"UnEquipJob",
@@ -635,6 +684,12 @@ function LoadPlayerJob:RegisterStates()
 				if not isAuthorized(player) then
 					return
 				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
+					return
+				end
 				createAndStartStateMachine(
 					orchestrator,
 					"ToggleWeaponJob",
@@ -642,6 +697,77 @@ function LoadPlayerJob:RegisterStates()
 					{
 						CharacterEntityId = charEntityId,
 						PlayerEntityId = playerEntityId,
+					},
+					"Validate"
+				)
+			end)
+
+			registerEntityCommand(orchestrator, charEntityId, "RequestAddItem", function(player, itemId)
+				if not isAuthorized(player) then
+					return
+				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"InventoryItemFSM",
+					"AddItem_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						Operation = "Add",
+						PlayerEntityId = playerEntityId,
+						ItemId = tostring(itemId or ""),
+					},
+					"Validate"
+				)
+			end)
+
+			registerEntityCommand(orchestrator, charEntityId, "RequestDropItem", function(player, itemId)
+				if not isAuthorized(player) then
+					return
+				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"InventoryItemFSM",
+					"Drop_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						Operation = "Drop",
+						CharacterEntityId = charEntityId,
+						PlayerEntityId = playerEntityId,
+						ItemId = tostring(itemId or ""),
+					},
+					"Validate"
+				)
+			end)
+
+			registerEntityCommand(orchestrator, charEntityId, "RequestMoveItem", function(player, itemId, direction)
+				if not isAuthorized(player) then
+					return
+				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
+					return
+				end
+				createAndStartStateMachine(
+					orchestrator,
+					"InventoryItemFSM",
+					"MoveItem_" .. charEntityId .. "_" .. tostring(os.clock()),
+					{
+						Operation = "Move",
+						PlayerEntityId = playerEntityId,
+						ItemId = tostring(itemId or ""),
+						Direction = tostring(direction or ""),
 					},
 					"Validate"
 				)
@@ -657,6 +783,12 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestAbility", function(player, abilityId)
 				if not isAuthorized(player) then
+					return
+				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
 					return
 				end
 				createAndStartStateMachine(
@@ -676,6 +808,12 @@ function LoadPlayerJob:RegisterStates()
 				if not isAuthorized(player) then
 					return
 				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
+					return
+				end
 				createAndStartStateMachine(
 					orchestrator,
 					"ProjectileAttackJob",
@@ -690,6 +828,12 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestUseItem", function(player, slotIndex)
 				if not isAuthorized(player) then
+					return
+				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
 					return
 				end
 				local playerEntity = orchestrator.GetEntity(playerEntityId)
@@ -724,6 +868,12 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestUnlockTalent", function(player, nodeId)
 				if not isAuthorized(player) then
+					return
+				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
 					return
 				end
 
@@ -779,6 +929,12 @@ function LoadPlayerJob:RegisterStates()
 				if not isAuthorized(player) then
 					return
 				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
+					return
+				end
 				createAndStartStateMachine(
 					orchestrator,
 					"ReplicateIntentJob",
@@ -800,6 +956,12 @@ function LoadPlayerJob:RegisterStates()
 					if player ~= nil and not isAuthorized(player) then
 						return
 					end
+					if player ~= nil and isRateLimited(player.UserId) then
+						return
+					end
+					if player ~= nil and not player.Parent then
+						return
+					end
 
 					local statusEffectHelper = ModuleLoader.requireSharedModule(orchestrator, "StatusEffectHelper")
 					local requestedEffectId = tostring(effectId or "")
@@ -812,6 +974,12 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "RequestAllocateStat", function(player, statName)
 				if not isAuthorized(player) then
+					return
+				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
 					return
 				end
 				local statDefs = ModuleLoader.getSharedModule(orchestrator, "StatDefs")
@@ -867,6 +1035,12 @@ function LoadPlayerJob:RegisterStates()
 
 			registerEntityCommand(orchestrator, charEntityId, "SetSprinting", function(player, isSprinting)
 				if not isAuthorized(player) then
+					return
+				end
+				if isRateLimited(player.UserId) then
+					return
+				end
+				if not player.Parent then
 					return
 				end
 				local charEntity = orchestrator.GetEntity(charEntityId)

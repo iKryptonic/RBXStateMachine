@@ -78,8 +78,8 @@ function BlockJob:RegisterStates()
 				return
 			end
 			if charEntity:UpdateEntity() == false then
-				fsm:Fail("Failed to start blocking")
-				return
+				-- UpdateEntity returns false for "no pending changes" which is not a real failure
+				fsm:Log({ Level = "WARN", Message = "No pending changes during block broadcast" })
 			end
 			fsm._startedBlocking = true
 			fsm.State = "EmitBlockIntent"
@@ -145,8 +145,8 @@ function BlockJob:RegisterStates()
 				return
 			end
 			if charEntity:UpdateEntity() == false then
-				fsm:Fail("Failed to stop blocking")
-				return
+				-- UpdateEntity returns false for "no pending changes" which is not a real failure
+				fsm:Log({ Level = "WARN", Message = "No pending changes during unblock broadcast" })
 			end
 			fsm._startedBlocking = false
 			fsm.State = "Completed"

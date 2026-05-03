@@ -599,8 +599,8 @@ function AttackJob:RegisterStates()
 				characterEntity.CanMove = if typeof(prior.CanMove) == "boolean" then prior.CanMove else true
 				characterEntity.MoveSpeedCap = if typeof(prior.MoveSpeedCap) == "number" then prior.MoveSpeedCap else 16
 				characterEntity.MouseLocked = if typeof(prior.MouseLocked) == "boolean" then prior.MouseLocked else true
-				if not characterEntity:UpdateEntity(fsm.Id) and fsm.Context._failureReason == nil then
-					fsm.Context._failureReason = "Failed to rollback movement constraints"
+				if characterEntity:UpdateEntity(fsm.Id) == false and type(fsm.Log) == "function" then
+					fsm:Log({ Level = "WARN", Message = "No pending changes during attack constraint rollback" })
 				end
 				fsm.Context._constraintsApplied = false
 			end
@@ -613,9 +613,7 @@ function AttackJob:RegisterStates()
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity and fsm.Context._combatLockApplied == true then
 				characterEntity.CombatLock = false
-				if not characterEntity:UpdateEntity(fsm.Id) and fsm.Context._failureReason == nil then
-					fsm.Context._failureReason = "Failed to clear combat lock"
-				end
+				characterEntity:UpdateEntity(fsm.Id)
 				fsm.Context._combatLockApplied = false
 			end
 

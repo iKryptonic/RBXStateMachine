@@ -1,8 +1,9 @@
 --!nocheck
 -- @Name Test_EquipJob
--- @Author Copilot
+-- @Author iKrypto
 -- @Description Unit tests for EquipJob module loading and request validation flow.
 
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)
 
@@ -66,6 +67,38 @@ local function loadEquipJob(orchestrator)
 	return ok, result, cleanup
 end
 
+local function setupAssets(assetIds: { string })
+	local assets = ReplicatedStorage:FindFirstChild("Assets")
+	local createdAssetsRoot = false
+	if not assets then
+		assets = Instance.new("Folder")
+		assets.Name = "Assets"
+		assets.Parent = ReplicatedStorage
+		createdAssetsRoot = true
+	end
+
+	local createdAssets = {}
+	for _, assetId in ipairs(assetIds) do
+		if not assets:FindFirstChild(assetId) then
+			local asset = Instance.new("Folder")
+			asset.Name = assetId
+			asset.Parent = assets
+			table.insert(createdAssets, asset)
+		end
+	end
+
+	return function()
+		for _, asset in ipairs(createdAssets) do
+			if asset.Parent then
+				asset:Destroy()
+			end
+		end
+		if createdAssetsRoot and assets.Parent then
+			assets:Destroy()
+		end
+	end
+end
+
 local function captureStates(job)
 	local states = {}
 	job.AddState = function(self, name, definition, transitions)
@@ -112,7 +145,7 @@ function Test_EquipJob.Run()
 			},
 			Player_01 = {
 				EntityId = "Player_01",
-				Inventory = { "Sword01", "Shield01" },
+				Inventory = { "Sword01", "Shield01", "Ghost01" },
 			},
 		}
 		local orchestrator = {
@@ -120,15 +153,20 @@ function Test_EquipJob.Run()
 				return entities[entityId]
 			end,
 		}
+		local cleanupAssets = setupAssets({ "Sword01", "Shield01", "Hammer01" })
 		local ok, job, cleanup = loadEquipJob(orchestrator)
+		local function cleanupAll()
+			cleanupAssets()
+			cleanup()
+		end
 		t:Assert(ok, "EquipJob should load for validation tests")
 		if not ok then
-			cleanup()
+			cleanupAll()
 			return
 		end
 		if type(job.RegisterStates) ~= "function" then
 			t:Assert(false, "EquipJob should expose RegisterStates for validation tests")
-			cleanup()
+			cleanupAll()
 			return
 		end
 
@@ -161,6 +199,9 @@ function Test_EquipJob.Run()
 		local missingItem = runValidate({ CharacterEntityId = "Char_01", PlayerEntityId = "Player_01", ItemId = nil })
 		t:AssertEquals(missingItem.Failure, "No ItemId provided", "ValidateRequest should require ItemId")
 
+		local missingAsset = runValidate({ CharacterEntityId = "Char_01", PlayerEntityId = "Player_01", ItemId = "Ghost01" })
+		t:AssertEquals(missingAsset.Failure, "Asset not found for item: Ghost01", "ValidateRequest should reject items whose assets are missing")
+
 		local invalidHand = runValidate({ CharacterEntityId = "Char_01", PlayerEntityId = "Player_01", ItemId = "Sword01", Hand = "Foot" })
 		t:AssertEquals(invalidHand.Failure, "Invalid hand: Foot", "ValidateRequest should reject invalid hands")
 
@@ -172,7 +213,7 @@ function Test_EquipJob.Run()
 		t:AssertEquals(success.Context.Hand, "Right", "ValidateRequest should default Hand to Right")
 		t:AssertEquals(success.Context.ItemId, "Sword01", "ValidateRequest should store ItemId in context")
 		t:AssertEquals(success.State, "AcquireEquipLock", "ValidateRequest should advance to AcquireEquipLock on success")
-		cleanup()
+		cleanupAll()
 	end)
 
 	return tester:PrintSummary()

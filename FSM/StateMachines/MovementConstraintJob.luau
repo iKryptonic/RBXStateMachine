@@ -68,9 +68,8 @@ function MovementConstraintJob:RegisterStates()
 			end
 
 			fsm._patchApplied = appliedPatch
-			if appliedPatch and charEntity:UpdateEntity() == false then
-				fsm:Fail("Failed to apply movement constraint patch")
-				return
+			if appliedPatch and charEntity:UpdateEntity() == false and type(fsm.Log) == "function" then
+				fsm:Log({ Level = "WARN", Message = "No pending changes during movement constraint apply" })
 			end
 
 			fsm.State = "WaitDuration"
@@ -95,10 +94,7 @@ function MovementConstraintJob:RegisterStates()
 			charEntity.CanMove = snapshot.CanMove
 			charEntity.MoveSpeedCap = snapshot.MoveSpeedCap
 			charEntity.MouseLocked = snapshot.MouseLocked
-			if charEntity:UpdateEntity() == false then
-				fsm:Fail("Failed to revert movement constraint patch")
-				return
-			end
+			charEntity:UpdateEntity()
 
 			fsm._patchApplied = false
 			fsm.State = "Completed"
