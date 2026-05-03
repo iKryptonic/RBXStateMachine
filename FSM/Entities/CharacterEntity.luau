@@ -42,6 +42,7 @@ local CharacterEntity = {
 		AnimationState = { Type = "string", Replicate = true, Persist = false },
 		SprintIntent = { Type = "boolean", Replicate = false, Persist = false },
 		InputMode = { Type = "string", Replicate = false, Persist = false },
+		Instance = { Type = "any", Replicate = false, Persist = false },
 	},
 }
 

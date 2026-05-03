@@ -514,6 +514,7 @@ function LoadPlayerJob:RegisterStates()
 				return
 			end
 
+			charEntity.Instance = character
 			applyCharacterDefaults(charEntity, character, userId, playerEntityId)
 			local playerEntity = orchestrator.GetEntity(playerEntityId)
 			if playerEntity then
