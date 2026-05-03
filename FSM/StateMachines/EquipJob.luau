@@ -131,6 +131,18 @@ function EquipJob:RegisterStates()
 
 			local handle = item:FindFirstChild("Handle")
 			if not handle or not handle:IsA("BasePart") then
+				-- Fallback: use PrimaryPart or first BasePart child
+				handle = item.PrimaryPart
+				if not handle then
+					for _, child in item:GetChildren() do
+						if child:IsA("BasePart") then
+							handle = child
+							break
+						end
+					end
+				end
+			end
+			if not handle or not handle:IsA("BasePart") then
 				item:Destroy()
 				StateTransitionHelpers.queueRollback(fsm, "Item has no Handle part: " .. tostring(fsm.ItemId))
 				return
