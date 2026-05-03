@@ -60,6 +60,56 @@ local function getTargetParts(player: Player, entity: any): (Model?, Humanoid?, 
 	return character, humanoid, rootPart
 end
 
+-- Indicator management (module-level helpers operating on FSM context)
+local function destroyIndicator(fsm: any)
+	local indicator = fsm.Context._indicator
+	if indicator then
+		indicator:Destroy()
+		fsm.Context._indicator = nil
+		fsm.Context._indicatorLabel = nil
+		fsm.Context._indicatorAdornee = nil
+	end
+end
+
+local function ensureIndicator(fsm: any, targetCharacter: Model)
+	local adornPart = targetCharacter:FindFirstChild("Head")
+		or targetCharacter:FindFirstChild("HumanoidRootPart")
+	if not adornPart then
+		destroyIndicator(fsm)
+		return
+	end
+
+	local existingIndicator = fsm.Context._indicator
+	if existingIndicator and fsm.Context._indicatorAdornee == adornPart and existingIndicator.Parent == adornPart then
+		return
+	end
+
+	destroyIndicator(fsm)
+
+	local billboard = Instance.new("BillboardGui")
+	billboard.Name = "LockOnIndicator"
+	billboard.Size = UDim2.fromOffset(36, 36)
+	billboard.AlwaysOnTop = true
+	billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+	billboard.ResetOnSpawn = false
+	billboard.Parent = adornPart
+
+	local label = Instance.new("TextLabel")
+	label.Name = "Diamond"
+	label.BackgroundTransparency = 1
+	label.Size = UDim2.fromScale(1, 1)
+	label.Font = Enum.Font.GothamBold
+	label.Text = "◆"
+	label.TextScaled = true
+	label.TextColor3 = Color3.fromRGB(255, 221, 85)
+	label.TextStrokeTransparency = 0.2
+	label.Parent = billboard
+
+	fsm.Context._indicator = billboard
+	fsm.Context._indicatorLabel = label
+	fsm.Context._indicatorAdornee = adornPart
+end
+
 function TargetLockFSM:RegisterStates()
 	-- Idle: no target. Waiting for ToggleLock.
 	self:AddState("Idle", {
@@ -224,56 +274,6 @@ end
 -- Public API: check if a target is locked
 function TargetLockFSM.IsLocked(fsm: any): boolean
 	return fsm.State == "Locked"
-end
-
--- Indicator management (module-level helpers operating on FSM context)
-local function destroyIndicator(fsm: any)
-	local indicator = fsm.Context._indicator
-	if indicator then
-		indicator:Destroy()
-		fsm.Context._indicator = nil
-		fsm.Context._indicatorLabel = nil
-		fsm.Context._indicatorAdornee = nil
-	end
-end
-
-local function ensureIndicator(fsm: any, targetCharacter: Model)
-	local adornPart = targetCharacter:FindFirstChild("Head")
-		or targetCharacter:FindFirstChild("HumanoidRootPart")
-	if not adornPart then
-		destroyIndicator(fsm)
-		return
-	end
-
-	local existingIndicator = fsm.Context._indicator
-	if existingIndicator and fsm.Context._indicatorAdornee == adornPart and existingIndicator.Parent == adornPart then
-		return
-	end
-
-	destroyIndicator(fsm)
-
-	local billboard = Instance.new("BillboardGui")
-	billboard.Name = "LockOnIndicator"
-	billboard.Size = UDim2.fromOffset(36, 36)
-	billboard.AlwaysOnTop = true
-	billboard.StudsOffset = Vector3.new(0, 2.5, 0)
-	billboard.ResetOnSpawn = false
-	billboard.Parent = adornPart
-
-	local label = Instance.new("TextLabel")
-	label.Name = "Diamond"
-	label.BackgroundTransparency = 1
-	label.Size = UDim2.fromScale(1, 1)
-	label.Font = Enum.Font.GothamBold
-	label.Text = "◆"
-	label.TextScaled = true
-	label.TextColor3 = Color3.fromRGB(255, 221, 85)
-	label.TextStrokeTransparency = 0.2
-	label.Parent = billboard
-
-	fsm.Context._indicator = billboard
-	fsm.Context._indicatorLabel = label
-	fsm.Context._indicatorAdornee = adornPart
 end
 
 return TargetLockFSM
