@@ -278,6 +278,9 @@ function EquipJob:RegisterStates()
 			local equipped = if typeof(playerEntity.Equipped) == "table" then table.clone(playerEntity.Equipped) else {}
 			equipped[hand] = fsm.ItemId
 			playerEntity.Equipped = equipped
+			if hand == "Right" then
+				playerEntity.WeaponEqp = fsm.ItemId
+			end
 			playerEntity:UpdateEntity()
 
 			fsm.State = "EmitIntent"

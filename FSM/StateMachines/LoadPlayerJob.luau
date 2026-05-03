@@ -95,8 +95,8 @@ local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player:
 		dirty = true
 	end
 
-	if type(playerEntity.WeaponEqp) ~= "string" or playerEntity.WeaponEqp == "" then
-		playerEntity.WeaponEqp = "1"
+	if type(playerEntity.WeaponEqp) ~= "string" then
+		playerEntity.WeaponEqp = ""
 		dirty = true
 	end
 
