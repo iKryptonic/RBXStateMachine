@@ -1,6 +1,8 @@
 --!strict
--- @Name AbilityComboFSM
--- @Description Server-authoritative active ability combo FSM.
+--[=[
+	@module AbilityComboFSM
+	@description Defines the `AbilityComboFSM` state machine module and its exported API.
+]=]
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -118,6 +120,16 @@ local function getComboStep(fsm: any): (any?, number)
 	return abilityDef.ComboSequence[stepIndex], stepIndex
 end
 
+--[=[
+	@description Records a cooldown expiration timestamp for an ability on the given entity.
+	Clones AbilityCooldowns to avoid shared-reference mutation, writes the new
+	timestamp, and calls UpdateEntity to replicate.
+	@param entity any — The entity to write cooldown to
+	@param abilityId string — The ability ID to put on cooldown
+	@param cooldownEnd number — os.clock() timestamp when cooldown expires
+	@param lockId string — FSM ID used as lock token for UpdateEntity
+	@writes entity.AbilityCooldowns[abilityId]
+]=]
 local function recordCooldown(entity: any, abilityId: string, cooldownEnd: number, lockId: string)
 	if not entity then
 		return
@@ -134,8 +146,21 @@ local function recordCooldown(entity: any, abilityId: string, cooldownEnd: numbe
 end
 
 function AbilityComboFSM:RegisterStates()
+	-- @state Idle — No-op entry point. Transitions to ValidateAbility.
 	self:AddState("Idle", function() end, { "ValidateAbility" })
 
+	--[=[
+		@state ValidateAbility
+		@description Validates the full ability request:
+		  1. Orchestrator, CharacterEntity, PlayerEntity must exist
+		  2. AbilityId must be non-empty and exist in AbilityCombosDefs
+		  3. ComboSequence must be a non-empty array
+		  4. If ability requires a WeaponType, equipped weapon must match
+		  5. Ability must be in UnlockedAbilities or EquippedAbilities
+		  6. Ability must not be on cooldown (AbilityCooldowns[id] < os.clock())
+		@transitions CheckMana (all checks pass) | Failed (any check fails)
+		@writes Context._abilityDef, Context._comboStepIndex
+	]=]
 	self:AddState("ValidateAbility", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -200,6 +225,13 @@ function AbilityComboFSM:RegisterStates()
 		end,
 	}, { "CheckMana", "Failed" })
 
+	--[=[
+		@state CheckMana
+		@description Reads ManaCost from the ability definition and checks the mana entity
+		  has sufficient Mana. Does NOT deduct — that happens in DeductMana.
+		@transitions DeductMana (sufficient) | Failed (insufficient or missing context)
+		@reads abilityDef.ManaCost, manaEntity.Mana
+	]=]
 	self:AddState("CheckMana", {
 		OnEnter = function(_, fsm)
 			local abilityDef = getAbilityDef(fsm)
@@ -222,6 +254,13 @@ function AbilityComboFSM:RegisterStates()
 		end,
 	}, { "DeductMana", "Failed" })
 
+	--[=[
+		@state DeductMana
+		@description Deducts ManaCost via ResourceHelpers.deductMana(). Calls UpdateEntity
+		  to replicate the mana change. Fails if deduction returns false.
+		@transitions PlayComboStep (success) | Failed (insufficient mana)
+		@writes manaEntity.Mana
+	]=]
 	self:AddState("DeductMana", {
 		OnEnter = function(_, fsm)
 			local abilityDef = getAbilityDef(fsm)
@@ -243,6 +282,16 @@ function AbilityComboFSM:RegisterStates()
 		end,
 	}, { "PlayComboStep", "Failed" })
 
+	--[=[
+		@state PlayComboStep
+		@description Plays the current combo step's animation:
+		  1. Reads ComboSequence[_comboStepIndex]
+		  2. Calls _onAnimate callback for client-side preview
+		  3. Appends Animation intent via IntentHelpers for replication
+		  4. Sets WaitSpan = step.Duration to pause for animation
+		@transitions ProcessComboEvents (after duration) | Failed (step not found)
+		@writes Context._currentStep, Context._currentStepIndex, fsm.WaitSpan
+	]=]
 	self:AddState("PlayComboStep", {
 		OnEnter = function(_, fsm)
 			local step, stepIndex = getComboStep(fsm)
@@ -282,6 +331,14 @@ function AbilityComboFSM:RegisterStates()
 		end,
 	}, { "ProcessComboEvents", "Failed" })
 
+	--[=[
+		@state ProcessComboEvents
+		@description Processes the current step's DamageEvent and Effect payloads.
+		  Currently logs events — will be expanded to spawn hitboxes, apply buffs,
+		  trigger dashes, etc. when the ability VFX system is built.
+		@transitions AdvanceStep (always) | Failed (step missing)
+		@reads Context._currentStep.DamageEvent, Context._currentStep.Effect
+	]=]
 	self:AddState("ProcessComboEvents", {
 		OnEnter = function(_, fsm)
 			local step = fsm.Context._currentStep
@@ -308,6 +365,13 @@ function AbilityComboFSM:RegisterStates()
 		end,
 	}, { "AdvanceStep", "Failed" })
 
+	--[=[
+		@state AdvanceStep
+		@description Increments _comboStepIndex. Loops to PlayComboStep if more steps
+		  remain, otherwise proceeds to Cooldown.
+		@transitions PlayComboStep (more steps) | Cooldown (done) | Failed (missing context)
+		@writes Context._comboStepIndex
+	]=]
 	self:AddState("AdvanceStep", {
 		OnEnter = function(_, fsm)
 			local abilityDef = getAbilityDef(fsm)
@@ -325,6 +389,14 @@ function AbilityComboFSM:RegisterStates()
 		end,
 	}, { "PlayComboStep", "Cooldown", "Failed" })
 
+	--[=[
+		@state Cooldown
+		@description Records cooldown expiration on both CharacterEntity and PlayerEntity
+		  via recordCooldown(), then pauses for the cooldown duration. The timestamp
+		  is checked by ValidateAbility on subsequent casts.
+		@transitions Completed (after wait) | Failed (missing context)
+		@writes charEntity.AbilityCooldowns[abilityId], playerEntity.AbilityCooldowns[abilityId]
+	]=]
 	self:AddState("Cooldown", {
 		OnEnter = function(_, fsm)
 			local abilityDef = getAbilityDef(fsm)
@@ -346,7 +418,9 @@ function AbilityComboFSM:RegisterStates()
 		end,
 	}, { "Completed", "Failed" })
 
+	-- @state Completed — Terminal success. Combo executed fully.
 	self:AddState("Completed", function() end, {})
+	-- @state Failed — Terminal failure. Error reason logged via fsm:Fail().
 	self:AddState("Failed", function() end, {})
 end
 
