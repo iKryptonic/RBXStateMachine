@@ -91,11 +91,8 @@ local function isAirborne(humanoid: Humanoid): boolean
 end
 
 --[=[
-	@description Returns the character entity for this FSM, or `nil` when it cannot be found.
-	@param fsm any  -- JumpFSM instance tracking grounded, airborne, and flip runtime state.
-	@return any -- Resolved character entity, or `nil` when unavailable.
+	@description Resolves get character entity from the FSM context or entity state.
 ]=]
-
 local function getCharacterEntity(fsm: any): any?
 	local orchestrator = (shared :: any).fsm
 	if not orchestrator then

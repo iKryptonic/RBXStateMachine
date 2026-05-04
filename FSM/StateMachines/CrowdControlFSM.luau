@@ -38,11 +38,8 @@ local CrowdControlFSM = {
 }
 
 --[=[
-	@description Maps `Stun` and `Knockdown` operations to the flag name, animation name, and log prefix used by the FSM.
-	@param operation any  -- Requested crowd-control operation name.
-	@return any -- Resolved route config, or `nil` when unavailable.
+	@description Resolves resolve route config from the FSM context or entity state.
 ]=]
-
 local function resolveRouteConfig(operation: string?): RouteConfig?
 	if operation == "Stun" then
 		return {
@@ -62,11 +59,8 @@ local function resolveRouteConfig(operation: string?): RouteConfig?
 end
 
 --[=[
-	@description Returns the route config for this FSM, or `nil` when it cannot be found.
-	@param fsm any  -- CrowdControlFSM instance carrying the requested crowd-control operation and routed flags.
-	@return any -- Resolved route config, or `nil` when unavailable.
+	@description Resolves get route config from the FSM context or entity state.
 ]=]
-
 local function getRouteConfig(fsm: any): RouteConfig?
 	local context = fsm.Context
 	if typeof(context) == "table" then
@@ -85,11 +79,8 @@ local function getRouteConfig(fsm: any): RouteConfig?
 end
 
 --[=[
-	@description Returns the operation label for this FSM, or `nil` when it cannot be found.
-	@param routeConfig any  -- Routed crowd-control metadata for the current operation.
-	@return string -- Resolved string value used by the FSM.
+	@description Resolves get operation label from the FSM context or entity state.
 ]=]
-
 local function getOperationLabel(routeConfig: RouteConfig): string
 	return string.lower(routeConfig.logPrefix)
 end

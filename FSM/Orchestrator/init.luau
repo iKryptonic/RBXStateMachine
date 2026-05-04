@@ -286,9 +286,8 @@ function Orchestrator.RegisterEntityCommandCallback(entityId: string, command: s
 	return true
 end
 --[=[
-	@param ... any -- `...` input parameter.
+	@param ... any — Additional arguments forwarded to the handler.
 ]=]
-
 function Orchestrator.ServerCommandEntity(entityId: string, command: string, ...: any)
 	ValidateRequest("Client")
 	Core.NetworkManager.ServerCommandEntity(entityId, command, ...)
@@ -301,9 +300,8 @@ function Orchestrator.RegisterServerRequestCallback(requestName: string, handler
 	return true
 end
 --[=[
-	@param ... any -- `...` input parameter.
+	@param ... any — Additional arguments forwarded to the handler.
 ]=]
-
 function Orchestrator.ServerRequest(requestName: string, ...: any)
 	ValidateRequest("Client")
 	return Core.NetworkManager.ServerRequest(requestName, ...)
@@ -312,17 +310,15 @@ end
 -- Convenience alias used throughout the codebase
 Orchestrator.Request = Orchestrator.ServerRequest
 --[=[
-	@param ... any -- `...` input parameter.
+	@param ... any — Additional arguments forwarded to the handler.
 ]=]
-
 function Orchestrator.ServerRequestAsync(requestName: string, ...: any)
 	ValidateRequest("Client")
 	return Core.NetworkManager.ServerRequestAsync(requestName, ...)
 end
 --[=[
-	@param ... any -- `...` input parameter.
+	@description Emits a replication intent so other clients can see the effect/action being applied.
 ]=]
-
 function Orchestrator.BroadcastEntityCommand(requestType: string, entityId: string, ...: any)
 	ValidateRequest("Server")
 	Core.NetworkManager.BroadcastEntityCommand(entityId, requestType, ...)
@@ -341,9 +337,8 @@ function Orchestrator.GetEventBus(name: string)
 	return Core.NetworkManager.GetEventBus(name)
 end
 --[=[
-	@param ... any -- `...` input parameter.
+	@param ... any — Additional arguments forwarded to the handler.
 ]=]
-
 function Orchestrator.FireEventBus(name: string, ...)
 	ValidateRequest()
 	return Core.NetworkManager.FireEventBus(name, ...)

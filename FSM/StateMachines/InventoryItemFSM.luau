@@ -83,11 +83,8 @@ end
 -- @writes none
 -- Returns the best available root part for item drop positioning.
 --[=[
-	@description Returns the root part for this FSM, or `nil` when it cannot be found.
-	@param character any  -- Character model associated with the request.
-	@return any -- Resolved root part, or `nil` when unavailable.
+	@description Resolves the character model's Humanoid and HumanoidRootPart. Falls back to LocalPlayer.Character if the entity Instance is unavailable.
 ]=]
-
 local function getRootPart(character: Model): BasePart?
 	local rootPart = character:FindFirstChild("HumanoidRootPart")
 	if rootPart and rootPart:IsA("BasePart") then
@@ -102,11 +99,8 @@ end
 -- @writes none
 -- Computes a forward-biased drop position in front of the character.
 --[=[
-	@description Returns the drop cframe for this FSM, or `nil` when it cannot be found.
-	@param character any  -- Character model associated with the request.
-	@return any -- Resolved drop c frame, or `nil` when unavailable.
+	@description Computes the drop or stow CFrame position relative to the character for item placement in the world or on the character's back.
 ]=]
-
 local function getDropCFrame(character: Model): CFrame?
 	local rootPart = getRootPart(character)
 	if not rootPart then
@@ -132,9 +126,8 @@ end
 --[=[
 	@description Enables collision.
 	@param instance any  -- Dropped item instance whose collidable parts should be enabled.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function enableCollision(instance: Instance)
 	if instance:IsA("BasePart") then
 		instance.CanCollide = true
@@ -185,12 +178,8 @@ end
 -- @writes fsm.Context._activeUnEquipJob, fsm managed cleanup
 -- Spawns and manages the drop-flow UnEquipJob child FSM.
 --[=[
-	@description Starts unequip job.
-	@param fsm any  -- InventoryItemFSM instance carrying the current inventory operation and staged containers.
-	@param hand any  -- Hand being read or updated.
-	@return nil -- Performs this helper's work in place.
+	@description Creates and starts a child UnEquipJob state machine with the given context, wiring completion/failure/cancellation handlers.
 ]=]
-
 local function beginUnequipJob(fsm: any, hand: string)
 	local orchestrator = fsm:GetOrchestrator()
 	local childJob = orchestrator.CreateStateMachine({

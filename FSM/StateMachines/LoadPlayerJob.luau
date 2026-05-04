@@ -67,9 +67,8 @@ end
 
 --[=[
 	@description Registers entity command.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function registerEntityCommand(
 	orchestrator: any,
 	entityId: string,
@@ -83,10 +82,8 @@ local function registerEntityCommand(
 end
 
 --[=[
-	@description Creates and start state machine.
-	@return nil -- Performs this helper's work in place.
+	@description Creates and starts a child state machine, wiring its lifecycle signals to drive the parent FSM's transitions.
 ]=]
-
 local function createAndStartStateMachine(
 	orchestrator: any,
 	className: string,
@@ -114,9 +111,8 @@ end
 	@param playerEntity any  -- Player entity being read from or written to.
 	@param player any  -- Player instance associated with the request.
 	@param userId any  --  user id to resolve.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player: Player, userId: number)
 	playerEntity:SetContext("Instance", player)
 	playerEntity:SetContext("OwnerId", tostring(userId))
@@ -246,9 +242,8 @@ end
 	@param character any  -- Character model associated with the request.
 	@param userId any  --  user id to resolve.
 	@param playerEntityId any  -- Player entity id to resolve.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function applyCharacterDefaults(charEntity: any, character: Model, userId: number, playerEntityId: string)
 	charEntity:SetContext("Instance", character)
 	charEntity:SetContext("OwnerId", tostring(userId))
@@ -415,11 +410,8 @@ local function applyDerivedCharacterStats(orchestrator: any, playerEntity: any, 
 end
 
 --[=[
-	@description Returns the command registration context for this FSM, or `nil` when it cannot be found.
-	@param fsm any  -- LoadPlayerJob instance carrying the player bootstrap context and created entity ids.
-	@return any -- Resolved command registration context, or `nil` when unavailable.
+	@description Resolves get command registration context from the FSM context or entity state.
 ]=]
-
 local function getCommandRegistrationContext(fsm: any)
 	local orchestrator = fsm:GetOrchestrator()
 	local charEntityId = fsm.CharacterEntityId :: string

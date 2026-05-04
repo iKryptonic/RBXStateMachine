@@ -48,21 +48,15 @@ local DIRECTION_MAP = {
 }
 
 --[=[
-	@description Returns the character entity for this FSM, or `nil` when it cannot be found.
-	@param fsm any  -- DashFSM instance carrying the queued dash direction and cached runtime parts.
-	@return any -- Resolved character entity, or `nil` when unavailable.
+	@description Resolves the CharacterEntity from the Orchestrator registry. Returns nil if the entity no longer exists.
 ]=]
-
 local function getCharacterEntity(fsm: any): any?
 	return fsm:GetEntity(fsm.CharacterEntityId)
 end
 
 --[=[
-	@description Returns the root part for this FSM, or `nil` when it cannot be found.
-	@param fsm any  -- DashFSM instance carrying the queued dash direction and cached runtime parts.
-	@return any -- Resolved root part, or `nil` when unavailable.
+	@description Resolves the character model's Humanoid and HumanoidRootPart. Falls back to LocalPlayer.Character if the entity Instance is unavailable.
 ]=]
-
 local function getRootPart(fsm: any): BasePart?
 	local charEntity = getCharacterEntity(fsm)
 	if charEntity and charEntity.Instance then
@@ -79,12 +73,8 @@ local function getRootPart(fsm: any): BasePart?
 end
 
 --[=[
-	@description Returns the impulse direction for this FSM, or `nil` when it cannot be found.
-	@param rootPart any  -- Root part used for movement or positioning.
-	@param direction any  -- Requested movement or attack direction.
-	@return any -- Resolved impulse direction, or `nil` when unavailable.
+	@description Resolves get impulse direction from the FSM context or entity state.
 ]=]
-
 local function getImpulseDirection(rootPart: BasePart, direction: string): Vector3?
 	local lookVector = rootPart.CFrame.LookVector
 	local rightVector = rootPart.CFrame.RightVector

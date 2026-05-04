@@ -55,41 +55,29 @@ local DEFAULT_PROJECTILE_LIFETIME = 3
 local DEFAULT_DASH_DURATION = 0.2
 
 --[=[
-	@description Returns the ability defs for this FSM, or `nil` when it cannot be found.
-	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
-	@return any -- Resolved ability defs, or `nil` when unavailable.
+	@description Resolves the AbilityDefs module through the Orchestrator shared module loader.
 ]=]
-
 local function getAbilityDefs(orchestrator: any)
 	return ModuleLoader.requireSharedModule(orchestrator,"AbilityDefs")
 end
 
 --[=[
-	@description Returns the talent tree defs for this FSM, or `nil` when it cannot be found.
-	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
-	@return any -- Resolved talent tree defs, or `nil` when unavailable.
+	@description Resolves the TalentTreeDefs module through the Orchestrator shared module loader.
 ]=]
-
 local function getTalentTreeDefs(orchestrator: any)
 	return ModuleLoader.requireSharedModule(orchestrator,"TalentTreeDefs")
 end
 
 --[=[
-	@description Returns the status effect defs for this FSM, or `nil` when it cannot be found.
-	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
-	@return any -- Resolved status effect defs, or `nil` when unavailable.
+	@description Resolves the StatusEffectDefs module through the Orchestrator shared module loader.
 ]=]
-
 local function getStatusEffectDefs(orchestrator: any)
 	return ModuleLoader.requireSharedModule(orchestrator,"StatusEffectDefs")
 end
 
 --[=[
-	@description Returns the item data for this FSM, or `nil` when it cannot be found.
-	@param itemId any  -- Item identifier for the request.
-	@return any -- Resolved item data, or `nil` when unavailable.
+	@description Resolves get item data from the FSM context or entity state.
 ]=]
-
 local function getItemData(itemId: string?): any?
 	if typeof(itemId) ~= "string" or itemId == "" then
 		return nil
@@ -210,12 +198,8 @@ local function areAbilitiesBlocked(orchestrator: any, charEntity: any): (boolean
 end
 
 --[=[
-	@description Builds and caches a cast definition from the requested ability or consumable, normalizing source type, costs, cast time, and cooldown.
-	@param fsm any  -- CastFSM instance carrying the active cast request, cached entities, and cleanup state.
-	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
-	@return any -- Resolved cast def, or `nil` when unavailable.
+	@description Resolves resolve cast def from the FSM context or entity state.
 ]=]
-
 local function resolveCastDef(fsm: any, orchestrator: any): any?
 	local cached = fsm.Context._castDef
 	if cached then
@@ -247,12 +231,8 @@ local function resolveCastDef(fsm: any, orchestrator: any): any?
 end
 
 --[=[
-	@description Looks up the character's current `TargetEntityId` on the orchestrator and returns that entity when present.
-	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
-	@param charEntity any  -- Character entity being read from or written to.
-	@return any -- Resolved target entity, or `nil` when unavailable.
+	@description Resolves resolve target entity from the FSM context or entity state.
 ]=]
-
 local function resolveTargetEntity(orchestrator: any, charEntity: any): any?
 	local targetEntityId = charEntity.TargetEntityId
 	if typeof(targetEntityId) ~= "string" or targetEntityId == "" then
@@ -262,13 +242,8 @@ local function resolveTargetEntity(orchestrator: any, charEntity: any): any?
 end
 
 --[=[
-	@description Uses the locked target's humanoid root when available; otherwise it aims 10 studs forward from the caster's root.
-	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
-	@param charEntity any  -- Character entity being read from or written to.
-	@param fallbackRoot any  -- Caster root part used when no target entity is locked.
-	@return any -- Resolved target position, or `nil` when unavailable.
+	@description Resolves resolve target position from the FSM context or entity state.
 ]=]
-
 local function resolveTargetPosition(orchestrator: any, charEntity: any, fallbackRoot: BasePart): Vector3
 	local targetEntity = resolveTargetEntity(orchestrator, charEntity)
 	if targetEntity and targetEntity.Instance and targetEntity.Instance:IsA("Model") then
@@ -281,12 +256,11 @@ local function resolveTargetPosition(orchestrator: any, charEntity: any, fallbac
 end
 
 --[=[
-	@description Clamps resource to valid bounds.
-	@param value any  -- Candidate value used by the helper.
-	@param maximum any  -- Maximum value allowed for the clamped resource.
-	@return number -- Numeric value derived for downstream logic.
+	@description Clamps a numeric resource value between 0 and the given maximum.
+	@param value number — The raw resource value to clamp
+	@param maximum number — Upper bound (e.g. MaxHealth, MaxMana)
+	@return number — Clamped value in [0, maximum]
 ]=]
-
 local function clampResource(value: number, maximum: number): number
 	return math.clamp(value, 0, maximum)
 end
@@ -297,9 +271,8 @@ end
 	@param humanoid any  -- Humanoid to inspect or update.
 	@param amount any  -- Amount of health or resource to restore.
 	@param lockId any  -- Lock id used when replicating entity changes.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function applyHealthChange(charEntity: any, humanoid: Humanoid, amount: number, lockId: string?)
 	local maxHealth = tonumber(charEntity.MaxHealth) or humanoid.MaxHealth
 	local nextHealth = ResourceHelpers.restoreResource(charEntity,"Health", amount,"MaxHealth")
@@ -309,9 +282,8 @@ end
 
 --[=[
 	@description Applies the resource restore work needed by the surrounding state flow.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function applyResourceRestore(
 	charEntity: any,
 	fieldName: string,
@@ -326,12 +298,11 @@ local function applyResourceRestore(
 end
 
 --[=[
-	@description Performs the `containerHasItem` helper work.
+	@description Executes the containerHasItem operation.
 	@param container any  -- Container table to inspect or mutate.
 	@param itemId any  -- Item identifier for the request.
 	@return boolean -- Whether the helper completed successfully.
 ]=]
-
 local function containerHasItem(container: any, itemId: string): boolean
 	if typeof(container) ~= "table" then
 		return false
@@ -462,9 +433,8 @@ end
 	@param playerEntity any  -- Player entity being read from or written to.
 	@param itemId any  -- Item identifier for the request.
 	@param slotIndex any  -- Index used for the lookup or write.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function consumePlayerItem(playerEntity: any, itemId: string, slotIndex: number?)
 	if not playerEntity then
 		return false
@@ -502,15 +472,14 @@ local function consumePlayerItem(playerEntity: any, itemId: string, slotIndex: n
 end
 
 --[=[
-	@description Performs the `spawnProjectile` helper work.
+	@description Executes the spawnProjectile operation.
 	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
 	@param fsm any  -- CastFSM instance carrying the active cast request, cached entities, and cleanup state.
 	@param castDef any  -- Resolved cast definition for the current ability or consumable.
 	@param charEntity any  -- Character entity being read from or written to.
 	@param rootPart any  -- Root part used for movement or positioning.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function spawnProjectile(orchestrator: any, fsm: any, castDef: any, charEntity: any, rootPart: BasePart)
 	local targetPosition = resolveTargetPosition(orchestrator, charEntity, rootPart)
 	local direction = targetPosition - rootPart.Position
@@ -582,21 +551,15 @@ local EFFECT_STATE_BY_TYPE = {
 }
 
 --[=[
-	@description Returns the cast attack name for this FSM, or `nil` when it cannot be found.
-	@param castDef any  -- Resolved cast definition for the current ability or consumable.
-	@return string -- Resolved string value used by the FSM.
+	@description Resolves get cast attack name from the FSM context or entity state.
 ]=]
-
 local function getCastAttackName(castDef: any): string
 	return castDef.Id or castDef.Name or "Cast"
 end
 
 --[=[
-	@description Bundles the validated orchestrator, cast definition, entity references, humanoid, root part, and attack name; missing pieces force cleanup through `ReleaseLock`.
-	@param fsm any  -- CastFSM instance carrying the active cast request, cached entities, and cleanup state.
-	@return any -- Resolved execute context, or `nil` when unavailable.
+	@description Resolves the character, humanoid, and root part from the entity for physics and targeting operations.
 ]=]
-
 local function resolveExecuteContext(fsm: any)
 	local orchestrator = fsm:GetOrchestrator()
 	local castDef = fsm.Context._castDef

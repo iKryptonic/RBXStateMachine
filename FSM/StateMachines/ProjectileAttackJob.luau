@@ -52,11 +52,8 @@ local DEFAULT_CHARGE_TIME = 0.3
 local DEFAULT_GRAVITY = Vector3.new(0, -30, 0)
 
 --[=[
-	@description Returns the item data for this FSM, or `nil` when it cannot be found.
-	@param weaponId any  -- Weapon or asset identifier to resolve.
-	@return any -- Resolved item data, or `nil` when unavailable.
+	@description Resolves get item data from the FSM context or entity state.
 ]=]
-
 local function getItemData(weaponId: string): any?
 	local RS = game:GetService("ReplicatedStorage")
 	local assets = RS:FindFirstChild("Assets")
@@ -76,11 +73,8 @@ local function getItemData(weaponId: string): any?
 end
 
 --[=[
-	@description Returns the projectile template for this FSM, or `nil` when it cannot be found.
-	@param weaponId any  -- Weapon or asset identifier to resolve.
-	@return any -- Resolved projectile template, or `nil` when unavailable.
+	@description Resolves get projectile template from the FSM context or entity state.
 ]=]
-
 local function getProjectileTemplate(weaponId: string): BasePart?
 	local RS = game:GetService("ReplicatedStorage")
 	local assets = RS:FindFirstChild("Assets")
@@ -122,12 +116,8 @@ local function cleanupProjectile(fsm: any)
 end
 
 --[=[
-	@description Returns the victim entity for this FSM, or `nil` when it cannot be found.
-	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
-	@param targetModel any  -- Hit character model to resolve back to an ECS entity.
-	@return any -- Resolved victim entity, or `nil` when unavailable.
+	@description Scans for valid damage targets within the attack radius using CombatHelpers, filtering by line-of-sight and alive state.
 ]=]
-
 local function getVictimEntity(orchestrator: any, targetModel: Model): any?
 	local entities = orchestrator.GetEntities and orchestrator.GetEntities() or {}
 	for _, entity in pairs(entities) do

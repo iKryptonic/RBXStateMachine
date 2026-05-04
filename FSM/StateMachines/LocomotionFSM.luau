@@ -57,11 +57,8 @@ local function isAirborne(humanoid: any): boolean
 end
 
 --[=[
-	@description Returns the horizontal speed for this FSM, or `nil` when it cannot be found.
-	@param rootPart any  -- Root part used for movement or positioning.
-	@return number -- Numeric value derived for downstream logic.
+	@description Computes the character's horizontal movement speed from the root part's velocity, ignoring the Y component.
 ]=]
-
 local function getHorizontalSpeed(rootPart: any): number
 	return (rootPart.AssemblyLinearVelocity * Vector3.new(1, 0, 1)).Magnitude
 end
@@ -70,9 +67,8 @@ end
 	@description Writes the derived locomotion state string back onto the active character entity.
 	@param fsm any  -- LocomotionFSM instance observing the character and writing locomotion state.
 	@param state any  -- State name to write.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function writeState(fsm: any, state: string)
 	local orchestrator = (shared :: any).fsm
 	if not orchestrator then

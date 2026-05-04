@@ -86,14 +86,8 @@ local MELEE_SEQUENCES = {
 }
 
 --[=[
-	@description Appends animation intent for this request.
-	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
-	@param charEntity any  -- Character entity being read from or written to.
-	@param fsm any  -- MeleeAttackJob instance carrying the active melee sequence, victims, and release state.
-	@param phase any  -- Animation phase entry whose intent should be emitted.
-	@return nil -- Performs this helper's work in place.
+	@description Emits a replication intent so other clients can see the effect/action being applied.
 ]=]
-
 local function appendAnimationIntent(orchestrator: any, charEntity: any, fsm: any, phase: any)
 	IntentHelpers.appendIntent(orchestrator, charEntity,"Animation", { Name = phase.Name, Speed = phase.Speed, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 end
@@ -102,9 +96,8 @@ end
 	@description Emits due animation phases.
 	@param fsm any  -- MeleeAttackJob instance carrying the active melee sequence, victims, and release state.
 	@param elapsed any  -- Elapsed attack time used to decide which phases are due.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function emitDueAnimationPhases(fsm: any, elapsed: number)
 	local phases = fsm.Context._phases
 	local phaseStartTimes = fsm.Context._phaseStartTimes

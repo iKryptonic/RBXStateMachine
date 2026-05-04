@@ -33,10 +33,8 @@ local StatusEffectFSM = {
 }
 
 --[=[
-	@description Returns the status effect defs for this FSM, or `nil` when it cannot be found.
-	@return any -- Resolved status effect defs, or `nil` when unavailable.
+	@description Loads the status effect definition from StatusEffectDefs and initializes the effect context for application.
 ]=]
-
 local function getStatusEffectDefs()
 	return require(ReplicatedStorage:WaitForChild("shared"):WaitForChild("StatusEffectDefs"))
 end
@@ -79,11 +77,8 @@ local function findEffectEntryIndex(activeEffects: { any }, instanceId: string):
 end
 
 --[=[
-	@description Returns the humanoid for this FSM, or `nil` when it cannot be found.
-	@param charEntity any  -- Character entity being read from or written to.
-	@return any -- Resolved humanoid, or `nil` when unavailable.
+	@description Resolves get humanoid from the FSM context or entity state.
 ]=]
-
 local function getHumanoid(charEntity: any): Humanoid?
 	local character = charEntity and charEntity.Instance
 	if not character then
@@ -100,9 +95,8 @@ end
 --[=[
 	@description Clamps resources to valid bounds.
 	@param charEntity any  -- Character entity being read from or written to.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function clampResources(charEntity: any)
 	if typeof(charEntity.Health) == "number" and typeof(charEntity.MaxHealth) == "number" then
 		charEntity.Health = math.clamp(charEntity.Health, 0, charEntity.MaxHealth)
@@ -118,9 +112,8 @@ end
 --[=[
 	@description Synchronizes humanoid with the latest derived runtime state.
 	@param charEntity any  -- Character entity being read from or written to.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function syncHumanoid(charEntity: any)
 	local humanoid = getHumanoid(charEntity)
 	if not humanoid then
@@ -139,11 +132,8 @@ local function syncHumanoid(charEntity: any)
 end
 
 --[=[
-	@description Returns the context for this FSM, or `nil` when it cannot be found.
-	@param fsm any  -- StatusEffectFSM instance carrying the active effect definition, timers, and rollback state.
-	@return any -- Resolved context, or `nil` when unavailable.
+	@description Resolves get context from the FSM context or entity state.
 ]=]
-
 local function getContext(fsm: any): any
 	fsm.Context = fsm.Context or {}
 	return fsm.Context
@@ -221,11 +211,8 @@ local function cleanupRegistry(fsm: any): boolean
 end
 
 --[=[
-	@description Performs the `broadcastEntity` helper work.
-	@param charEntity any  -- Character entity being read from or written to.
-	@return boolean -- Whether the helper completed successfully.
+	@description Emits a replication intent so other clients can see the effect/action being applied.
 ]=]
-
 local function broadcastEntity(charEntity: any): boolean
 	if not charEntity then
 		return false
@@ -238,11 +225,8 @@ local function broadcastEntity(charEntity: any): boolean
 end
 
 --[=[
-	@description Applies the tick work needed by the surrounding state flow.
-	@param fsm any  -- StatusEffectFSM instance carrying the active effect definition, timers, and rollback state.
-	@return nil -- Performs this helper's work in place.
+	@description Loads the status effect definition from StatusEffectDefs and initializes the effect context for application.
 ]=]
-
 local function applyTick(fsm: any)
 	local context = getContext(fsm)
 	local charEntity = context._charEntity or fsm.CharacterEntity

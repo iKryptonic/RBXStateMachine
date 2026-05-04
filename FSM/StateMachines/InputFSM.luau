@@ -19,7 +19,7 @@ local KEYSTROKE_TIMEOUT = 1.75
 	@description Writes the derived input mode data back onto the active entity or FSM context.
 	@param fsm any  -- InputFSM instance tracking combo-buffer and held-attack input state.
 	@param mode any  -- Mode name to apply.
-	@return nil -- Performs this helper's work in place.
+
 ]=]
 
 local function writeInputMode(fsm: any, mode: string)

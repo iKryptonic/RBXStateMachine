@@ -24,11 +24,8 @@ local ActionFSM = {
 }
 
 --[=[
-	@description Returns the char entity for this FSM, or `nil` when it cannot be found.
-	@param fsm any  -- ActionFSM instance tracking the current overlay request and cached action data.
-	@return any -- Resolved char entity, or `nil` when unavailable.
+	@description Resolves get char entity from the FSM context or entity state.
 ]=]
-
 local function getCharEntity(fsm: any): any?
 	local orchestrator = (shared :: any).fsm
 	if not orchestrator then
@@ -41,9 +38,8 @@ end
 	@description Writes the derived action overlay data back onto the active entity or FSM context.
 	@param fsm any  -- ActionFSM instance tracking the current overlay request and cached action data.
 	@param overlay any  -- Overlay name to mirror onto the character entity.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function writeActionOverlay(fsm: any, overlay: string)
 	local charEntity = getCharEntity(fsm)
 	if charEntity then

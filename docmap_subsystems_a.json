@@ -1,0 +1,372 @@
+[
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "local Theme = require(script.Parent.Parent.Theme)",
+    "new_block": "--[=[\n\t@module TasksModule\n\t@description Provides the Tasks panel subsystem for the ServiceManager UI.\n\tCollects live Scheduler task data, renders task rows with status badges,\n\tmaintains a per-frame EMA-smoothed performance strip (FPS / MEM / TASKS / BUDGET),\n\tand exposes a sparkline for FPS history. Supports both client and server context modes.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule.new(): any",
+    "new_block": "--[=[\n\t@description Constructs a new `TasksModule` instance.\n\tInitialises all state: `_taskCache`, `_archivedTasks`, `_completedTasks`,\n\t`_perfCache`, `_perfHistory` (up to 60 snapshots), `_lastFetchTime`,\n\t`_selectedTask`, `_searchText`, `_sortMode` (default: Priority),\n\t`_showArchived`, `_showCompleted`, `_prevRunCounts`, `_lastActiveTime`,\n\tand the EMA state tables `_smoothPerf`, `_prevPerf`, `_perfDirections`.\n\t@return TasksModule -- New instance with default state.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:_UpdateSmoothedPerf()",
+    "new_block": "--[=[\n\t@description Applies a fixed-alpha EMA (PERF_SMOOTH_ALPHA = 0.25) to the four\n\tperformance metrics stored in `self._perfCache` (FPS, MemoryMB, ActiveTasks,\n\tFrameBudgetMs) and writes the results to `self._smoothPerf`.\n\tAlso computes per-metric direction indicators (-1 / 0 / 1) in `self._perfDirections`\n\tby comparing the current raw value against the previous raw snapshot held in\n\t`self._prevPerf`.  Values that differ less than the per-metric threshold in\n\t`PERF_STABLE_THRESHOLD` are classified as stable (direction = 0).\n\tReads: `_perfCache`, `_smoothPerf`, `_prevPerf`.\n\tWrites: `_smoothPerf`, `_perfDirections`, `_prevPerf`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:_TickPerfStrip(nexus: any, dt: number)",
+    "new_block": "--[=[\n\t@description Per-frame lightweight perf-strip updater.  Called every heartbeat,\n\tcheaper than `FetchData` because it only reads live FPS and memory without\n\tenumerating all tasks.  Uses a frame-rate-independent EMA (tau ≈ 0.4 s) keyed\n\ton `dt` so animation stays smooth regardless of frame rate.  Locates the\n\t`PerfStrip` Frame under `navigator._rootContainer / Layer_TASKS / Content` and\n\tdelegates label writes to `_UpdatePerfStripLabels`.\n\t@param nexus any -- The owning Nexus; provides `_lastFPS` and `_navigator`.\n\t@param dt number -- Frame delta-time in seconds from the Heartbeat connection.\n\tReads: `_smoothPerf`, `_prevPerf`, `_perfDirections`, `_perfCache`.\n\tWrites: `_smoothPerf`, `_prevPerf`, `_perfDirections`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:_UpdatePerfStripLabels(strip: Frame)",
+    "new_block": "--[=[\n\t@description Writes the current EMA-smoothed metric values and direction glyphs\n\tinto the four `Cell_FPS`, `Cell_MEM`, `Cell_TASKS`, and `Cell_BUDGET` frames\n\tinside `strip`.  Colour is derived from raw (non-smoothed) values so the hue\n\treacts immediately to bad readings even while the number smoothly interpolates.\n\t@param strip Frame -- The `PerfStrip` TextButton frame containing the four cells.\n\tReads: `_smoothPerf`, `_perfCache`, `_perfDirections`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:FetchData(nexus: any)",
+    "new_block": "--[=[\n\t@description Main data-collection pass, called by ServiceBrain every ~2 s.\n\tIn client mode: enumerates `orchestrator.Scheduler.Tasks`, classifies each task\n\tas `error > running > active > idle` using an adaptive active-window\n\t(max(3 s, 2 * TaskExecutionDelay)) and run-count delta tracking stored in\n\t`_prevRunCounts` / `_lastActiveTime`.  Also reads the History ring buffer (indices\n\t0–99) to populate `_completedTasks` with one-shot tasks that have already\n\tbeen unscheduled.  In server mode: reads equivalent data from `nexus._serverData`.\n\tAfter collection, appends a snapshot to `_perfHistory` (capped at 60), calls\n\t`_UpdateSmoothedPerf`, and publishes `tasks.list` and `tasks.perf` to the Store.\n\t@param nexus any -- Nexus instance; provides `_orchestrator`, `_serverData`,\n\t`_contextMode`, `_lastFPS`, and `Store`.\n\tWrites: `_taskCache`, `_completedTasks`, `_perfCache`, `_prevRunCounts`,\n\t`_lastActiveTime`, `_perfHistory`, `_lastFetchTime`, and the Store.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:Render(_nexus: any) end",
+    "new_block": "--[=[\n\t@description No-op render hook required by the subsystem contract.\n\tTask rendering is driven entirely by `BuildRootLayer` / `FetchData`; this\n\tstub exists so the caller does not need to guard the method call.\n\t@param _nexus any -- Unused; present for interface compatibility.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:_GetSortedFilteredTasks(): { { Name: string, Data: any } }",
+    "new_block": "--[=[\n\t@description Returns a sorted, filtered snapshot of `_taskCache`.\n\tFiltering applies the `_searchText` substring against task name, status, and\n\tevent type (all lowercased, plain-text match).  Sorting is controlled by\n\t`_sortMode`: `Priority` (ascending), `Name` (A-Z), `Status` (A-Z),\n\t`Executions` (descending), or `AvgTime` (descending).\n\t@return { { Name: string, Data: any } } -- Ordered array of { Name, Data } pairs.\n\tReads: `_taskCache`, `_searchText`, `_sortMode`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:BuildRootLayer(frame: Frame, context: any)",
+    "new_block": "--[=[\n\t@description Idempotent root-layer builder for the TASKS panel.\n\tPreserves the `PerfStrip` and `ToolbarRow` children across rebuilds so their\n\tin-place EMA labels and stateful widgets survive each ServiceBrain tick.\n\tCreates UIListLayout and UIPadding if absent, then calls `_BuildPerfStrip`,\n\t`_BuildToolbar`, iterates sorted-filtered tasks to emit task rows,\n\tand optionally renders ARCHIVED and COMPLETED sections.  Rows are animated\n\tin via `animationController:StaggerIn`.\n\t@param frame Frame -- The layer host Frame; must contain a child named `Content`.\n\t@param context any -- Context table: `context.Nexus` is the Nexus instance.\n\tReads: `_showArchived`, `_archivedTasks`, `_showCompleted`, `_completedTasks`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:_BuildToolbar(parent: Frame, nexus: any)",
+    "new_block": "--[=[\n\t@description Idempotent toolbar builder with search, sort, and toggle controls.\n\tOn first call creates: a search `TextBox` wired to `SearchAutocomplete`\n\t(suggestions from `_taskCache` keys), a sort-mode cycle button (cycles through\n\tSORT_MODES: Priority / Name / Status / Executions / AvgTime), an Archive\n\ttoggle, and a Completed toggle.  On subsequent calls only syncs the search\n\tbox text to `_searchText` and exits early — no new instances are created.\n\t@param parent Frame -- The content frame that will host the `ToolbarRow` child.\n\t@param nexus any -- Nexus instance; `nexus._lastDataRefresh` is set to 0 on changes.\n\tWrites: `_searchText`, `_sortMode`, `_showArchived`, `_showCompleted`, `_searchAC`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:_BuildPerfStrip(parent: Frame, nexus: any)",
+    "new_block": "--[=[\n\t@description Idempotent perf-strip builder.  Creates a 56 px `TextButton` named\n\t`PerfStrip` with four metric cells (FPS / MEM / TASKS / BUDGET) and a sparkline\n\tarea on the first call; on subsequent calls it updates the labels in-place.\n\tEach cell contains a `Value` and a `Direction` TextLabel updated via\n\t`_UpdatePerfStripLabels`.  The sparkline is delegated to `_RenderSparkline`.\n\tClicking the strip opens a `tasks.performance` detail layer via the navigator.\n\t@param parent Frame -- Container that will host (or already hosts) `PerfStrip`.\n\t@param nexus any -- Nexus instance; provides `_navigator` and `_animationController`.\n\tReads: `_smoothPerf`, `_perfCache`, `_perfDirections`, `_perfHistory`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:_RenderSparkline(strip: Frame)",
+    "new_block": "--[=[\n\t@description Renders a 180×44 px FPS history sparkline inside `strip`.\n\tCreates the `Sparkline` container with a `Segments` sub-frame, `TitleLbl` (FPS),\n\t`Midline` grid reference, and `MaxLbl` / `MinLbl` / `LiveLbl` text labels on\n\tfirst call.  On every call destroys all children of `Segments` and redraws up\n\tto the last 30 samples from `_perfHistory`.  Each sample is plotted as a 2 px\n\tline segment (rotated Frame) plus a 4 px dot, coloured green ≥55 FPS,\n\tamber ≥30 FPS, or red otherwise.  The y-axis range is padded to ±5 FPS when the\n\tspread is less than 5 so a stable line never renders flat against min/max.\n\t@param strip Frame -- The PerfStrip frame containing (or to contain) `Sparkline`.\n\tReads: `_perfHistory`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:_BuildTaskRow(parent: Frame, name: string, taskData: any, nexus: any, order: number): Frame",
+    "new_block": "--[=[\n\t@description Builds a 36 px themed row for one scheduled task.\n\tDerives a status colour (Accent=running, Success=active, Danger=error, Muted=idle)\n\tand assembles a stat array: STATUS badge, error count (if any), priority, memory\n\t(avg KB, auto-scaled to KB/MB), avg time (ms, red >10 ms, amber >5 ms), run\n\tcount, and a REC badge when `IsRecurring` is true.  Attaches a click handler that\n\tpushes a `tasks.detail.<name>` layer via the navigator.  Starts a pulse animation\n\ton the status dot for running/active tasks.\n\t@param parent Frame -- Parent container for the row.\n\t@param name string -- Task identifier (used as display name and layer key).\n\t@param taskData any -- Task snapshot from `_taskCache`.\n\t@param nexus any -- Nexus instance; provides `_navigator` and `_animationController`.\n\t@param order number -- LayoutOrder for the row within parent.\n\t@return Frame -- The newly created row Frame.\n\tSide effects: writes `_selectedTask` when clicked.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:_BuildTaskDetailLayer(frame: Frame, context: any)",
+    "new_block": "--[=[\n\t@description Builds the drill-down detail view for a single task.\n\tClears `frame.Content`, then renders: a title header with the task name,\n\tan action bar with three buttons (Run — calls `taskDef.TaskAction` via pcall;\n\tKill — unschedules the task, moves it to `_archivedTasks`, collapses navigator;\n\tReset — zeroes ExecutionCount / Errors / Perf stats on the live taskDef),\n\ta PROPERTIES section (Status, Priority, Event, Recurring, Delay), and a\n\tPERFORMANCE section (Executions, Avg/Max/Min time, Errors, Avg/Max/Total memory).\n\t@param frame Frame -- Layer host frame; must contain a `Content` child.\n\t@param context any -- `{ Nexus, TaskName, TaskData }` from the navigator context.\n\tSide effects: can unschedule tasks and clear `_archivedTasks` via Kill.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:_BuildPropRow(parent: Frame, key: string, value: string, color: Color3, order: number)",
+    "new_block": "--[=[\n\t@description Builds a 24 px key → value row used in detail layer property tables.\n\tThe key label occupies 45 % of the width in TextSecondary/Caption; the value\n\tlabel occupies 50 % right-aligned in monospace at `color`.\n\t@param parent Frame -- Container that receives the new row.\n\t@param key string -- Property name displayed on the left.\n\t@param value string -- Formatted value string displayed on the right.\n\t@param color Color3 -- Text colour for the value label.\n\t@param order number -- LayoutOrder within parent.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:_BuildPerfDetailLayer(frame: Frame, context: any)",
+    "new_block": "--[=[\n\t@description Builds the full-screen Performance Dashboard layer.\n\tRenders a metrics table (Frames/Sec, Memory, Active Tasks, Frame Budget,\n\tTasks/Frame, History Samples) using `_BuildPropRow`, followed by an FPS HISTORY\n\tchart — a 80 px Frame that replots the last 60 `_perfHistory` snapshots as\n\tcoloured bars mapping FPS to height (green ≥55, amber ≥30, red otherwise).\n\t@param frame Frame -- Layer host; must contain a `Content` child.\n\t@param context any -- `{ Nexus }` table; nexus is currently unused but kept for\n\tinterface consistency.\n\tReads: `_perfCache`, `_perfHistory`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/TasksModule.luau",
+    "anchor": "function TasksModule:Destroy()",
+    "new_block": "--[=[\n\t@description Cleans up resources held by this TasksModule instance.\n\tCalls `Destroy` on the `_searchAC` SearchAutocomplete handle if one exists,\n\tpreventing the autocomplete overlay from orphaning inside the navigator UI.\n\tSafe to call multiple times.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "local Theme = require(script.Parent.Parent.Theme)",
+    "new_block": "--[=[\n\t@module ProfilerModule\n\t@description Provides the Profiler panel subsystem for the ServiceManager UI.\n\tCollects scheduler task timing, FSM update timing, network traffic, Lua GC\n\theap size, and Roblox instance-tree memory metrics.  Renders budget bars,\n\thot-task / hot-FSM tables, instance-memory breakdowns, and a collapsible\n\tdiagnostics section.  Supports both client (live orchestrator) and server\n\t(snapshot) context modes.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule.new(): any",
+    "new_block": "--[=[\n\t@description Constructs a new `ProfilerModule` instance with default state.\n\tInitialises: `_taskPerf` and `_fsmPerf` (empty maps), `_frameBudget`\n\t(`{ UsedMs=0, BudgetMs=16.6, FPS=60 }`), `_threadPool` stats, `_networkTraffic`\n\tarray, `_gcStats`, `_instanceMemory` scaffold, `_sortMode` (AvgTime),\n\t`_fsmSortMode` (AvgTime), `_showDiagnostics` (false), `_showInstanceMemory` (true).\n\t@return ProfilerModule -- New instance ready for `FetchData`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:FetchData(nexus: any)",
+    "new_block": "--[=[\n\t@description Entry point for the profiler data-collection pass.\n\tDispatches to `_FetchClient` in client mode or `_FetchServer` (snapshot path)\n\tin server mode.  In server mode also applies the client's live FPS from\n\t`nexus._lastFPS` to `_frameBudget.FPS` after the snapshot is read.\n\tAfter collection writes `profiler.frameBudget`, `profiler.taskCount`, and\n\t`profiler.fsmCount` to the Store via a BatchUpdate.\n\t@param nexus any -- Nexus instance; provides `_orchestrator`, `_serverData`,\n\t`_contextMode`, `_lastFPS`, and `Store`.\n\tWrites: `_frameBudget.FPS`, and the Store keys listed above.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_CountTable(t: { [any]: any }): number",
+    "new_block": "--[=[\n\t@description Counts the number of entries in a generic table.\n\tUsed internally to derive `profiler.taskCount` and `profiler.fsmCount`\n\tfrom `_taskPerf` and `_fsmPerf` without building an intermediate array.\n\t@param t { [any]: any } -- The table to count.\n\t@return number -- Number of key-value pairs in `t`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_FetchClient(orchestrator: any, nexus: any?)",
+    "new_block": "--[=[\n\t@description Populates profiler state from a live orchestrator in client mode.\n\tTasks: iterates `orchestrator.Scheduler.Tasks`, computing AvgMs, MaxMs,\n\tRunCount, MemoryAvgKB, MemoryMaxKB, Priority, IsRecurring, and Event.\n\tAlso reads `LastFrameStats` for `_frameBudget` and calls\n\t`GetThreadPoolStats` (pcall-guarded) for `_threadPool`.\n\tFSMs: enumerates `Factory.Registry:GetAllStateMachines()` and records\n\tAvgMs, MaxMs, UpdateCount, MemDeltaKB, IsActive, and current State.\n\tNetwork: delegates to `_FetchNetworkClient`.  GC: `collectgarbage('count')`.\n\tInstance memory: delegates to `_FetchInstanceMemoryLocal`.\n\t@param orchestrator any -- Live orchestrator table exposed by Nexus.\n\t@param nexus any? -- Nexus instance used to read `_lastFPS`.\n\tWrites: `_taskPerf`, `_fsmPerf`, `_frameBudget`, `_threadPool`,\n\t`_networkTraffic`, `_gcStats`, `_instanceMemory`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_FetchServer(serverData: any?)",
+    "new_block": "--[=[\n\t@description Populates profiler state from a server-side snapshot table.\n\tHandles unit-conversion edge cases: FrameTime/Budget values <1 are assumed\n\tto be in seconds and are multiplied by 1000; BudgetMs falls back to 16.6 if\n\tthe result is below 0.1 ms.  Reads `serverData.Tasks`, `serverData.FSM`,\n\t`serverData.Network` (Commands, EventBuses, Remotes — sorted by message count),\n\tand `serverData.InstanceMemory`.  Resets all state to empty/zero if\n\t`serverData` is nil.\n\t@param serverData any? -- Server performance snapshot from `nexus._serverData`.\n\tWrites: `_taskPerf`, `_fsmPerf`, `_frameBudget`, `_networkTraffic`,\n\t`_gcStats`, `_instanceMemory`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_FetchNetworkClient(nm: any?)",
+    "new_block": "--[=[\n\t@description Rebuilds `_networkTraffic` from the client-side NetworkManager stats.\n\tReads `nm._remoteStats`, `nm._busStats`, and `nm._invokeStats`; only entries\n\twith a non-zero `Count` are included.  The result is sorted descending by\n\tmessage count so the busiest channels appear at the top.\n\t@param nm any? -- NetworkManager reference from the live orchestrator.  Safe\n\tto call with nil — clears `_networkTraffic` and returns immediately.\n\tWrites: `_networkTraffic`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_FetchInstanceMemoryLocal()",
+    "new_block": "--[=[\n\t@description Enumerates descendant counts across key Roblox services to estimate\n\tinstance-tree memory pressure.  Walks ReplicatedStorage, Workspace, Lighting,\n\tSoundService, and PlayerGui (client only).  Identifies top offenders (children\n\tof RS with >50 descendants, Workspace children with >100) and duplicate assets\n\t(multiple children of RS/Assets sharing the same name).  Results are capped\n\tto 15 top offenders and 10 duplicates.\n\tWrites: `_instanceMemory` (`{ Services, TopOffenders, TotalDescendants,\n\tDuplicateAssets? }`).\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:Render(_nexus: any) end",
+    "new_block": "--[=[\n\t@description No-op render hook required by the subsystem contract.\n\tProfiler rendering is driven entirely by `BuildRootLayer` / `FetchData`.\n\t@param _nexus any -- Unused; present for interface compatibility.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_GetSortedTasks(): { any }",
+    "new_block": "--[=[\n\t@description Returns `_taskPerf` as a sorted array for table rendering.\n\tSort modes: `AvgTime` (default, descending), `MaxTime` (descending),\n\t`Runs` (descending), `Memory` (descending by MemoryAvgKB), `Name` (A-Z).\n\t@return { any } -- Array of task-perf records ordered by `_sortMode`.\n\tReads: `_taskPerf`, `_sortMode`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_GetSortedFSMs(): { any }",
+    "new_block": "--[=[\n\t@description Returns `_fsmPerf` as a sorted array for table rendering.\n\tSort modes mirror `_GetSortedTasks` but use `_fsmSortMode` and the\n\tFSM-specific `MemDeltaKB` / `UpdateCount` fields.\n\t@return { any } -- Array of FSM-perf records ordered by `_fsmSortMode`.\n\tReads: `_fsmPerf`, `_fsmSortMode`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:BuildRootLayer(frame: Frame, context: any)",
+    "new_block": "--[=[\n\t@description Builds the Profiler panel root layer by composing four sections.\n\tClears `frame.Content`, creates UIListLayout + UIPadding if absent, then\n\tcalls: `_BuildBudgetBar`, `_BuildHotTasksSection`, `_BuildHotFSMsSection`,\n\t`_BuildInstanceMemorySection`, `_BuildDiagnosticsSection` each with a\n\tmonotonically increasing layout-order counter.\n\t@param frame Frame -- Layer host; must contain a child named `Content`.\n\t@param context any -- `{ Nexus }` table.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_BuildBudgetBar(parent: Frame, layoutOrder: number)",
+    "new_block": "--[=[\n\t@description Renders a 40 px frame-budget utilisation bar.\n\tComputes `pct = UsedMs / BudgetMs` (clamped to [0, 1]) and colours the fill\n\tgreen (<60 %), amber (<90 %), or red (≥90 %).  Displays `UsedMs / BudgetMs`\n\tat `FPS` in the label row and a right-aligned badge showing Lua heap (MB)\n\tand total instance-descendant count (colour-coded by threshold).\n\t@param parent Frame -- Container that receives the `BudgetBar` frame.\n\t@param layoutOrder number -- LayoutOrder for the section within parent.\n\tReads: `_frameBudget`, `_gcStats`, `_instanceMemory.TotalDescendants`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_BuildHotTasksSection(parent: Frame, nexus: any, layoutOrder: number)",
+    "new_block": "--[=[\n\t@description Renders the HOT TASKS table (up to MAX_HOT_ITEMS = 10 rows).\n\tEmits a section header label, calls `_BuildTableHeader` with columns\n\tName / AvgMs / MaxMs / ×Runs / MemKB / Pri, then iterates `_GetSortedTasks()`\n\tand calls `_BuildTableRow` for each.  AvgMs is coloured red >1 ms, amber >0.1 ms,\n\tgreen otherwise.  Shows '(no tasks)' placeholder when the list is empty.\n\t@param parent Frame -- Container for the section widgets.\n\t@param nexus any -- Currently unused; kept for interface consistency.\n\t@param layoutOrder number -- Base layout-order multiplied by 100 for row spacing.\n\tReads: `_taskPerf`, `_sortMode`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOrder: number)",
+    "new_block": "--[=[\n\t@description Renders the HOT FSMs table (up to MAX_HOT_ITEMS = 10 rows).\n\tColumns: FSM Id (truncated to 30 chars) / State / AvgMs / MaxMs / ×Updates / Mem∆.\n\tInactive FSMs are displayed in TextMuted; the current state is accented.\n\tSame AvgMs colour thresholds as `_BuildHotTasksSection`.\n\t@param parent Frame -- Container for the section widgets.\n\t@param nexus any -- Currently unused; kept for interface consistency.\n\t@param layoutOrder number -- Base layout-order multiplied by 100 for row spacing.\n\tReads: `_fsmPerf`, `_fsmSortMode`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_BuildInstanceMemorySection(parent: Frame, _nexus: any, layoutOrder: number)",
+    "new_block": "--[=[\n\t@description Renders the collapsible INSTANCE MEMORY section.\n\tShows a toggle button with total descendant count.  When `_showInstanceMemory`\n\tis false only the toggle is rendered; click sets the flag and calls\n\t`_nexus._navigator:RebuildCurrentLayer()`.  When expanded: service-breakdown\n\tlist sorted by count, TOP OFFENDERS table (Name / Class / Descendants / Service,\n\tup to 10 rows), DUPLICATE ASSETS warning list, FSM instance ownership table,\n\tand SUSPECTED ORPHAN INSTANCES list.\n\t@param parent Frame -- Container for all section widgets.\n\t@param _nexus any -- Nexus instance used to trigger layer rebuilds on toggle.\n\t@param layoutOrder number -- Base layout-order multiplied by 100.\n\tReads: `_instanceMemory`, `_showInstanceMemory`.\n\tWrites: `_showInstanceMemory` on toggle.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_BuildDiagnosticsSection(parent: Frame, _nexus: any, layoutOrder: number)",
+    "new_block": "--[=[\n\t@description Renders the collapsible DIAGNOSTICS section.\n\tCollapsed by default (`_showDiagnostics = false`).  Toggle click sets the\n\tflag and calls `_nexus._navigator:RebuildCurrentLayer()`.  When expanded\n\tshows: thread-pool stats (Total / Free / Active / Peak), GC heap (MB),\n\tand top-5 network traffic entries with name, message count, and last-fired age.\n\t@param parent Frame -- Container for diagnostics widgets.\n\t@param _nexus any -- Nexus instance used to trigger layer rebuilds on toggle.\n\t@param layoutOrder number -- Base layout-order multiplied by 100.\n\tReads: `_threadPool`, `_gcStats`, `_networkTraffic`, `_showDiagnostics`.\n\tWrites: `_showDiagnostics` on toggle.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_BuildTableHeader(parent: Frame, layoutOrder: number, columns: { string }, widths: { number })",
+    "new_block": "--[=[\n\t@description Builds a 16 px transparent header row for tabular data.\n\tPlaces one TextLabel per column, positioned by cumulative x-offset derived\n\tfrom `widths` (fractional UDim2 scale values).  Labels are styled in\n\tTextMuted / Tiny / Bold.\n\t@param parent Frame -- Container that receives the header row.\n\t@param layoutOrder number -- LayoutOrder for the row within parent.\n\t@param columns { string } -- Column header strings.\n\t@param widths { number } -- Fractional width (0–1) for each column.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:_BuildTableRow(parent: Frame, layoutOrder: number, cells: { { Text: string, Width: number, Color: Color3 } })",
+    "new_block": "--[=[\n\t@description Builds a 18 px data row for tabular profiler tables.\n\tCreates a GlassTertiary Frame with a UICorner, then places one monospace\n\tTextLabel per cell positioned by cumulative x-offset from `cell.Width`.\n\t@param parent Frame -- Container that receives the data row.\n\t@param layoutOrder number -- LayoutOrder for the row within parent.\n\t@param cells { { Text: string, Width: number, Color: Color3 } } --\n\tArray of cell specs; `Color` defaults to TextSecondary if omitted.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/ProfilerModule.luau",
+    "anchor": "function ProfilerModule:Destroy()",
+    "new_block": "--[=[\n\t@description Releases profiler state to allow garbage collection.\n\tClears `_taskPerf`, `_fsmPerf`, and `_networkTraffic` in place so any\n\tlingering references to the module do not retain large data tables.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "local Theme = require(script.Parent.Parent.Theme)",
+    "new_block": "--[=[\n\t@module NetworkModule\n\t@description Provides the Network panel subsystem for the ServiceManager UI.\n\tEnumerates all NetworkManager commands, EventBuses, server callbacks, and\n\tRoblox Remote instances from either the live client orchestrator or a server\n\tsnapshot.  Renders rows grouped by type (EntityCommand, NetworkCommand,\n\tRemoteEvent, RemoteFunction, EventBus, ServerRequest) with message count,\n\tsubscriber count, and drilldown detail layers including call history.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule.new(): any",
+    "new_block": "--[=[\n\t@description Constructs a new `NetworkModule` instance with default state.\n\tInitialises: `_commandCache` (NetworkCommands, EntityCommands, Remotes),\n\t`_eventBusCache`, `_serverCallbacks`, `_searchText`, `_sortMode` (Name),\n\t`_selectedItem`, and `_nexusRef` (stored for summary-strip click handlers).\n\t@return NetworkModule -- New instance ready for `FetchData`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:FetchData(nexus: any)",
+    "new_block": "--[=[\n\t@description Main data-collection pass for the Network panel.\n\tIn client mode: enumerates `nm.EventBuses`, `nm.ServerRequestCallbacksSync`,\n\t`nm.ServerRequestCallbacksAsync`, `nm.EntityCommandCallbacks`, and named\n\tRemote instances (OrchestratorEvent/Function, EntityUpdateEvent/CommandEvent).\n\tMessage counts and RecentCalls are read from `nm._busStats` / `nm._remoteStats`.\n\tIn server mode: reads equivalent data from `nexus._serverData.Network`.\n\tPublishes `network.commands`, `network.buses`, and `network.callbacks` to Store.\n\t@param nexus any -- Nexus; provides `_orchestrator`, `_serverData`,\n\t`_contextMode`, and `Store`.\n\tWrites: `_commandCache`, `_eventBusCache`, `_serverCallbacks`, and the Store.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_DetectCommandType(name: string, cmd: any): string",
+    "new_block": "--[=[\n\t@description Heuristically classifies a NetworkManager command object.\n\tReturns `cmd.Type` if already set.  Otherwise inspects the name for 'entity'\n\t(→ EntityCommand), then checks object shape: `IsRemote` flag (→ RemoteFunction),\n\t`ServerRequestCallbacks` or `_serverCallback` (→ ServerRequest),\n\t`Subscribers` or `_subscribers` (→ EventBus), otherwise `NetworkCommand`.\n\t@param name string -- The command's registered name.\n\t@param cmd any -- The command table from the NetworkManager registry.\n\t@return string -- One of EntityCommand / RemoteFunction / ServerRequest /\n\tEventBus / NetworkCommand / Unknown.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_CountSubscribers(obj: any): number",
+    "new_block": "--[=[\n\t@description Counts the number of subscribers attached to a bus or signal object.\n\tChecks `obj.Subscribers`, `obj._subscribers`, `obj.Listeners`, `obj._listeners`\n\tin order.  If the value is a table, counts its entries; if a number, returns it\n\tdirectly.  Returns 0 for non-table input or when no subscriber field is found.\n\t@param obj any -- Signal, EventBus, or command table to inspect.\n\t@return number -- Subscriber count, or 0 if indeterminate.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_ExtractCmdProperties(cmd: any): { [string]: any }",
+    "new_block": "--[=[\n\t@description Extracts public scalar properties from a command table for display\n\tin the detail layer.  Includes only string keys that do not start with `_`\n\tand whose values are neither functions nor tables (avoids leaking internal\n\tstate or causing serialisation errors in the UI).\n\t@param cmd any -- Command table to inspect.\n\t@return { [string]: any } -- Map of public scalar key-value pairs.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_ExtractBusProperties(bus: any): { [string]: any }",
+    "new_block": "--[=[\n\t@description Extracts public scalar properties from an EventBus object using the\n\tsame filter logic as `_ExtractCmdProperties`: public-key, non-function,\n\tnon-table values only.\n\t@param bus any -- EventBus table to inspect.\n\t@return { [string]: any } -- Map of public scalar key-value pairs.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:Render(_nexus: any) end",
+    "new_block": "--[=[\n\t@description No-op render hook required by the subsystem contract.\n\tNetwork rendering is driven entirely by `BuildRootLayer` / `FetchData`.\n\t@param _nexus any -- Unused; present for interface compatibility.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_GetAllItems(): { { Name: string, Data: any } }",
+    "new_block": "--[=[\n\t@description Returns the merged command + event-bus list filtered by\n\t`_searchText` and sorted by `_sortMode`.\n\tIterates `_commandCache` and `_eventBusCache`; applies a case-insensitive\n\tsubstring match on name and type.  Server callbacks are intentionally\n\texcluded — every callback already appears in `_commandCache` with more detail.\n\tSort modes: Name (A-Z), Type (A-Z), Subscribers (desc), Messages (desc).\n\t@return { { Name: string, Data: any } } -- Sorted array for rendering.\n\tReads: `_commandCache`, `_eventBusCache`, `_searchText`, `_sortMode`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:BuildRootLayer(frame: Frame, context: any)",
+    "new_block": "--[=[\n\t@description Builds the Network panel root layer.\n\tStores `nexus` in `_nexusRef` for summary-strip callbacks, clears `Content`,\n\tcreates UIListLayout + UIPadding, calls `_BuildSummaryStrip` and `_BuildToolbar`,\n\tthen renders items grouped by type in the canonical order:\n\tEntityCommand → NetworkCommand → RemoteEvent → RemoteFunction → EventBus\n\t→ ServerRequest → Unknown.  Each type group gets a coloured section label.\n\tRows are animated in via `animationController:StaggerIn`.\n\t@param frame Frame -- Layer host; must contain a `Content` child.\n\t@param context any -- `{ Nexus }` table.\n\tWrites: `_nexusRef`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_BuildSummaryStrip(parent: Frame)",
+    "new_block": "--[=[\n\t@description Renders a 44 px summary strip with four metric cells:\n\tCOMMANDS (count from `_commandCache`), BUSES (count from `_eventBusCache`),\n\tSRV CB (count from `_serverCallbacks`), MESSAGES (total across both caches).\n\tEach cell is a clickable `TextButton`; COMMANDS clears `_searchText`,\n\tBUSES sets it to 'EventBus', SRV CB sets it to 'ServerRequest', then\n\tforces a data refresh via `_nexusRef._lastDataRefresh = 0`.\n\t@param parent Frame -- Container that receives the `NetSummary` frame.\n\tReads: `_commandCache`, `_eventBusCache`, `_serverCallbacks`, `_nexusRef`.\n\tWrites: `_searchText` (on cell click).\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_BuildToolbar(parent: Frame, nexus: any)",
+    "new_block": "--[=[\n\t@description Builds the search-and-sort toolbar for the Network panel.\n\tCreates a `TextBox` wired to `SearchAutocomplete` (suggestions from all cached\n\tcommand/bus/callback names), and a sort-mode cycle button cycling through\n\tSORT_MODES: Name / Type / Subscribers / Messages.\n\tUnlike TasksModule, this toolbar is NOT idempotent — it is rebuilt on each\n\t`BuildRootLayer` call (the parent Content is cleared before `_BuildToolbar`).\n\t@param parent Frame -- Content frame receiving the `NetToolbar` frame.\n\t@param nexus any -- Nexus instance; `_lastDataRefresh` reset on text/sort change.\n\tWrites: `_searchText`, `_sortMode`, `_searchAC`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_BuildNetworkRow(parent: Frame, name: string, data: any, nexus: any, order: number): Frame",
+    "new_block": "--[=[\n\t@description Builds a 34 px themed row for one network command or bus entry.\n\tAssembles a stat array: TYPE badge (coloured by TYPE_COLORS), subscriber count\n\t(if >0), message count, handler indicator (✓), and remote indicator (↗).\n\tClicking the row stores `_selectedItem` and pushes a `network.detail.<name>`\n\tdetail layer.  Attaches a hover-glow animation via `animationController`.\n\t@param parent Frame -- Parent container.\n\t@param name string -- Item identifier (displayed as title).\n\t@param data any -- Item snapshot from `_commandCache` or `_eventBusCache`.\n\t@param nexus any -- Nexus; provides `_navigator` and `_animationController`.\n\t@param order number -- LayoutOrder within parent.\n\t@return Frame -- The created row Frame.\n\tWrites: `_selectedItem` on click.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_BuildNetworkDetailLayer(frame: Frame, context: any)",
+    "new_block": "--[=[\n\t@description Builds the drill-down detail view for a network item.\n\tRenders: type-coloured header, an action bar (Fire button for EventBus/Signal/\n\tRemoteEvent/NetworkCommand types, Inspect button), a PROPERTIES section of\n\tscalar key-value pairs, a RECENT CALLS section listing the last few invocations\n\twith timestamps, and a button to open the full CALL HISTORY layer.\n\t@param frame Frame -- Layer host; must contain a `Content` child.\n\t@param context any -- `{ Nexus, ItemName, ItemData }` from navigator.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_BuildPropRow(parent: Frame, key: string, value: string, color: Color3, order: number)",
+    "new_block": "--[=[\n\t@description Builds a 24 px key → value row for the network detail property tables.\n\tIdentical in structure to `TasksModule:_BuildPropRow`.\n\t@param parent Frame -- Container that receives the new row.\n\t@param key string -- Property name displayed on the left.\n\t@param value string -- Formatted value displayed on the right.\n\t@param color Color3 -- Text colour for the value label.\n\t@param order number -- LayoutOrder within parent.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:Destroy()",
+    "new_block": "--[=[\n\t@description Cleans up resources held by this NetworkModule instance.\n\tDestroys the `_searchAC` SearchAutocomplete handle if present.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_BuildCallsHistoryLayer(frame: Frame, context: any)",
+    "new_block": "--[=[\n\t@description Builds a scrollable call-history layer for a network item.\n\tReads `context.ItemData.RecentCalls` and renders each entry as a row showing\n\ttimestamp, elapsed time since the call, and structured argument preview.\n\tDelegates argument rendering to `_RenderStructuredArgs`.\n\t@param frame Frame -- Layer host; must contain a `Content` child.\n\t@param context any -- `{ Nexus, ItemName, ItemData }` from navigator.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_RenderStructuredArgs(parent: Frame, args: any, depth: number)",
+    "new_block": "--[=[\n\t@description Recursively renders a structured arguments table into the UI.\n\tIterates numeric or string keys; for each entry calls `_RenderStructuredArg`.\n\tDepth is passed through to limit nesting and indentation.\n\t@param parent Frame -- Container that receives argument rows.\n\t@param args any -- Argument table (array or map) to render.\n\t@param depth number -- Current nesting depth (0 = top level).\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/NetworkModule.luau",
+    "anchor": "function NetworkModule:_RenderStructuredArg(parent: Frame, key: string, value: any, depth: number, layoutOrder: number)",
+    "new_block": "--[=[\n\t@description Renders a single argument key-value pair in the call-history view.\n\tScalar values are displayed inline.  Table values display a summary line and,\n\tif `depth < 3`, recurse into `_RenderStructuredArgs`.  Indentation scales\n\twith `depth` (4 px per level).\n\t@param parent Frame -- Container that receives the rendered row.\n\t@param key string -- Argument key or index.\n\t@param value any -- Argument value to display.\n\t@param depth number -- Nesting depth for indentation.\n\t@param layoutOrder number -- LayoutOrder for the row within parent.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/LogsModule.luau",
+    "anchor": "local TweenService = game:GetService(\"TweenService\")",
+    "new_block": "--[=[\n\t@module LogsModule\n\t@description Provides the Logs panel subsystem for the ServiceManager UI.\n\tAggregates log entries from three sources: `orchestrator.Logger.History`,\n\tthe ServiceManager internal log buffer (`nexus._logs`), and server-side logs\n\tfrom `nexus._serverData.Logs` (server context mode).  Renders a scrollable\n\tlog list with level-filter tabs (ALL / DEBUG / INFO / WARN / ERROR), a\n\ttext-search box with autocomplete, and a CLEAR button.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/LogsModule.luau",
+    "anchor": "function LogsModule.new(): any",
+    "new_block": "--[=[\n\t@description Constructs a new `LogsModule` instance with default state.\n\tInitialises: `_logCache` (all ingested entries, capped at 2×MAX_DISPLAY_LOGS),\n\t`_filteredLogs` (post-filter view, capped at MAX_DISPLAY_LOGS = 200),\n\t`_activeFilter` ('ALL'), `_searchText`, `_autoScroll` (true),\n\t`_scrollFrame` (nil until `BuildRootLayer`), `_filterButtons` map,\n\t`_lastRenderedHash`, and the three incremental-read counters:\n\t`_lastLoggerCount`, `_lastInternalLogCount`, `_lastServerLogCount`.\n\t@return LogsModule -- New instance ready for `FetchData`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/LogsModule.luau",
+    "anchor": "function LogsModule:FetchData(nexus: any)",
+    "new_block": "--[=[\n\t@description Incremental log ingestion pass called by ServiceBrain on each tick.\n\tUses cursor fields (`_lastLoggerCount` etc.) to only process new entries since\n\tthe last call — prevents O(n) re-scan of the entire log buffer on each tick.\n\tReads from `orchestrator.Logger.History`, `nexus._logs`, and (server mode)\n\t`nexus._serverData.Logs`.  When any new entries are found: trims `_logCache`\n\tto 2×MAX, calls `_ApplyFilters` and `_RenderLogs`.  Always publishes\n\t`logs.count`, `logs.filteredCount`, and `logs.filter` to the Store.\n\t@param nexus any -- Nexus; provides `_orchestrator`, `_logs`, `_serverData`,\n\t`_contextMode`, and `Store`.\n\tWrites: `_logCache`, `_filteredLogs`, `_lastLoggerCount`,\n\t`_lastInternalLogCount`, `_lastServerLogCount`, and the Store.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/LogsModule.luau",
+    "anchor": "function LogsModule:Render(nexus: any) end",
+    "new_block": "--[=[\n\t@description No-op render hook required by the subsystem contract.\n\tLog rendering is driven incrementally by `FetchData` → `_RenderLogs`.\n\t@param nexus any -- Unused; present for interface compatibility.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/LogsModule.luau",
+    "anchor": "function LogsModule:_ApplyFilters()",
+    "new_block": "--[=[\n\t@description Rebuilds `_filteredLogs` from `_logCache` by applying the\n\tactive level filter and text search.  Level filter skips entries whose\n\t`Level` does not match `_activeFilter` (unless filter is 'ALL').\n\tText search applies a case-insensitive `find` against both `entry.Message`\n\tand `entry.Source`.  The result is trimmed to MAX_DISPLAY_LOGS = 200.\n\tReads: `_logCache`, `_activeFilter`, `_searchText`.\n\tWrites: `_filteredLogs`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/LogsModule.luau",
+    "anchor": "function LogsModule:BuildRootLayer(frame: Frame, context: any)",
+    "new_block": "--[=[\n\t@description Idempotent root-layer builder for the Logs panel.\n\tIf `LogScroll` already exists inside `frame.Content` the method returns\n\timmediately (logs render incrementally).  On first call: disables outer\n\tScrollingFrame auto-sizing, clears content, then builds a fixed 68 px toolbar\n\t(level-filter buttons, CLEAR button, search TextBox with source autocomplete)\n\tand a `ScrollingFrame` named `LogScroll` with AutomaticCanvasSize.Y.\n\tStores `_scrollFrame` reference and calls `_RenderLogs` once.\n\t@param frame Frame -- Layer host; must contain a `Content` child.\n\t@param context any -- `{ Nexus }` table.\n\tWrites: `_scrollFrame`, `_filterButtons`, `_searchAC`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/LogsModule.luau",
+    "anchor": "function LogsModule:_UpdateFilterVisuals()",
+    "new_block": "--[=[\n\t@description Tweens the visual state of the five filter buttons to reflect\n\t`_activeFilter`.  The active button transitions to 0.3 background transparency\n\tand white text; inactive buttons transition to 0.8 transparency and their\n\tlevel colour.  Uses `TweenService` with `Theme.Tween.Fast`.\n\tReads: `_filterButtons`, `_activeFilter`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/LogsModule.luau",
+    "anchor": "function LogsModule:_RenderLogs()",
+    "new_block": "--[=[\n\t@description Clears and re-renders all log rows in `_scrollFrame`.\n\tDestroys every `Frame` and `TextLabel` child of `LogScroll`, then iterates\n\t`_filteredLogs` creating one row per entry.  Each row shows a level icon,\n\ttimestamp (formatted as hh:mm:ss), level-coloured text, source badge,\n\tand the log message.  Rows with CorrelationId show a dim correlation badge.\n\tReads: `_filteredLogs`, `_scrollFrame`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/LogsModule.luau",
+    "anchor": "function LogsModule:Destroy()",
+    "new_block": "--[=[\n\t@description Cleans up resources held by this LogsModule instance.\n\tDestroys the `_searchAC` SearchAutocomplete handle if present.\n\tClears `_scrollFrame` to release the UI reference.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/InsightsModule.luau",
+    "anchor": "local Theme = require(script.Parent.Parent.Theme)",
+    "new_block": "--[=[\n\t@module InsightsModule\n\t@description Provides the Insights panel subsystem for the ServiceManager UI.\n\tDelegates analysis to the `AnalyticsEngine` and surfaces the results as\n\tactive insight cards (with severity badges and actionable hints) and a\n\tscrollable history list.  Insight severities: CRITICAL, WARNING, INFO, SUGGESTION.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/InsightsModule.luau",
+    "anchor": "function InsightsModule.new(): any",
+    "new_block": "--[=[\n\t@description Constructs a new `InsightsModule` instance.\n\tInitialises `_activeInsights` and `_historyInsights` as empty arrays.\n\t@return InsightsModule -- New instance ready for `FetchData`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/InsightsModule.luau",
+    "anchor": "function InsightsModule:FetchData(nexus: any)",
+    "new_block": "--[=[\n\t@description Runs the AnalyticsEngine analysis cycle (if pending work exists),\n\tthen refreshes `_activeInsights` and `_historyInsights` from the engine.\n\tIf `analytics:HasPendingWork()` is true, calls `analytics:RunCycle(nexus)`\n\twrapped in a pcall to prevent a failing analysis from crashing the panel.\n\tPublishes `insights.active`, `insights.history`, and `insights.activeCount`\n\tto the Store via BatchUpdate.\n\t@param nexus any -- Nexus; provides `_analyticsEngine` and `Store`.\n\tWrites: `_activeInsights`, `_historyInsights`, and the Store.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/InsightsModule.luau",
+    "anchor": "function InsightsModule:Render(nexus: any) end",
+    "new_block": "--[=[\n\t@description No-op render hook required by the subsystem contract.\n\tInsights rendering is driven entirely by `BuildRootLayer` / `FetchData`.\n\t@param nexus any -- Unused; present for interface compatibility.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/InsightsModule.luau",
+    "anchor": "function InsightsModule:BuildRootLayer(frame: Frame, context: any)",
+    "new_block": "--[=[\n\t@description Builds the Insights panel root layer.\n\tClears `frame.Content`, creates UIListLayout + UIPadding, renders a 28 px\n\tseverity-summary strip (CRIT / WARN / INFO / SUGG badge counts), then the\n\tACTIVE INSIGHTS section (with an empty-state placeholder if none), then a\n\tHISTORY section showing the last 20 resolved insights in reverse order.\n\tAll rows are animated in via `animationController:StaggerIn`.\n\t@param frame Frame -- Layer host; must contain a `Content` child.\n\t@param context any -- `{ Nexus }` table.\n\tReads: `_activeInsights`, `_historyInsights`.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/InsightsModule.luau",
+    "anchor": "function InsightsModule:_BuildInsightRow(parent: Frame, insight: any, nexus: any, order: number): Frame",
+    "new_block": "--[=[\n\t@description Builds a 40 px (64 px if ActionableHints present) insight card.\n\tShows a severity dot (pulsed for CRITICAL via `animationController:StartPulse`),\n\ttitle, subsystem badge, truncated description, and — if the insight has\n\t`ActionableHints` — an inline hint list below the description.\n\tClicking the card pushes an `insights.detail.<id>` detail layer.\n\t@param parent Frame -- Container that receives the row.\n\t@param insight any -- Insight object with Id, Title, Description, Severity,\n\tSubsystem, and optional ActionableHints.\n\t@param nexus any -- Nexus; provides `_navigator` and `_animationController`.\n\t@param order number -- LayoutOrder within parent.\n\t@return Frame -- The created row Frame.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/InsightsModule.luau",
+    "anchor": "function InsightsModule:_BuildHistoryRow(parent: Frame, insight: any, order: number): Frame",
+    "new_block": "--[=[\n\t@description Builds a compact 30 px history row for a resolved insight.\n\tShows the severity dot (non-pulsed, muted), title, subsystem badge, and a\n\tresolution timestamp or age label derived from `insight.ResolvedAt`.\n\t@param parent Frame -- Container that receives the row.\n\t@param insight any -- Resolved insight object from `_historyInsights`.\n\t@param order number -- LayoutOrder within parent.\n\t@return Frame -- The created history row Frame.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/InsightsModule.luau",
+    "anchor": "function InsightsModule:_BuildInsightDetailLayer(frame: Frame, context: any)",
+    "new_block": "--[=[\n\t@description Builds the drill-down detail view for one insight.\n\tRenders: severity-coloured title header, full description text, severity badge,\n\tsubsystem badge, a DETAILS section with all insight metadata as prop-rows\n\t(Category, DetectedAt, ConfidenceScore, AffectedEntities count), and a\n\tRECOMMENDED ACTIONS section listing each `ActionableHints` entry.\n\t@param frame Frame -- Layer host; must contain a `Content` child.\n\t@param context any -- `{ Nexus, Insight }` table from navigator.\n]=]"
+  },
+  {
+    "file": "FSM/Orchestrator/ServiceManager/Subsystems/InsightsModule.luau",
+    "anchor": "function InsightsModule:Destroy()",
+    "new_block": "--[=[\n\t@description Releases state held by this InsightsModule instance.\n\tClears `_activeInsights` and `_historyInsights` in place.\n]=]"
+  }
+]

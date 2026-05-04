@@ -14,11 +14,8 @@ local PlayerTeardownFSM = {
 }
 
 --[=[
-	@description Returns the state machines for this FSM, or `nil` when it cannot be found.
-	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
-	@return any -- Resolved state machines, or `nil` when unavailable.
+	@description Safely invokes a callback with pcall, logging any errors without crashing the FSM.
 ]=]
-
 local function getStateMachines(orchestrator: any): { [string]: any }
 	if type(orchestrator.GetStateMachines) == "function" then
 		local ok, result = pcall(function()
@@ -33,12 +30,8 @@ local function getStateMachines(orchestrator: any): { [string]: any }
 end
 
 --[=[
-	@description Returns the state machine field for this FSM, or `nil` when it cannot be found.
-	@param stateMachine any  -- State machine being inspected during teardown matching.
-	@param key any  -- Field name to read from the state machine or its context.
-	@return any -- Resolved state machine field, or `nil` when unavailable.
+	@description Resolves get state machine field from the FSM context or entity state.
 ]=]
-
 local function getStateMachineField(stateMachine: any, key: string): any
 	local context = stateMachine and stateMachine.Context
 	if type(context) == "table" and context[key] ~= nil then
@@ -56,13 +49,12 @@ local function getStateMachineField(stateMachine: any, key: string): any
 end
 
 --[=[
-	@description Performs the `stateMachineMatchesPlayer` helper work.
+	@description Executes the stateMachineMatchesPlayer operation.
 	@param fsm any  -- PlayerTeardownFSM instance carrying the user, entity ids, and teardown bookkeeping.
 	@param candidateId any  -- Candidate state-machine id from the orchestrator lookup.
 	@param stateMachine any  -- State machine being inspected during teardown matching.
 	@return boolean -- Whether the helper completed successfully.
 ]=]
-
 local function stateMachineMatchesPlayer(fsm: any, candidateId: string, stateMachine: any): boolean
 	if stateMachine == nil then
 		return false

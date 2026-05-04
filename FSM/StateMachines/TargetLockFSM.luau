@@ -69,9 +69,8 @@ end
 --[=[
 	@description Destroys indicator.
 	@param fsm any  -- TargetLockFSM instance carrying the local player, current target id, and indicator state.
-	@return nil -- Performs this helper's work in place.
-]=]
 
+]=]
 local function destroyIndicator(fsm: any)
 	local indicator = fsm.Context._indicator
 	if indicator then
@@ -83,12 +82,8 @@ local function destroyIndicator(fsm: any)
 end
 
 --[=[
-	@description Performs the `ensureIndicator` helper work.
-	@param fsm any  -- TargetLockFSM instance carrying the local player, current target id, and indicator state.
-	@param targetCharacter any  -- Character model associated with the request.
-	@return nil -- Performs this helper's work in place.
+	@description Resolves the character model's Humanoid and HumanoidRootPart. Falls back to LocalPlayer.Character if the entity Instance is unavailable.
 ]=]
-
 local function ensureIndicator(fsm: any, targetCharacter: Model)
 	local adornPart = targetCharacter:FindFirstChild("Head")
 		or targetCharacter:FindFirstChild("HumanoidRootPart")

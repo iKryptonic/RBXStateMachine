@@ -651,10 +651,8 @@ end
 
 
 --[=[
-	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
-	@return nil -- Performs state changes or cleanup as side effects.
+	@description Spawns a DamageJob child FSM for each valid victim within the damage window, applying computed damage with knockback.
 ]=]
-
 function DamageJob:OnCleanup() end
 
 return DamageJob

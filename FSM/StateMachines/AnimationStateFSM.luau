@@ -14,11 +14,8 @@ local AnimationStateFSM = {
 }
 
 --[=[
-	@description Returns the character entity for this FSM, or `nil` when it cannot be found.
-	@param fsm any  -- AnimationStateFSM instance tracking the observed animation bucket for this character.
-	@return any -- Resolved character entity, or `nil` when unavailable.
+	@description Resolves the CharacterEntity from the Orchestrator registry. Returns nil if the entity no longer exists.
 ]=]
-
 local function getCharacterEntity(fsm: any): any?
 	return fsm:GetEntity(fsm.CharacterEntityId)
 end

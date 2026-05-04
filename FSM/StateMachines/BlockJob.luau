@@ -289,7 +289,7 @@ end
 
 --[=[
 	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
-	@return nil -- Performs state changes or cleanup as side effects.
+
 ]=]
 
 function BlockJob:OnCleanup()

@@ -1,8 +1,29 @@
 --!strict
-
 --[=[
-	@module CharacterSetupFSM
-	@description Disables default Roblox character systems, waits for ECS entities, creates local controllers and FSMs, binds runtime events, and tears everything down on exit.
+	@Name CharacterSetupFSM
+	@Author iKrypto
+	@Description Client-side deterministic character bootstrap. Disables default Roblox
+	animation (Animate script + Animator), waits for entity replication, creates the
+	controller bundle (dash, double jump, hit react), creates client FSMs (Locomotion,
+	Action, Dash, Jump, Input, etc.), binds lifecycle events, and enters the Active
+	state. TearingDown cleans up all connections and FSMs when the character dies or leaves.
+
+	State flow:
+	Validating → DisablingDefaults → AwaitingEntities → InitControllers
+	→ InitFSMs → BindingEvents → Active → TearingDown → Completed
+
+	Context fields:
+	- Character: Model — the spawned character model
+	- Humanoid: Humanoid — character humanoid
+	- CharacterEntity: any — replicated character entity
+	- Connections: table — event connections to disconnect on teardown
+	- _defaultAnimate: Script — reference to the disabled Animate script
+	- _defaultAnimateWasDisabled: boolean — whether Animate was already disabled
+	- _removedAnimator: Animator — reference to the removed Animator instance
+
+	Required params:
+	- CharacterEntityId: string — character entity ID
+	- PlayerEntityId: string — player entity ID
 ]=]
 
 local CharacterSetupFSM = {
@@ -25,11 +46,14 @@ local CharacterSetupFSM = {
 }
 
 --[=[
-	@description Destroys managed.
-	@param value any  -- Candidate value used by the helper.
-	@return nil -- Performs this helper's work in place.
-]=]
+	@description Disposes a managed resource by type. Disconnects RBXScriptConnections,
+	destroys Instances, calls functions (cleanup callbacks), cancels active FSMs
+	(tables with Cancel+IsActive), destroys tables with a Destroy method, and
+	recursively cleans table children. Used by TearingDown to clean up everything
+	registered during the character's lifetime.
 
+	@param value any — The resource to dispose (connection, Instance, function, FSM, or table)
+]=]
 local function destroyManaged(value: any)
 	if value == nil then
 		return
@@ -62,11 +86,12 @@ local function destroyManaged(value: any)
 end
 
 --[=[
-	@description Performs the `restoreDefaults` helper work.
-	@param fsm any  -- CharacterSetupFSM instance carrying the character model, controllers, and child FSM bundle.
-	@return nil -- Performs this helper's work in place.
-]=]
+	@description Re-enables the default Animate script and re-parents the removed
+	Animator back into the Humanoid. Called during teardown to restore Roblox's
+	default animation system when the custom pipeline is no longer driving the character.
 
+	@param fsm any — CharacterSetupFSM instance with Context._defaultAnimate and _removedAnimator
+]=]
 local function restoreDefaults(fsm: any)
 	local defaultAnimate = fsm.Context._defaultAnimate
 	if defaultAnimate and defaultAnimate.Parent and fsm.Context._defaultAnimateWasDisabled == false then
@@ -81,11 +106,13 @@ local function restoreDefaults(fsm: any)
 end
 
 --[=[
-	@description Returns the character model for this FSM, or `nil` when it cannot be found.
-	@param fsm any  -- CharacterSetupFSM instance carrying the character model, controllers, and child FSM bundle.
-	@return any -- Resolved character model, or `nil` when unavailable.
-]=]
+	@description Resolves the character Model from the FSM's Context. Checks
+	Context.Character first, falls back to Context.Instance. Returns nil if
+	neither is a valid Model.
 
+	@param fsm any — CharacterSetupFSM instance
+	@return Model? — The character model, or nil
+]=]
 local function getCharacterModel(fsm: any): Model?
 	local character = fsm.Context.Character or fsm.Context.Instance
 	if character and character:IsA("Model") then
@@ -95,11 +122,14 @@ local function getCharacterModel(fsm: any): Model?
 end
 
 --[=[
-	@description Returns the required parts for this FSM, or `nil` when it cannot be found.
-	@param character any  -- Character model associated with the request.
-	@return any -- Resolved required parts, or `nil` when unavailable.
-]=]
+	@description Resolves standard R6/R15 body parts from a character Model.
+	Returns a table with Humanoid, RootPart, Torso, Head, and Limbs (RightArm,
+	LeftArm, RightLeg, LeftLeg) — handling both R6 names ("Right Arm") and R15
+	names ("RightHand"). Any part that doesn't exist will be nil in the result.
 
+	@param character Model — The character model to scan
+	@return { Humanoid, RootPart, Torso, Head, Limbs } — Resolved body parts
+]=]
 local function getRequiredParts(character: Model)
 	local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
 	local limbs = {
@@ -119,12 +149,8 @@ local function getRequiredParts(character: Model)
 end
 
 --[=[
-	@description Performs the `safeInvoke` helper work.
-	@param factory any  -- Callback factory invoked with the FSM and forwarded arguments.
-	@param fsm any  -- CharacterSetupFSM instance carrying the character model, controllers, and child FSM bundle.
-	@return any -- Result returned by `safeInvoke`, mirrored through this wrapper.
+	@description Safely invokes a callback with pcall, logging any errors without crashing the FSM.
 ]=]
-
 local function safeInvoke(factory: any, fsm: any, ...: any): any
 	if type(factory) ~= "function" then
 		return nil

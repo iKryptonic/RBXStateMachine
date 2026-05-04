@@ -333,10 +333,8 @@ end
 
 
 --[=[
-	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
-	@return nil -- Performs state changes or cleanup as side effects.
+	@description Emits a replication intent so other clients can see the effect/action being applied.
 ]=]
-
 function ReplicateIntentJob:OnCleanup() end
 
 return ReplicateIntentJob
