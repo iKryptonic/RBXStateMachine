@@ -12,8 +12,34 @@ local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
 
 --[=[
-	@module MeleeAttackJob
-	@description Executes unarmed combo attacks by spending stamina, playing attack phases, scanning victims, and spawning per-target damage jobs.
+	@Name MeleeAttackJob
+	@Author iKrypto
+	@Description Server-authoritative unarmed melee combo chain FSM. Validates the attack
+	request, acquires a combat lock, checks and deducts stamina, resolves the combo
+	sequence (RightPunch → LeftPunch → LeftKnee → Uppercut → RightKick), emits phase
+	animations, schedules damage windows with victim scanning and knockback, then releases
+	the lock. Uses "Completed" as terminal state (historical: "Complete" typo caused zombie
+	FSM leak — never use "Complete").
+
+	State flow:
+	Validate → AcquireLock → ValidateStamina → DeductStamina → ResolveSequence
+	→ EmitPhaseAnimation → ScheduleDamageWindow → WaitForDamageWindow
+	→ ScanVictims → ProcessVictim → ApplyKnockback → WaitForRecovery
+	→ ReleaseLock → Completed
+
+	Context fields:
+	- _charEntity: any — attacker character entity
+	- _character: Model — attacker character model
+	- _humanoid: Humanoid — for death detection during combo
+	- _comboSlot: number — which combo step (1-5)
+	- _phases: table — resolved phase timeline
+	- _damage: number — computed damage per hit
+	- _lockHeld: boolean — whether combat lock was acquired
+	- _releaseReason: string? — stored failure reason for cleanup path
+
+	Required params:
+	- CharacterEntityId: string — attacking character entity ID
+	- ComboSlot: number? — combo step index (defaults to 1)
 ]=]
 
 local MeleeAttackJob = {

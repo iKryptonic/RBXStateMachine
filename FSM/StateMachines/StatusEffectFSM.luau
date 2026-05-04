@@ -4,8 +4,24 @@
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 --[=[
-	@module StatusEffectFSM
-	@description Applies, refreshes, and expires timed status effects while keeping entity flags and replicated state synchronized.
+	@Name StatusEffectFSM
+	@Author iKrypto
+	@Description Server-authoritative timed buff/debuff FSM. Loads the effect definition
+	(Poison, Burning, Slow, Regeneration, Strength, Shield, Stun, Silence), applies stat
+	modifiers and status flags to the target entity, ticks for the effect duration (applying
+	periodic damage/healing), then removes all modifiers and flags on expiry.
+
+	State flow:
+	ValidateInput → LoadEntities → LoadEffectDef → InitializeContext
+	→ UpdateEffectsRegistry → ApplyStatModifiers → ApplyStatusFlags
+	→ SyncResources → BroadcastUpdate → Ticking
+	→ RemoveStatModifiers → RemoveStatusFlags → CleanupRegistry
+	→ BroadcastCleanup → Expired
+
+	Required params:
+	- CharacterEntityId: string — target character entity
+	- EffectId: string — unique ID for this effect instance
+	- Definition: table — effect definition from StatusEffectDefs
 ]=]
 
 local StatusEffectFSM = {

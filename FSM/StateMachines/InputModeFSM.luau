@@ -2,8 +2,18 @@
 
 
 --[=[
-	@module InputModeFSM
-	@description Switches the character between combat-focused input and UI interaction input.
+	@Name InputModeFSM
+	@Author iKrypto
+	@Description Client-side input mode toggle. Switches between CombatInput (mouse locked,
+	camera follows, combat keys active) and UIInput (mouse unlocked, UI panels interactive,
+	combat keys suppressed). Tab key triggers the toggle. The mode is read by InputRouter
+	to decide whether key presses should be routed to combat or UI handlers.
+
+	State flow:
+	CombatInput ↔ UIInput (Tab toggle)
+
+	Required params:
+	- CharacterEntityId: string — character entity ID
 ]=]
 
 local InputModeFSM = {

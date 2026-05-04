@@ -2,8 +2,29 @@
 
 
 --[=[
-	@module ActionFSM
-	@description Tracks transient action overlays for a character, including melee phases, dashes, flips, and hit reactions.
+	@Name ActionFSM
+	@Author iKrypto
+	@Description Client-side action overlay FSM. Tracks the character's active combat
+	action (melee windup/strike/recovery, dash, flip, hit react) and drives animation
+	phase timing. Each action type is a timed state that transitions back to None when
+	the phase completes. The charEntity.ActionOverlay field is read by the render loop
+	to determine which animation layer to blend.
+
+	State flow:
+	None → MeleeWindup → MeleeStrike → MeleeRecovery → None
+	None → Dashing → None
+	None → Flipping → None
+	None → HitReact → None
+
+	Context fields:
+	- _currentMove: string — active action name (e.g. "RightPunch", "DashStart")
+	- _movePhases: table — phase timeline for the current action
+	- _phaseIndex: number — current phase step
+	- _dashDirection: string? — dash direction for directional dashes
+	- _onAnimate: function? — animation playback callback
+
+	Required params:
+	- CharacterEntityId: string — character entity to read ActionOverlay from
 ]=]
 
 local ActionFSM = {

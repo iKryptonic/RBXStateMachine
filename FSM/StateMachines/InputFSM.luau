@@ -2,8 +2,23 @@
 
 
 --[=[
-	@module InputFSM
-	@description Tracks short-lived combat input modes such as combo buffering and held attacks.
+	@Name InputFSM
+	@Author iKrypto
+	@Description Client-side input state machine. Tracks whether the player is in Normal
+	input mode, Combo mode (C key for spell combos), or HeldAttack mode (holding Q for
+	repeated attacks). Manages the combo key buffer and pointer for spell keystroke
+	sequences.
+
+	State flow:
+	Normal ↔ ComboMode (C key toggle)
+	Normal → HeldAttack (Q hold) → Normal (Q release)
+
+	Context fields:
+	- _comboBuffer: string — accumulated keystroke sequence for spell combos
+	- _comboPointer: number — current position in the combo buffer
+
+	Required params:
+	- CharacterEntityId: string — character entity ID
 ]=]
 
 local InputFSM = {

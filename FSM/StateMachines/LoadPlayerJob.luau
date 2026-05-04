@@ -11,8 +11,30 @@ local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
 -- @Description Handles player initialization: creates PlayerEntity (persistent), waits for character, creates CharacterEntity, registers command handlers
 
 --[=[
-	@module LoadPlayerJob
-	@description Creates and initializes player and character entities for a joining player, seeds defaults, and registers gameplay commands.
+	@Name LoadPlayerJob
+	@Author iKrypto
+	@Description Server-side player lifecycle bootstrap. Creates PlayerEntity (persistent)
+	and CharacterEntity (ephemeral), hydrates from DataStore, normalizes inventory with
+	migration for legacy saves, waits for the character model, registers all server-side
+	command handlers (combat, equip, ability, utility), then publishes the loaded event.
+
+	State flow:
+	Start → ValidatePlayer → CreatePlayerEntity → LoadData → AwaitCharacter
+	→ CreateCharacterEntity → RegisterCommands → RegisterCombatCommands
+	→ RegisterEquipCommands → RegisterAbilityCommands → RegisterUtilityCommands
+	→ PublishLoaded → Completed
+
+	Context fields:
+	- Player: Player — the joining player instance
+	- UserId: number — player's UserId
+	- Character: Model — player's character (set after AwaitCharacter)
+	- CharacterEntityId: string — "Char_{userId}"
+	- PlayerEntityId: string — "Player_{userId}"
+	- _awaitStart: number — timestamp when character wait began (10s timeout)
+
+	Required params:
+	- Player: Player — the joining player
+	- UserId: number — player's UserId
 ]=]
 
 local LoadPlayerJob = {

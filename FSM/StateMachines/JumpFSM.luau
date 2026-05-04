@@ -8,8 +8,28 @@ assert(Helpers,"Helpers folder not found")
 local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 
 --[=[
-	@module JumpFSM
-	@description Tracks grounded and airborne movement, and handles the stamina-gated flip or double-jump flow.
+	@Name JumpFSM
+	@Author iKrypto
+	@Description Client-side double jump and front flip FSM. Tracks grounded vs airborne
+	state. On second jump input while airborne, validates stamina, deducts it, plays the
+	flip sound and animation, applies a BodyVelocity upward impulse (tracked via
+	TrackInstance for leak-safe cleanup), rotates the character through 12×30° steps,
+	then enters cooldown before returning to Grounded.
+
+	State flow:
+	Grounded → InAir → ValidateFlip → DeductFlipStamina → PlayFlipSound
+	→ TriggerFlipAnimation → ApplyUpwardForce → RotateCharacter
+	→ Flipping → PlayLandSound → TriggerLandAnimation → Cooldown → Grounded
+
+	Context fields:
+	- _rootPart: BasePart — HumanoidRootPart for physics
+	- _humanoid: Humanoid — for state detection
+	- _bodyVelocity: BodyVelocity — impulse object (TrackInstance'd for leak safety)
+	- _flipRequested: boolean — set by TryDoubleJump input handler
+	- _onAnimate: function — animation playback callback
+
+	Required params:
+	- CharacterEntityId: string — character entity ID
 ]=]
 
 local JumpFSM = {

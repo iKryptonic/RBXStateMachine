@@ -2,8 +2,24 @@
 
 
 --[=[
-	@module AnimationStateFSM
-	@description Observes the animation player and mirrors whether the character is idle, on a base loop, playing an action overlay, or blending.
+	@Name AnimationStateFSM
+	@Author iKrypto
+	@Description Client-side animation state observer. Polls charEntity.AnimationState
+	and LocomotionState to determine which base animation to play (idle, walk, run) and
+	when to blend action overlays. Feeds the AnimationPlayer with current state so the
+	render loop can drive the correct joint transforms.
+
+	State flow:
+	Idle ↔ BaseAnimation ↔ ActionOverlay → Blending → Idle
+	Continuous polling — no terminal path during normal gameplay.
+
+	Context fields:
+	- AnimationPlayer: any — reference to the legacy AnimationPlayer instance
+	- _observedState: string — last observed locomotion/action state
+	- _blendUntil: number — timestamp when blend completes
+
+	Required params:
+	- CharacterEntityId: string — character entity to observe
 ]=]
 
 local AnimationStateFSM = {

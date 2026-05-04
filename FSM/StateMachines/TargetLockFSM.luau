@@ -8,8 +8,26 @@ local MAX_LOCK_DISTANCE = 50
 local BREAK_LOCK_DISTANCE = 60
 
 --[=[
-	@module TargetLockFSM
-	@description Controls target-lock acquisition, maintenance, and release for character combat targeting.
+	@Name TargetLockFSM
+	@Author iKrypto
+	@Description Client-side target lock toggle FSM. Scans for the nearest valid target
+	in front of the player, creates a BillboardGui diamond indicator above the target
+	(tracked via TrackInstance for leak-safe cleanup), and maintains the lock by updating
+	charEntity.TargetEntityId. T key toggles between Idle and Locked states.
+
+	State flow:
+	Idle → Scanning → Locked → Idle (T key toggle or target dies/leaves range)
+
+	Context fields:
+	- _indicator: BillboardGui — lock-on visual (TrackInstance'd)
+	- _indicatorLabel: TextLabel — diamond label child
+	- _indicatorAdornee: BasePart — target's root part
+	- _targetEntityId: string — locked target's entity ID
+	- _player: Player — local player reference
+	- _rootPart: BasePart — player's HumanoidRootPart for range checks
+
+	Required params:
+	- CharacterEntityId: string — player's character entity ID
 ]=]
 
 local TargetLockFSM = {

@@ -12,8 +12,30 @@ local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
 local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 
 --[=[
-	@module AbilityComboFSM
-	@description Validates and executes multi-step ability combos, spending mana, emitting animation intents, advancing combo steps, and recording cooldowns.
+	@Name AbilityComboFSM
+	@Author iKrypto
+	@Description Server-authoritative ability combo execution FSM. Drives a multi-step
+	combo sequence for an equipped ability: validates the ability is unlocked and off
+	cooldown, checks and deducts mana, plays each combo step's animation in sequence
+	(with DamageEvent/Effect processing per step), then enters a cooldown period before
+	completing.
+
+	State flow:
+	ValidateAbility → CheckMana → DeductMana → PlayComboStep → ProcessComboEvents
+	→ AdvanceStep → (loop to PlayComboStep if more steps) → Cooldown → Completed
+	Any state may → Failed on validation/resource errors.
+
+	Context fields:
+	- _abilityDef: table — cached ability definition from AbilityCombosDefs
+	- _comboStepIndex: number — current 1-based index into ComboSequence
+	- _currentStep: table — the active combo step being processed
+	- _currentStepIndex: number — snapshot of _comboStepIndex at PlayComboStep entry
+	- _onAnimate: function? — optional client-side animation callback
+
+	Required params:
+	- AbilityId: string — ID matching a key in AbilityCombosDefs.Abilities
+	- CharacterEntityId: string — registry ID for the CharacterEntity
+	- PlayerEntityId: string — registry ID for the PlayerEntity
 ]=]
 
 local AbilityComboFSM = {

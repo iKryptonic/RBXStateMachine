@@ -8,8 +8,25 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local MAX_INVENTORY_SIZE = 100
 
 --[=[
-	@module InventoryItemFSM
-	@description Handles inventory add, remove, move, and drop flows, including optional unequip work before committing player inventory changes.
+	@Name InventoryItemFSM
+	@Author iKrypto
+	@Description Server-authoritative inventory operation router. Validates the requested
+	operation (Add, Remove, Drop, Move), then branches to the appropriate flow:
+	Add checks capacity and inserts into BagContents/Inventory. Remove finds and removes.
+	Drop unequips if needed, removes from inventory, and spawns a world item with Debris
+	timer. Move reorders slots. All paths converge at Commit which calls UpdateEntity.
+
+	State flow:
+	Validate → RouteBranch → [Add|Remove|Drop|Move path] → Commit → Completed
+	                                                        → Failed
+
+	Context fields:
+	- CharacterEntityId: string — for unequip-if-needed during Drop
+	- PlayerEntityId: string — entity holding the inventory
+	- _activeUnEquipJob: any — child UnEquipJob spawned during Drop
+
+	Required params:
+	- Operation: string — "Add", "Remove", "Drop", or "Move"
 ]=]
 
 local InventoryItemFSM = {

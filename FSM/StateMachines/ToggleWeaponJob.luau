@@ -4,8 +4,19 @@
 local HttpService = game:GetService("HttpService")
 
 --[=[
-	@module ToggleWeaponJob
-	@description Routes a weapon toggle request to the appropriate equip or unequip workflow based on current character state.
+	@Name ToggleWeaponJob
+	@Author iKrypto
+	@Description Server-authoritative weapon draw/stow toggle FSM. Checks current equipped
+	state: if weapon is drawn, spawns UnEquipJob (stow mode, not ForceRemove). If weapon
+	is stowed, spawns EquipJob to re-draw from WeaponEqp. Z key triggers this FSM.
+
+	State flow:
+	Validate → ResolveCurrentState → ChooseBranch → RunEquip or RunUnEquip → Completed
+
+	Required params:
+	- CharacterEntityId: string — character entity
+	- PlayerEntityId: string — player entity for inventory/WeaponEqp
+	- Hand: string — "Right" or "Left"
 ]=]
 
 local ToggleWeaponJob = {

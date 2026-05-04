@@ -7,8 +7,22 @@ assert(Helpers,"Helpers folder not found")
 local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
 
 --[=[
-	@module MovementConstraintJob
-	@description Applies a temporary movement patch to a character entity and restores the prior values when the duration expires or cleanup runs.
+	@Name MovementConstraintJob
+	@Author iKrypto
+	@Description Server-authoritative temporary movement constraint FSM. Snapshots current
+	movement fields (CanMove, MoveSpeedCap, MouseLocked), applies the requested patch,
+	waits for the specified duration, then reverts to the snapshot. Used by AttackJob and
+	other combat FSMs to freeze the character during wind-up/recovery phases.
+
+	State flow:
+	Validate → SnapshotPrior → ApplyPatch → WaitDuration → RevertPatch → Completed
+
+	Required params:
+	- CharacterEntityId: string — character to constrain
+	- Duration: number — constraint duration in seconds
+	- CanMove: boolean? — override for CanMove field
+	- MoveSpeedCap: number? — override for MoveSpeedCap
+	- MouseLocked: boolean? — override for MouseLocked
 ]=]
 
 local MovementConstraintJob = {

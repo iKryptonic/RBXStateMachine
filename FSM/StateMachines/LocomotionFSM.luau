@@ -2,8 +2,18 @@
 
 
 --[=[
-	@module LocomotionFSM
-	@description Observes movement speed and humanoid state to mirror idle, walking, running, or airborne locomotion onto the character entity.
+	@Name LocomotionFSM
+	@Author iKrypto
+	@Description Client-side locomotion state observer. Polls the character's horizontal
+	velocity and HumanoidState each frame to determine Idle/Walking/Running/Airborne.
+	Writes charEntity.LocomotionState which the AnimationStateFSM and render loop use
+	to select the appropriate base animation.
+
+	State flow:
+	Idle ↔ Walking ↔ Running ↔ Airborne (continuous polling, no terminal)
+
+	Required params:
+	- CharacterEntityId: string — character entity to write LocomotionState to
 ]=]
 
 local LocomotionFSM = {

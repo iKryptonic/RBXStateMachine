@@ -15,8 +15,32 @@ local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
 
 --[=[
-	@module ProjectileAttackJob
-	@description Validates projectile attack requests, spawns projectile state, and routes impacts into downstream damage handling.
+	@Name ProjectileAttackJob
+	@Author iKrypto
+	@Description Server-authoritative ranged/projectile attack FSM. Validates the attack,
+	acquires a combat lock, checks and deducts mana, plays charge and fire animations,
+	spawns a projectile Part with BodyVelocity physics, registers Touched hit detection,
+	waits for impact or lifetime expiry, processes the hit (DamageJob + knockback), then
+	cleans up the projectile and releases the lock.
+
+	State flow:
+	Validate → AcquireLock → ValidateMana → DeductMana → EmitChargeAnimation
+	→ WaitCharge → ValidateForFire → EmitFireAnimation → SpawnProjectile
+	→ ConfigurePhysics → RegisterHitDetection → WaitForImpact → ProcessHit
+	→ ApplyProjectileKnockback → DestroyProjectile → ReleaseLock → Completed
+
+	Context fields:
+	- _projectile: BasePart — spawned projectile instance
+	- _hitConn: RBXScriptConnection — Touched connection for impact detection
+	- _hitData: table — victim data on impact
+	- _impactResolved: boolean — whether hit was processed
+	- _damage: number — computed projectile damage
+	- _manaCost: number — mana cost for the shot
+	- _lockHeld: boolean — combat lock state
+	- _lifetime: number — max projectile lifetime before auto-destroy
+
+	Required params:
+	- CharacterEntityId: string — firing character entity
 ]=]
 
 local ProjectileAttackJob = {

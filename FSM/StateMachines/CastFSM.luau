@@ -14,8 +14,35 @@ local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
 local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 
 --[=[
-	@module CastFSM
-	@description Runs the cast flow for abilities from validation and resource checks through cast timing, intent emission, and recovery.
+	@Name CastFSM
+	@Author iKrypto
+	@Description Server-authoritative ability casting FSM. Handles the full cast lifecycle:
+	validates the ability definition and resource costs, acquires a combat lock, deducts
+	mana/stamina, plays cast animations, waits the cast duration with interrupt checks,
+	then branches to the correct execution type (melee single/AoE, projectile, self-heal,
+	instant resource restore, dash, targeted AoE). After execution, sets the cooldown and
+	releases the lock.
+
+	State flow:
+	Idle → ValidateAbility → ValidateResources → AcquireLock → DeductResources
+	→ EmitCastAnimation → WaitCastDuration → ValidateNotInterrupted
+	→ Execute[Type] → EmitFinishAnimation → SetCooldown → ReleaseLock → Completed
+	Any state may → ReleaseLock → Failed on error.
+
+	Context fields:
+	- _abilityDef: table — resolved ability definition
+	- _castDef: table — cast configuration (duration, type, range, etc.)
+	- _charEntity: any — resolved character entity
+	- _character: Model — character model instance
+	- _humanoid: Humanoid — for death/interrupt detection
+	- _playerEntity: any — resolved player entity for resource deduction
+	- _lockHeld: boolean — whether combat lock was acquired
+	- _movementLocked: boolean — whether movement constraints were applied
+
+	Required params:
+	- CharacterEntityId: string — attacking character entity
+	- PlayerEntityId: string — player entity for resource checks
+	- AbilityId: string? — ability to cast (or ConsumableId/SlotIndex)
 ]=]
 
 local CastFSM = {

@@ -2,8 +2,29 @@
 
 
 --[=[
-	@module CharacterSetupFSM
-	@description Prepares a spawned character for runtime use by disabling default Roblox systems, wiring controllers and child FSMs, then tearing them down safely.
+	@Name CharacterSetupFSM
+	@Author iKrypto
+	@Description Client-side deterministic character bootstrap. Disables default Roblox
+	animation, waits for entity replication, creates the controller bundle (dash, double
+	jump, hit react), creates client FSMs (Locomotion, Action, Dash, Jump, Input, etc.),
+	binds lifecycle events, and enters the Active state. TearingDown cleans up all
+	connections and FSMs when the character dies or leaves.
+
+	State flow:
+	Validating → DisablingDefaults → AwaitingEntities → InitControllers
+	→ InitFSMs → BindingEvents → Active → TearingDown → Completed
+
+	Context fields:
+	- Character: Model — the spawned character model
+	- Humanoid: Humanoid — character humanoid
+	- CharacterEntity: any — replicated character entity
+	- Connections: table — event connections to disconnect on teardown
+	- CreateControllerBundle: function — factory for dash/jump/hitreact controllers
+	- CreateFSMBundle: function — factory for client FSMs
+
+	Required params:
+	- CharacterEntityId: string — character entity ID
+	- PlayerEntityId: string — player entity ID
 ]=]
 
 local CharacterSetupFSM = {

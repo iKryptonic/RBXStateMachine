@@ -15,8 +15,22 @@ type RouteConfig = {
 }
 
 --[=[
-	@module CrowdControlFSM
-	@description Applies timed crowd-control effects such as stun or knockdown, emits the matching intent, and restores movement when the effect ends.
+	@Name CrowdControlFSM
+	@Author iKrypto
+	@Description Server-authoritative crowd control application pipeline. Applies stun,
+	knockdown, or other CC effects by acquiring a CC lock, setting entity flags
+	(IsStunned, IsKnocked), emitting a replication intent, waiting for the CC duration,
+	then clearing flags and releasing the lock.
+
+	State flow:
+	Validate → RouteBranch → AcquireCCLock → ApplyFlags → EmitIntent
+	→ WaitDuration → ClearFlags → ReleaseCCLock → Completed
+	Any state may → ReleaseCCLock → Failed on error.
+
+	Required params:
+	- CharacterEntityId: string — target character entity
+	- Operation: string — CC type ("Stun", "Knockdown", etc.)
+	- Duration: number — effect duration in seconds
 ]=]
 
 local CrowdControlFSM = {

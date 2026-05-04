@@ -8,8 +8,27 @@ assert(Helpers,"Helpers folder not found")
 local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 
 --[=[
-	@module DashFSM
-	@description Executes the local dash flow from validation and stamina spend through impulse, animation, overlay, active frames, and cooldown.
+	@Name DashFSM
+	@Author iKrypto
+	@Description Client-side dash execution FSM. Validates dash eligibility (not stunned,
+	not on cooldown), deducts stamina, applies a BodyVelocity impulse for 0.1s, plays
+	dash sound and animation, writes the ActionOverlay for render routing, holds the
+	active dash frames, then clears the overlay and enters cooldown.
+
+	State flow:
+	Ready → ValidateDash → ValidateStamina → DeductStamina → ApplyImpulse
+	→ PlaySound → TriggerAnimation → WriteOverlay → DashActive
+	→ ClearOverlay → Cooldown → Ready (loops)
+	Any state may → Ready on validation failure (silent reset, no Failed terminal).
+
+	Context fields:
+	- _charEntity: any — character entity for stamina/overlay writes
+	- _rootPart: BasePart — HumanoidRootPart for impulse application
+	- _dashDirection: string — dash direction from input
+	- _onAnimate: function — animation playback callback
+
+	Required params:
+	- CharacterEntityId: string — character entity ID
 ]=]
 
 local DashFSM = {

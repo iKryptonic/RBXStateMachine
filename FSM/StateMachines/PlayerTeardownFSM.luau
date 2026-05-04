@@ -2,8 +2,23 @@
 
 
 --[=[
-	@module PlayerTeardownFSM
-	@description Cleans up character-side systems, child FSMs, and entity links when a player character is removed or torn down.
+	@Name PlayerTeardownFSM
+	@Author iKrypto
+	@Description Server-side player disconnect cleanup. Cancels all FSMs belonging to the
+	player (by scanning StateMachineId for entity ID patterns), flushes persistent entity
+	state to DataStore, then deletes both PlayerEntity and CharacterEntity from the registry.
+
+	State flow:
+	CancelSMs → FlushEntities → DeleteEntities → Completed
+
+	Context fields:
+	- _cancelledStateMachineIds: table — IDs of cancelled FSMs for logging
+
+	Required params:
+	- Player: Player — the leaving player
+	- UserId: number — player's UserId
+	- PlayerEntityId: string — "Player_{userId}"
+	- CharacterEntityId: string — "Char_{userId}"
 ]=]
 
 local PlayerTeardownFSM = {

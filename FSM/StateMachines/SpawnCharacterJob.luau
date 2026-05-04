@@ -2,8 +2,21 @@
 
 
 --[=[
-	@module SpawnCharacterJob
-	@description Spawns or reuses a player character model, positions it, and links it to the runtime character entity.
+	@Name SpawnCharacterJob
+	@Author iKrypto
+	@Description Server-side character respawn handler. Validates the player and character
+	model, binds the CharacterEntity.Instance field to the new character, and re-applies
+	the player's loadout (equipped weapons, stats). Short-lived FSM that completes
+	immediately after binding.
+
+	State flow:
+	Validate → BindEntity → ApplyLoadout → Completed
+
+	Required params:
+	- Player: Player — the respawning player
+	- Character: Model — the new character model
+	- CharacterEntityId: string — character entity to bind
+	- PlayerEntityId: string — player entity for loadout data
 ]=]
 
 local SpawnCharacterJob = {
