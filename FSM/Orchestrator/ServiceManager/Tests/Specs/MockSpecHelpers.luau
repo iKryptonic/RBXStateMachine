@@ -305,7 +305,7 @@ function MockSpecHelpers.ensureAsset(env: any, itemId: string, asModel: boolean?
 	if asModel == false then
 		asset = env:DestroyLater(Instance.new("Part"))
 		asset.Name = itemId
-		(asset :: BasePart).Size = Vector3.new(1, 1, 1)
+		asset.Size = Vector3.new(1, 1, 1)
 	else
 		asset = MockSpecHelpers.makeItemTemplate(env, itemId, true)
 	end

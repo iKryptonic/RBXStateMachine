@@ -1,5 +1,11 @@
 --!strict
-
+--[=[
+	@module ConnectionBag
+	@description Lifecycle container that accumulates RBXScriptConnections, tweens, and coroutine
+	threads, then disposes them all in a single `DisconnectAll` call.
+	Used throughout ServiceManager to ensure every async resource created during a session
+	is torn down cleanly when the session ends.
+]=]
 
 local ConnectionBag = {}
 ConnectionBag.__index = ConnectionBag

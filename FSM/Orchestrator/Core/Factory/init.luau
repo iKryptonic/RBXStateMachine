@@ -122,6 +122,18 @@ local CompiledClasses = {
 };
 
 
+--[=[
+	Bootstraps the Factory and all sub-modules (BaseEntity, BaseStateMachine,
+	BehaviorTree, Registry, PersistenceManager) in dependency order. After
+	initializing sub-modules, scans every `game:GetDescendants()` Folder named
+	with an Entity or StateMachine alias and calls `CompileFolder` on it,
+	populating `CompiledClasses` with all found definitions. No-ops after the
+	first successful call.
+
+	@param Util table -- Shared Orchestrator utilities propagated to all sub-modules.
+	@reads Initialized, EntityAlias, StateMachineAlias, game:GetDescendants()
+	@writes Utility, Logger, Initialized, CompiledClasses (via CompileFolder)
+]=]
 function Factory.Initialize(Util)
 	if Initialized then return end
 	Initialized = true
@@ -157,6 +169,19 @@ function Factory.Initialize(Util)
 end
 
 
+--[=[
+	Returns a compiled class by category and name. Normalises `typeName`
+	aliases ("Entity" → "Entities", "StateMachine" → "StateMachines") before
+	looking up in `CompiledClasses`. Logs ERROR and returns nil if the category
+	or class is not found.
+
+	@param typeName string -- Class category; supports "Entity", "Entities",
+	       "StateMachine", "StateMachines".
+	@param name string -- Class name as registered during compilation.
+	@return any -- Compiled subclass table, or nil.
+	@reads CompiledClasses, Initialized
+	@writes None
+]=]
 function Factory.Get(typeName: string, name: string): any
 	assert(Initialized,"Factory not initialized")
 	-- Process aliases: Entity -> Entities, StateMachine -> StateMachines
@@ -179,6 +204,16 @@ function Factory.Get(typeName: string, name: string): any
 end
 
 
+--[=[
+	Returns the entire compiled class map for a category. Normalises aliases
+	the same way as `Factory.Get`. Logs ERROR and returns nil if the category
+	does not exist.
+
+	@param typeName string -- Class category name or alias.
+	@return { [string]: any }? -- Map of class name → compiled subclass, or nil.
+	@reads CompiledClasses, Initialized
+	@writes None
+]=]
 function Factory.GetAll(typeName: string): any
 	assert(Initialized,"Factory not initialized")
 	local configKey = typeName
@@ -291,6 +326,17 @@ local function CompileModule(child: ModuleScript, typeName: string, classBase: a
 end
 
 
+--[=[
+	Iterates all ModuleScripts in `configurationFolder` and its descendant
+	Folders, compiling each via `CompileModule` into the appropriate
+	`CompiledClasses` bucket. The folder must be named with a recognized Entity
+	or StateMachine alias (validated by `CreateConfiguration`). Nested folders
+	are processed recursively (breadth-first via the `Folders` accumulator).
+
+	@param configurationFolder Folder -- Root folder to scan; must be alias-named.
+	@reads FolderConfig.Folder, FolderConfig.Base, FolderConfig.TypeName
+	@writes CompiledClasses (via CompileModule)
+]=]
 function Factory.CompileFolder(configurationFolder: Folder)
 	assert(Initialized,"Factory not initialized")
 
@@ -315,6 +361,30 @@ function Factory.CompileFolder(configurationFolder: Folder)
 end
 
 
+--[=[
+	Resolves an entity class by name or table, generates a GUID entity id if
+	none is provided, and returns an initialized entity instance. If an entity
+	with the same id already exists in the Registry, the existing instance is
+	returned without applying new params.
+
+	On the server, wires two lifecycle callbacks after instantiation:
+	  - `StateUpdated`: replicates changed and Replicate-flagged schema fields to
+	    all clients via `NetworkManager.BroadcastEntityUpdate`; rate-limited
+	    writes are batched in a task.spawn debounce loop.
+	  - `Destroyed`: saves persistent state, broadcasts `OnEntityDestroyed`,
+	    unregisters network commands, and unregisters from the Registry.
+	Entity pooling is used when a recycled instance exists for the class name.
+	Persistent entities trigger `PersistenceManager.LoadState` immediately after
+	creation on the server.
+
+	@param params { EntityClass: any, EntityId: string?, Context: {}?,
+	       Persistent: boolean?, PersistenceKey: string?,
+	       InitialData: { [string]: any }? } -- Creation parameters.
+	@return any? -- Entity instance, or nil on failure.
+	@reads CompiledClasses (via ResolveClass), Registry.GetEntity,
+	       Registry.GetPooledEntity, RunService:IsServer()
+	@writes Registry (RegisterEntity), entity._privateProperties
+]=]
 function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Context: {any}?, Persistent: boolean?, PersistenceKey: string?, InitialData: { [string]: any }? })
 	assert(Initialized,"Factory not initialized")
 	local EntityClass = ResolveClass("Entity", params.EntityClass)
@@ -581,6 +651,22 @@ return entity
 end
 
 
+--[=[
+	Resolves a state machine class, constructs an instance, injects `FSM` and
+	`StateMachineId` into its Context, registers it with the Registry, and
+	auto-starts it (unless `params.AutoStart == false`). If the FSM cannot
+	enter an active state during auto-start, it is cleaned up immediately and
+	nil is returned. Cleanup (unregister + destroy) is wired to the Completed,
+	Failed, and Cancelled signals. On the server, StateChanged is also
+	connected to broadcast state updates to clients via NetworkManager.
+
+	@param params { StateMachineClass: any, StateMachineId: string?,
+	       Context: {}?, AutoStart: boolean?, InitialState: string? } -- Creation parameters.
+	@return any? -- Running FSM instance, or nil on failure.
+	@reads CompiledClasses (via ResolveClass), Registry.GetStateMachine,
+	       RunService:IsServer(), Utility.Settings, Utility.NetworkManager
+	@writes Registry (RegisterStateMachine), newSM.Context
+]=]
 function Factory.CreateStateMachine(params: { StateMachineClass: any, StateMachineId: string?, Context: {any}?, AutoStart: boolean?, InitialState: string? })
 	assert(Initialized,"Factory not initialized")
 	local StateMachineClass = ResolveClass("StateMachine", params.StateMachineClass)

@@ -1,6 +1,5 @@
 --!strict
-
-
+--[[
 	@Name ActorWorker
 	@Author iKrypto
 	@Description Worker script running inside an Actor. Receives jobs via

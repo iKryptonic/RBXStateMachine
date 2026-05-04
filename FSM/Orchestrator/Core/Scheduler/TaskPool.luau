@@ -29,6 +29,13 @@ export type Task = {
 }
 
 
+--[=[
+	@description Acquires a Task record from the free list. If `_count > 0`, pops the
+	top item from `_storage`, clears its slot, and decrements `_count`. If the pool is
+	empty, allocates a new table with all Task fields zeroed. Callers must reinitialize
+	all fields before registering the record with the Scheduler.
+	@return Task -- A blank or zeroed Task record ready to be populated.
+]=]
 function TaskPool.Get(): Task
 	if TaskPool._count > 0 then
 		local t = TaskPool._storage[TaskPool._count]
@@ -56,6 +63,15 @@ function TaskPool.Get(): Task
 end
 
 
+--[=[
+	@description Returns a completed Task record to the free list. Nils `Action` first to
+	release any captured closures and prevent environment leaks, then zeroes all other
+	fields. Increments `_count` and stores `t` at the new top of `_storage`. Must only be
+	called after the task has fully completed execution; the Scheduler calls this
+	automatically for non-recurring tasks and for stale heap entries.
+	@param t Task -- The Task record to return to the pool.
+	@return nil
+]=]
 function TaskPool.Release(t: Task)
 	-- IMPORTANT: Nil out the Action to prevent closure/environment leaks
 	t.Action = nil :: any
@@ -78,6 +94,15 @@ function TaskPool.Release(t: Task)
 end
 
 
+--[=[
+	@description Trims the free list to at most `target` entries (default 10) to bound
+	memory after bulk task releases. Nils out `_storage` slots from the top of the stack
+	down to `target + 1`, then sets `_count = target`. No-ops if `_count` is already at
+	or below `target`. Called by `Scheduler:PrunePool` when the free list exceeds 100
+	objects.
+	@param target number? -- Maximum number of free entries to retain; defaults to 10.
+	@return nil
+]=]
 function TaskPool.Shrink(target: number?)
 	local keepCount = target or 10
 	if TaskPool._count <= keepCount then return end

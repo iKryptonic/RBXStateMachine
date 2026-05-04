@@ -1,16 +1,14 @@
 --!strict
 
-
 local RequestFSM = {
 	Definition = {
 		Name = "RequestFSM",
-		ValidStates = {"Queued","Processing","Retrying","Success","Failed" },
-		TerminalStates = {"Success","Failed" },
+		ValidStates = { "Queued", "Processing", "Retrying", "Success", "Failed" },
+		TerminalStates = { "Success", "Failed" },
 		InitialState = "Queued",
-		Priority = 2 -- High priority for responsive data handling
-	}
+		Priority = 2, -- High priority for responsive data handling
+	},
 }
-
 
 function RequestFSM:RegisterStates()
 	local Orchestrator = self.Context.Orchestrator
@@ -19,8 +17,7 @@ function RequestFSM:RegisterStates()
 	local retryModule = DataStoreFolder:FindFirstChild("RetryBehavior")
 	if not retryModule then
 		-- Fallback: navigate from ReplicatedStorage
-		DataStoreFolder = game:GetService("ReplicatedStorage")
-			:FindFirstChild("Orchestrator")
+		DataStoreFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Orchestrator")
 		if DataStoreFolder then
 			DataStoreFolder = DataStoreFolder:FindFirstChild("Core")
 			DataStoreFolder = DataStoreFolder and DataStoreFolder:FindFirstChild("DataStore")
@@ -32,13 +29,11 @@ function RequestFSM:RegisterStates()
 	end
 	local RetryBehavior = retryModule and require(retryModule).Create(Orchestrator) or nil
 
-
 	self:AddState("Queued", {
 		OnEnter = function(_, fsm)
 			fsm.State = "Processing"
-		end
+		end,
 	})
-
 
 	self:AddState("Processing", {
 		OnEnter = function(_, fsm)
@@ -48,23 +43,21 @@ function RequestFSM:RegisterStates()
 			end
 			fsm.Context.FSM = fsm
 			RetryBehavior(fsm.Context)
-		end
+		end,
 	})
-
 
 	self:AddState("Retrying", {
 		OnEnter = function(_, fsm)
 			fsm.State = "Processing"
-		end
+		end,
 	})
-
 
 	self:AddState("Success", {
 		OnEnter = function(_, fsm)
 			if fsm.Context.OnSuccess then
 				fsm.Context.OnSuccess(fsm.Context.Result)
 			end
-		end
+		end,
 	})
 	--[=[
 		@state Failed
@@ -76,7 +69,7 @@ function RequestFSM:RegisterStates()
 			if fsm.Context.OnFailure then
 				fsm.Context.OnFailure(fsm.Context.LastError)
 			end
-		end
+		end,
 	})
 end
 

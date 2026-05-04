@@ -1,6 +1,11 @@
 --!strict
 
 
+--[=[
+	@module Logger
+	@description Structured logger with per-instance message history, level-based filtering, and optional RichText formatting. Module-level `Settings` are shared across all instances and must be seeded via `Logger.Initialize` before use.
+]=]
+
 local Logger = {}
 Logger.__index = Logger
 
@@ -22,6 +27,12 @@ local MAX_SUMMARY_HISTORY = 200 -- compressed summaries for long-term analysis
 local Initialized, Settings = false, nil
 
 
+--[=[
+	@description One-time initialization that reads `Util.Settings.Logger` into the module-level `Settings` table and sets the `Initialized` guard. Silently no-ops on subsequent calls. Must be called before `Logger.new` or any log operation.
+	@param Util table -- Shared utility table; `Util.Settings.Logger` must contain `DebuggingEnabled: boolean` and `MinimumLoggingLevel: number`.
+	@writes Initialized, Settings
+]=]
+
 function Logger.Initialize(Util)
 	if Initialized then return end
 	Initialized = true
@@ -35,6 +46,12 @@ local function ValidateRequest()
 	assert(type(Settings.MinimumLoggingLevel) == "number","Logger not initialized")
 end
 
+
+--[=[
+	@description Creates a new Logger instance with an empty `History` ring and an optional source name label. When `params.Name` is absent the constructor auto-detects the calling script's short name via `debug.info(2, "s")` and strips the leading dot-path prefix.
+	@param params { Name: string? } -- Optional table; `Name` becomes `self.Source` and appears in every formatted log line.
+	@return Logger -- New Logger instance with `Source` and `History` initialised.
+]=]
 
 function Logger.new(params: { Name: string? })
 	local self = setmetatable({}, Logger)
@@ -52,6 +69,13 @@ function Logger.new(params: { Name: string? })
 	return self
 end
 
+
+--[=[
+	@description Appends a `LogEntry` to `self.History`, evicting the oldest entry into a compressed `self.Summary` ring when the history exceeds `MAX_LOG_HISTORY` (50). Skips output when `Settings.DebuggingEnabled` is false or the level falls below `Settings.MinimumLoggingLevel`. WARN and ERROR levels route through `warn()`; INFO/DEBUG use `print()`, optionally wrapped in a RichText color tag when `USE_RICH_TEXT` is true.
+	@param params { Level: string, Message: string, OperationId: string?, Data: any? } -- `Level` must be one of `"INFO"`, `"WARN"`, `"ERROR"`, or `"DEBUG"`.
+	@reads Settings.DebuggingEnabled, Settings.MinimumLoggingLevel
+	@writes self.History, self.Summary
+]=]
 
 function Logger:Log(params: { Level: string, Message: string, OperationId: string?, Data: any? })
 	ValidateRequest()
@@ -138,6 +162,12 @@ function Logger:SetMinimumLoggingLevel(level: number)
 	Settings.MinimumLoggingLevel = level
 end
 
+
+--[=[
+	@description Returns the instance's in-memory `History` array containing up to `MAX_LOG_HISTORY` (50) recent `LogEntry` objects, each with `Timestamp`, `Level`, `Message`, `OperationId?`, and `Data?` fields. Older entries are compressed into `self.Summary` and are not included.
+	@return { LogEntry } -- Direct reference to the live history array.
+	@reads self.History
+]=]
 
 function Logger:GetHistory()
 	return self.History

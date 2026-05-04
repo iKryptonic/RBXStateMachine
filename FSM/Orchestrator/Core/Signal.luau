@@ -1,9 +1,19 @@
 --!strict
 
 
+--[=[
+	@module Signal
+	@description Lightweight, Roblox-compatible signal implementation. Supports persistent connections, one-shot listeners, asynchronous fire, coroutine-yielding wait, and full teardown. Handler snapshotting on `Fire` makes it safe to disconnect or destroy the signal from within a handler.
+]=]
+
 local Signal = {}
 Signal.__index = Signal
 
+
+--[=[
+	@description Creates a new Signal instance backed by an empty `_handlers` array. The returned object uses `Signal` as its metatable.
+	@return Signal -- New Signal with no connected handlers.
+]=]
 
 function Signal.new(): any
 	local self = setmetatable({
@@ -12,6 +22,13 @@ function Signal.new(): any
 	return (self :: any)
 end
 
+
+--[=[
+	@description Appends a connection object to `self._handlers` and returns it. The connection exposes a `Disconnect` method that removes itself from the handler list and nils its back-references, making it safe to call more than once.
+	@param handler (...any) -> () -- Callback invoked with the payload of each subsequent `Fire`.
+	@return Connection -- Connection object with a `Disconnect()` method.
+	@writes self._handlers
+]=]
 
 function Signal:Connect(handler: (...any) -> ()): any
 	local connection = {
@@ -33,6 +50,13 @@ function Signal:Connect(handler: (...any) -> ()): any
 	return (connection :: any)
 end
 
+
+--[=[
+	@description Connects a handler that automatically disconnects itself the first time it fires. Internally wraps the provided handler in a `Connect` call; the returned connection can still be used to cancel the subscription before it fires.
+	@param handler (...any) -> () -- Callback invoked at most once with the next fire's payload.
+	@return Connection -- Connection that will self-disconnect on first invocation.
+	@writes self._handlers
+]=]
 
 function Signal:Once(handler: (...any) -> ())
 	local connection
@@ -61,6 +85,13 @@ function Signal:Fire(...: any)
 end
 
 
+--[=[
+	@description Suspends the calling coroutine until the next `Fire`. Uses `Once` to register a one-shot listener that resumes the thread via `task.spawn`, then yields with `coroutine.yield`. Returns all values passed to the matching `Fire` call.
+	@return ...any -- Payload values forwarded from the next `Fire` call on this signal.
+	@reads self._handlers
+	@writes self._handlers
+]=]
+
 function Signal:Wait(): ...any
 	local thread = coroutine.running()
 	self:Once(function(...)
@@ -69,6 +100,11 @@ function Signal:Wait(): ...any
 	return coroutine.yield()
 end
 
+
+--[=[
+	@description Severs all handler connections and clears the handler table. Iterates `_handlers`, nils the `_signal` back-reference on each entry to break cycles, then calls `table.clear`. Connections that were already stored by callers become inert after this call.
+	@writes self._handlers
+]=]
 
 function Signal:Destroy()
 	for _, conn in ipairs(self._handlers) do

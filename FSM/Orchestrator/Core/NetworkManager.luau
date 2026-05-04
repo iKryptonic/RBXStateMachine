@@ -1,6 +1,11 @@
 --!strict
 
 
+--[=[
+	@module NetworkManager
+	@description Singleton network layer managing RemoteEvent and RemoteFunction lifecycle, named request callback dispatch, entity command routing, event buses, and per-remote call telemetry. Initialize once per runtime context via `NetworkManager.Initialize(Util)` before calling any other method.
+]=]
+
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Signal, Initialized
@@ -144,11 +149,23 @@ local function DisconnectTrackedConnections()
 end
 
 
+--[=[
+	@description Forwards a formatted log entry to the module-level Logger instance created during `Initialize`. Requires the module to be initialized.
+	@param params { Level: string, Message: string, OperationId: string } -- Log entry fields passed directly to `NetworkManager.Logger:Log`.
+	@reads NetworkManager.Logger
+]=]
+
 function NetworkManager.Log(params: { Level: string, Message: string, OperationId: string })
 	ValidateRequest()
 	NetworkManager.Logger:Log(params)
 end
 
+
+--[=[
+	@description One-time setup that creates or retrieves the four shared RemoteEvent/RemoteFunction instances in `ReplicatedStorage`, initialises the `Signal` module reference and internal Logger, wires runtime listeners for the current execution context (server or client), and creates the `EventBusRegistered` signal. No-ops on subsequent calls via the module-level `Initialized` guard.
+	@param Util table -- Shared utility table providing `Util.Logger`, `Util.Signal`, and `Util.Settings.StaticStrings` for remote instance names.
+	@writes Initialized, NetworkManager.Logger, NetworkManager.OrchestratorEvent, NetworkManager.OrchestratorFunction, NetworkManager.EntityUpdateEvent, NetworkManager.EntityCommandEvent, NetworkManager.EventBusRegistered
+]=]
 
 function NetworkManager.Initialize(Util)
 	if Initialized then return end
@@ -173,6 +190,14 @@ function NetworkManager.Initialize(Util)
 end
 
 
+--[=[
+	@description Registers a named server-side callback for inbound client requests. Async handlers are stored in `ServerRequestCallbacksAsync` and invoked via `OrchestratorEvent`; sync handlers go into `ServerRequestCallbacksSync` and are invoked via `OrchestratorFunction:InvokeServer`. Must be called server-side.
+	@param name string -- Logical request key clients pass as the first argument to `ServerRequest` or `ServerRequestAsync`.
+	@param handler (Player, ...any) -> any -- Callback invoked with the requesting player and the forwarded request arguments.
+	@param isAsync boolean? -- When truthy, registers an async fire-and-forget handler; otherwise registers a synchronous handler whose return value is sent back to the client.
+	@writes NetworkManager.ServerRequestCallbacksSync, NetworkManager.ServerRequestCallbacksAsync
+]=]
+
 function NetworkManager.RegisterServerRequest(name: string, handler: (Player, ...any) -> any, isAsync: boolean?)
 	ValidateRequest("Server")
 	if isAsync then
@@ -184,6 +209,14 @@ function NetworkManager.RegisterServerRequest(name: string, handler: (Player, ..
 end
 
 
+--[=[
+	@description Maps an `(entityId, command)` pair to a handler in `EntityCommandCallbacks`. Creates the entity sub-table on first use. Called on both server and client to register handlers for incoming entity commands in the respective runtime context.
+	@param entityId string -- Identifier of the entity whose command table this handler is registered under.
+	@param command string -- Command name used to select this handler when an entity command arrives.
+	@param handler (Player, ...any) -> () -- Callback invoked with the triggering player (or nil on the client) and any forwarded arguments.
+	@writes NetworkManager.EntityCommandCallbacks
+]=]
+
 function NetworkManager.RegisterEntityCommand(entityId: string, command: string, handler: (Player, ...any) -> ())
 	ValidateRequest()
 	if not NetworkManager.EntityCommandCallbacks[entityId] then
@@ -193,6 +226,12 @@ function NetworkManager.RegisterEntityCommand(entityId: string, command: string,
 	NetworkManager.Log({ Level = "INFO", Message = "Registered entity command callback for " .. entityId ..": " .. command })
 end
 
+
+--[=[
+	@description Removes all registered command handlers for the given entity by setting `EntityCommandCallbacks[entityId]` to nil. Must be called server-side. Typically invoked when an entity is destroyed to prevent dangling callback references.
+	@param entityId string -- Identifier of the entity whose entire command handler sub-table should be removed.
+	@writes NetworkManager.EntityCommandCallbacks
+]=]
 
 function NetworkManager.UnregisterEntityCommands(entityId: string)
 	ValidateRequest("Server")
@@ -243,7 +282,7 @@ local function trackRemoteCall(remoteName: string, direction: string, packedArgs
 	end
 end
 --[=[
-	@description Sends an entity command from a client to the server through `EntityCommandEvent`. The payload is packed to preserve trailing nil values, recorded in the remote-call statistics table, and then forwarded to the server if the remote exists.
+	@description Sends an entity command from a client to the server through `EntityCommandEvent`. The payload is packed to preserve trailing nil values, recorded in `_remoteStats` under `"EntityCommandEvent"`, and then fired to the server.
 	@param entityId string -- Identifier of the entity whose command handler should run on the server.
 	@param command string -- Command name used to look up the server-side entity callback.
 	@param ... any -- Additional command arguments forwarded to the server handler unchanged.
@@ -260,7 +299,7 @@ function NetworkManager.ServerCommandEntity(entityId: string, command: string, .
 	end
 end
 --[=[
-	@description Broadcasts an entity command from the server to every client through `EntityCommandEvent`. The command and payload are mirrored into remote-call telemetry before the remote is fired so the dashboard can inspect outbound traffic.
+	@description Broadcasts an entity command from the server to every client through `EntityCommandEvent:FireAllClients`. The command and payload are mirrored into `_remoteStats` telemetry before firing so the dashboard can inspect outbound traffic.
 	@param entityId string -- Identifier of the replicated entity that clients should route the command to.
 	@param command string -- Command name clients use to select the appropriate entity handler.
 	@param ... any -- Additional command arguments replicated to every client unchanged.
@@ -277,6 +316,14 @@ function NetworkManager.BroadcastEntityCommand(entityId: string, command: string
 	end
 end
 
+
+--[=[
+	@description Broadcasts an entity state-change table from the server to all clients through `EntityUpdateEvent:FireAllClients`. Telemetry is recorded in `_remoteStats` under the `"EntityUpdateEvent"` key before firing.
+	@param entityId string -- Identifier of the entity being updated on all clients.
+	@param changes { [string]: any } -- Partial state table containing only the properties that changed.
+	@reads NetworkManager.EntityUpdateEvent, NetworkManager._remoteStats
+	@writes NetworkManager._remoteStats
+]=]
 
 function NetworkManager.BroadcastEntityUpdate(entityId: string, changes: { [string]: any })
 	ValidateRequest("Server")
@@ -321,6 +368,13 @@ function NetworkManager.ServerRequestAsync(requestName: string, ...: any)
 end
 
 
+--[=[
+	@description Creates and stores a new Signal-backed event bus at `EventBuses[name]` if one does not already exist, then fires `EventBusRegistered` with the bus name. Returns the existing or newly created Signal.
+	@param name string -- Unique identifier for the event bus.
+	@return Signal -- The registered Signal instance for `name`.
+	@writes NetworkManager.EventBuses
+]=]
+
 function NetworkManager.RegisterEventBus(name: string)
 	ValidateRequest()
 	if not NetworkManager.EventBuses[name] then
@@ -332,6 +386,12 @@ function NetworkManager.RegisterEventBus(name: string)
 end
 
 
+--[=[
+	@description Destroys the Signal stored at `EventBuses[name]` (calling `:Destroy()` if available) and removes the entry from the table. Subsequent `GetEventBus` or `FireEventBus` calls for this name will return nil or silently skip until the bus is re-registered.
+	@param name string -- Identifier of the event bus to tear down.
+	@writes NetworkManager.EventBuses
+]=]
+
 function NetworkManager.UnregisterEventBus(name: string)
 	ValidateRequest()
 	local bus = NetworkManager.EventBuses[name]
@@ -341,14 +401,21 @@ function NetworkManager.UnregisterEventBus(name: string)
 end
 
 
+--[=[
+	@description Returns the Signal instance registered under `name`, or `nil` if no bus with that name has been registered. Does not create a new bus.
+	@param name string -- Identifier of the event bus to retrieve.
+	@return Signal? -- The Signal for `name`, or `nil` if absent.
+	@reads NetworkManager.EventBuses
+]=]
+
 function NetworkManager.GetEventBus(name: string)
 	ValidateRequest()
 	return NetworkManager.EventBuses[name]
 end
 --[=[
-	@description Fires a locally registered event bus by name and updates its in-memory analytics. Each emission increments the bus counters, stores both a string preview and a sanitized structured snapshot of the first arguments for UI inspection, trims the recent-call history to 30 entries, and then forwards the payload to the underlying `Signal` instance.
+	@description Fires the named event bus and updates its analytics entry in `_busStats`. Each emission increments the call count, records the wall-clock timestamp, and appends a row to a capped 30-entry ring buffer containing both an inline string preview and a sanitized depth-limited structured snapshot of the arguments for UI drill-down. Silently no-ops when no bus is registered for `name`.
 	@param name string -- Event bus identifier previously registered with `RegisterEventBus`.
-	@param ... any -- Payload forwarded to listeners and captured in the recent-call history buffers.
+	@param ... any -- Payload forwarded to all connected listeners and captured in the recent-call history.
 	@reads NetworkManager.EventBuses, NetworkManager._busStats
 	@writes NetworkManager._busStats
 ]=]
@@ -391,6 +458,14 @@ function NetworkManager.FireEventBus(name: string, ...)
 end
 
 
+--[=[
+	@description Polls every 0.1 seconds until an event bus with the given name is registered, then returns it. If `timeout` seconds elapse before the bus appears, returns `nil`. Useful for consumers that may initialize before the producer that registers the bus.
+	@param name string -- Identifier of the event bus to wait for.
+	@param timeout number? -- Maximum seconds to wait before giving up. If omitted, waits indefinitely.
+	@return Signal? -- The registered Signal, or `nil` on timeout.
+	@reads NetworkManager.EventBuses
+]=]
+
 function NetworkManager.AwaitEventBus(name: string, timeout: number?)
 	ValidateRequest()
 	local start = os.clock()
@@ -403,6 +478,11 @@ function NetworkManager.AwaitEventBus(name: string, timeout: number?)
 	return NetworkManager.EventBuses[name]
 end
 
+
+--[=[
+	@description Wires all server-side remote listeners after disconnecting any previously tracked connections. Sets `OrchestratorFunction.OnServerInvoke` and connects `OrchestratorEvent.OnServerEvent` to a shared handler that dispatches sync and async requests to registered callbacks, records per-request invocation stats and call history via `trackRemoteCall`, and surfaces errors through `pcall`. Also connects `EntityCommandEvent.OnServerEvent` to route entity commands and accumulate their telemetry.
+	@writes NetworkManager._connections, NetworkManager._invokeStats, NetworkManager._remoteStats
+]=]
 
 function NetworkManager._RegisterServerListeners()
 	ValidateRequest("Server")
@@ -481,6 +561,11 @@ function NetworkManager._RegisterServerListeners()
 	NetworkManager.Log({ Level = "INFO", Message = "Registered server listeners" })
 end
 
+
+--[=[
+	@description Wires all client-side remote listeners after disconnecting any previously tracked connections. Connects `EntityCommandEvent.OnClientEvent` to route server-broadcast entity commands to registered client handlers (passing nil as the player argument). Also exposes `NetworkManager.RecordInboundCall` as a helper allowing other inbound RemoteEvent consumers (e.g., the EntityUpdateEvent listener in Orchestrator) to record receive-side call telemetry.
+	@writes NetworkManager._connections, NetworkManager.RecordInboundCall
+]=]
 
 function NetworkManager._RegisterClientListeners()
 	DisconnectTrackedConnections()

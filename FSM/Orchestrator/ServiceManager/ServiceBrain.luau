@@ -1,5 +1,11 @@
 --!strict
-
+--[=[
+	@module ServiceBrain
+	@description Declarative behaviour-tree builder for ServiceManager subsystems.
+	Converts a subsystem descriptor table (priorities, transition predicates, and action functions)
+	into an ordered list of behaviour nodes that `ServiceManager` evaluates each tick to decide
+	which subsystem should be active and what side effects to run.
+]=]
 
 local ServiceBrain = {}
 

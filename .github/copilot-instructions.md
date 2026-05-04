@@ -439,3 +439,96 @@ Every entity schema field MUST have an inline comment documenting:
 - Use `TrackInstance(inst, label)` for Instances that should be destroyed with the FSM
 - Use `TrackInstance(inst, label, true)` for Instances that outlive the FSM (monitor only)
 - Never create Roblox Instances without either TrackInstance, Manage, or Debris:AddItem
+
+## Cross-cutting integration test requirements
+
+Beyond unit-level FSM state tests, every gameplay pipeline MUST have integration tests that cover the **cross-system boundaries** where bugs historically hide. The test gaps below were identified from production incidents where unit tests passed but the live game broke.
+
+### Mandatory test categories
+
+#### 1. Lifecycle continuity tests
+When state resets on spawn/respawn/reconnect, verify downstream systems recover:
+- **Equip → respawn → re-equip**: After `refreshCharacterEntityForSpawn` clears `EquippedRight`/`EquippedLeft`, auto-equip must fire if `WeaponEqp` is saved. Test that `charEntity.EquippedRight` is restored after spawn.
+- **Persist → load → verify**: After saving entity state and reloading, all gameplay-critical fields (`WeaponEqp`, `Inventory`, `Equipped`, `StatPoints`, `TalentSelections`) must survive the round-trip.
+- **Session lock → crash → rejoin**: If the server crashes mid-session, the next session must be able to acquire the lock after TTL expiry and load the last saved state.
+
+#### 2. Container format resilience tests
+Any code that reads `Inventory`, `BagContents`, or similar collections MUST be tested against all storage formats:
+- **Array-style**: `{ "Sword", "Shield" }`
+- **Dictionary-style**: `{ Sword = true, Shield = 1 }`
+- **Table-value style**: `{ { ItemId = "Sword" }, { Id = "Shield" } }`
+- **Empty/nil**: `{}`, `nil`
+- **Mixed keys**: `{ [1] = "Sword", Dagger = true }`
+
+Never use `#table` to check if a table has contents — it returns 0 for dictionary-style tables. Use `next(table) ~= nil` or iterate with `pairs()`.
+
+#### 3. Entity field propagation tests
+When an FSM writes a field on one entity, verify all consumers of that field see the change:
+- `EquipJob.CommitState` sets `charEntity.EquippedRight` → client heartbeat's `resolveEquippedItemId` reads it → `resolveWeaponAnimation` uses it → correct animation plays.
+- `EquipJob.CommitState` sets `playerEntity.WeaponEqp` → `ToggleWeaponJob.ChooseBranch` reads it → Z-key toggle works.
+- `EquipJob.CommitState` removes item from source container → `InventoryGui.buildInventoryList` no longer shows it in bag.
+
+#### 4. Animation catalog dependency tests
+When weapon data references animation names (e.g. `"GreatSwordIdle1"`), verify:
+- The animation name exists in `AnimationCatalog` (merged `LegacyAnimations` + `DefaultAnimations`).
+- The `LegacyAnimations` module loads from `Assets/Animations` before weapons reference it.
+- `resolveWeaponAnimation` returns non-nil for every status the weapon defines animations for (`Idle`, `Walking`, `Running`, etc.).
+
+#### 5. Input pipeline coverage tests
+Combat input must work in all movement states:
+- Attack keys (Q/E/R/F) must fire while holding movement keys (WASD).
+- Block (LeftControl) and Sprint (LeftAlt) must work regardless of `gameProcessed`.
+- UI toggle keys (I/P/K/V/N/B/M) must work regardless of `gameProcessed`.
+- No keys should fire when the player is typing in chat (`TextBox` focused).
+
+#### 6. DataStore round-trip tests
+- **Save → Load integrity**: Serialize entity, encode payload, decode payload, deserialize — output must match input for all field types.
+- **Session lock atomicity**: Two concurrent `Load` calls with different `SESSION_ID`s — only one should succeed; the other gets `SessionLocked`.
+- **Payload size guard**: A payload exceeding 4MB must return `PayloadTooLarge` without calling the DataStore API.
+- **Backward compatibility**: v1 payloads (no lock field) must decode correctly and allow lock acquisition on first v2 save.
+
+### Test template for cross-system equip pipeline
+
+```luau
+describe("Equip pipeline integration", function()
+    it("should restore weapon after respawn via auto-equip", function()
+        local env = Helpers.newEnvironment()
+        -- Set up player with WeaponEqp persisted
+        local playerEntity = Helpers.createPlayerEntity(env, "Player_1", {
+            Inventory = { "Sword" },
+            WeaponEqp = "Sword",
+            Equipped = {},
+        })
+        local character = Helpers.makeCharacterRig(env, "RespawnChar")
+        local charEntity = Helpers.createCharacterEntity(env, "Char_1", {
+            Instance = character,
+            PlayerEntityId = "Player_1",
+            EquippedRight = "",  -- cleared by refreshCharacterEntityForSpawn
+        })
+        -- Simulate auto-equip trigger
+        -- ... create EquipJob with ItemId = playerEntity.WeaponEqp
+        env.Mock:StepFrames(5)
+        expect(charEntity.EquippedRight).toEqual("Sword")
+        env:Cleanup()
+    end)
+
+    it("should equip from dict-style BagContents", function()
+        local env = Helpers.newEnvironment()
+        local playerEntity = Helpers.createPlayerEntity(env, "Player_1", {
+            BagContents = { Sword = true },
+            Inventory = {},
+        })
+        -- ... create EquipJob with ItemId = "Sword"
+        env.Mock:StepFrames(5)
+        expect(machine.State).toEqual("Completed")
+        env:Cleanup()
+    end)
+end)
+```
+
+### When to write integration tests
+
+- **Every FSM change** that modifies entity fields must include a test verifying downstream readers see the update.
+- **Every container-reading change** must include tests for array, dict, and empty formats.
+- **Every spawn/respawn-related change** must include a test verifying the full lifecycle from spawn → setup → gameplay-ready.
+- **Every input routing change** must include tests for `gameProcessed = true` and `gameProcessed = false` scenarios.

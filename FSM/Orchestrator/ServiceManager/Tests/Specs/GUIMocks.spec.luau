@@ -88,7 +88,7 @@ local function ensureAsset(env: any, itemId: string, asModel: boolean?): Instanc
 	if asModel == false then
 		asset = env:DestroyLater(Instance.new("Part"))
 		asset.Name = itemId
-		(asset :: BasePart).Size = Vector3.new(1, 1, 1)
+		asset.Size = Vector3.new(1, 1, 1)
 	else
 		asset = env:DestroyLater(Instance.new("Model"))
 		asset.Name = itemId
@@ -96,7 +96,7 @@ local function ensureAsset(env: any, itemId: string, asModel: boolean?): Instanc
 		handle.Name = "Handle"
 		handle.Size = Vector3.new(1, 1, 3)
 		handle.Parent = asset
-		(asset :: Model).PrimaryPart = handle
+		asset.PrimaryPart = handle
 	end
 	asset.Parent = assets
 	return asset
