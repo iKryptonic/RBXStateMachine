@@ -1,8 +1,5 @@
 --!strict
---[=[
-	@module DataStoreModule
-	@description Defines the `DataStoreModule` module and its exported API.
-]=]
+
 
 local Theme = require(script.Parent.Parent.Theme)
 local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
@@ -10,12 +7,8 @@ local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
 local DataStoreModule = {}
 DataStoreModule.__index = DataStoreModule
 
-local SORT_MODES = { "Name", "Keys", "Ops", "LastSync" }
---[=[
-	@description Implements `DataStoreModule.new`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+local SORT_MODES = {"Name","Keys","Ops","LastSync" }
+
 
 function DataStoreModule.new(): any
 	local self = setmetatable({}, DataStoreModule)
@@ -25,11 +18,7 @@ function DataStoreModule.new(): any
 	self._selectedStore = nil :: string?
 	return self
 end
---[=[
-	@description Implements `DataStoreModule.FetchData`.
-	@param nexus any -- `nexus` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
@@ -44,7 +33,7 @@ function DataStoreModule:FetchData(nexus: any)
 			if registry then
 				local dsEntity = nil
 				if type(registry.GetEntity) == "function" then
-					local ok, result = pcall(registry.GetEntity, "DataStoreSystem")
+					local ok, result = pcall(registry.GetEntity,"DataStoreSystem")
 					if ok then dsEntity = result end
 				end
 				if dsEntity then
@@ -104,12 +93,7 @@ function DataStoreModule:FetchData(nexus: any)
 		nexus.Store:Set("datastore.list", self._storeCache)
 	end)
 end
---[=[
-	@description Implements `DataStoreModule._ExtractStoreData`.
-	@param name string -- `name` input parameter.
-	@param store any -- `store` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:_ExtractStoreData(name: string, store: any): any
 	if type(store) ~= "table" then
@@ -134,7 +118,7 @@ function DataStoreModule:_ExtractStoreData(name: string, store: any): any
 	local cache = store.Cache or store._cache or store.Data or store._data or {}
 	if type(cache) == "table" then
 		for k, v in pairs(cache) do
-			cachedKeys += 1
+			cachedKeys + = 1
 			keys[tostring(k)] = v
 		end
 	end
@@ -142,7 +126,7 @@ function DataStoreModule:_ExtractStoreData(name: string, store: any): any
 	local pendingOps = 0
 	local pending = store.PendingOperations or store._pendingOperations or store.Queue or store._queue or {}
 	if type(pending) == "table" then
-		for _ in pairs(pending) do pendingOps += 1 end
+		for _ in pairs(pending) do pendingOps + = 1 end
 	end
 
 	local config = {}
@@ -184,18 +168,10 @@ function DataStoreModule:_ExtractStoreData(name: string, store: any): any
 		OperationsLog = store.OperationsLog or store._operationsLog or {},
 	}
 end
---[=[
-	@description Implements `DataStoreModule.Render`.
-	@param _nexus any -- `_nexus` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:Render(_nexus: any) end
---[=[
-	@description Implements `DataStoreModule._GetSorted`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return { { Name: string, Data: any } } -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:_GetSorted(): { { Name: string, Data: any } }
 	local result = {}
@@ -221,12 +197,7 @@ function DataStoreModule:_GetSorted(): { { Name: string, Data: any } }
 	end)
 	return result
 end
---[=[
-	@description Creates the result managed by `DataStoreModule.BuildRootLayer`.
-	@param frame Frame -- `frame` input parameter.
-	@param context any -- `context` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
@@ -280,11 +251,7 @@ function DataStoreModule:BuildRootLayer(frame: Frame, context: any)
 		)
 	end
 end
---[=[
-	@description Implements `DataStoreModule._BuildSummaryStrip`.
-	@param parent Frame -- `parent` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:_BuildSummaryStrip(parent: Frame)
 	local strip = Instance.new("Frame")
@@ -310,11 +277,11 @@ function DataStoreModule:_BuildSummaryStrip(parent: Frame)
 
 	local storeCount, totalKeys, totalOps, totalPending, errorCount = 0, 0, 0, 0, 0
 	for _, d in pairs(self._storeCache) do
-		storeCount += 1
-		totalKeys += (d.CachedKeys or 0)
-		totalOps += (d.TotalOps or 0)
-		totalPending += (d.PendingOps or 0)
-		errorCount += (d.Errors or 0)
+		storeCount + = 1
+		totalKeys + = (d.CachedKeys or 0)
+		totalOps + = (d.TotalOps or 0)
+		totalPending + = (d.PendingOps or 0)
+		errorCount + = (d.Errors or 0)
 	end
 
 	local metrics = {
@@ -352,12 +319,7 @@ function DataStoreModule:_BuildSummaryStrip(parent: Frame)
 		})
 	end
 end
---[=[
-	@description Implements `DataStoreModule._BuildToolbar`.
-	@param parent Frame -- `parent` input parameter.
-	@param nexus any -- `nexus` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:_BuildToolbar(parent: Frame, nexus: any)
 	local toolbar = Instance.new("Frame")
@@ -458,15 +420,7 @@ function DataStoreModule:_BuildToolbar(parent: Frame, nexus: any)
 		if nexus then nexus._lastDataRefresh = 0 end
 	end)
 end
---[=[
-	@description Implements `DataStoreModule._BuildStoreRow`.
-	@param parent Frame -- `parent` input parameter.
-	@param name string -- `name` input parameter.
-	@param storeData any -- `storeData` input parameter.
-	@param nexus any -- `nexus` input parameter.
-	@param order number -- `order` input parameter.
-	@return Frame -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:_BuildStoreRow(parent: Frame, name: string, storeData: any, nexus: any, order: number): Frame
 	local statusColor = if storeData.Status == "syncing" then Theme.Colors.Warning
@@ -524,7 +478,7 @@ function DataStoreModule:_BuildStoreRow(parent: Frame, name: string, storeData: 
 	-- Pulse status dot when syncing
 	local dot = row:FindFirstChild("StatusDot")
 	if dot and storeData.Status == "syncing" and nexus._animationController then
-		nexus._animationController:StartPulse("ds_" .. name, dot, "BackgroundTransparency", 0.6)
+		nexus._animationController:StartPulse("ds_" .. name, dot,"BackgroundTransparency", 0.6)
 	end
 
 	-- Hover glow
@@ -535,12 +489,7 @@ function DataStoreModule:_BuildStoreRow(parent: Frame, name: string, storeData: 
 
 	return row
 end
---[=[
-	@description Implements `DataStoreModule._BuildStoreDetailLayer`.
-	@param frame Frame -- `frame` input parameter.
-	@param context any -- `context` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -677,7 +626,7 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 	local opProps = {
 		{ Key = "Total Ops", Value = tostring(storeData.TotalOps or 0), Color = Theme.Colors.Success },
 		{ Key = "Pending Ops", Value = tostring(storeData.PendingOps or 0), Color = if (storeData.PendingOps or 0) > 0 then Theme.Colors.Warning else Theme.Colors.TextMuted },
-		{ Key = "Last Sync", Value = if (storeData.LastSync or 0) > 0 then string.format("%.1fs ago", os.clock() - storeData.LastSync) else "never", Color = Theme.Colors.TextSecondary },
+		{ Key = "Last Sync", Value = if (storeData.LastSync or 0) > 0 then string.format("%.1fs ago", os.clock() - storeData.LastSync) else"never", Color = Theme.Colors.TextSecondary },
 		{ Key = "Errors", Value = tostring(storeData.Errors or 0), Color = if (storeData.Errors or 0) > 0 then Theme.Colors.Danger else Theme.Colors.TextMuted },
 	}
 	for i, p in ipairs(opProps) do
@@ -712,7 +661,7 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 	-- ─── CONFIG ───
 	if type(storeData.Config) == "table" then
 		local configCount = 0
-		for _ in pairs(storeData.Config) do configCount += 1 end
+		for _ in pairs(storeData.Config) do configCount + = 1 end
 		if configCount > 0 then
 			Theme.CreateLabel({
 				Text = string.format("CONFIG (%d)", configCount),
@@ -726,7 +675,7 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 			local order = 51
 			for key, val in pairs(storeData.Config) do
 				self:_BuildPropRow(contentFrame, tostring(key), tostring(val), Theme.Colors.TextPrimary, order)
-				order += 1
+				order + = 1
 				if order > 65 then break end
 			end
 		end
@@ -735,7 +684,7 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 	-- ─── CACHED KEYS ───
 	if type(storeData.Keys) == "table" then
 		local keyCount = 0
-		for _ in pairs(storeData.Keys) do keyCount += 1 end
+		for _ in pairs(storeData.Keys) do keyCount + = 1 end
 		if keyCount > 0 then
 			Theme.CreateLabel({
 				Text = string.format("CACHED KEYS (%d)", keyCount),
@@ -751,7 +700,7 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 				local valStr = self:_Stringify(value)
 				local valColor = self:_TypeColor(value)
 				self:_BuildPropRow(contentFrame, tostring(key), valStr, valColor, order)
-				order += 1
+				order + = 1
 				if order > 110 then break end
 			end
 		end
@@ -779,34 +728,26 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 					elseif opType == "GET" then Theme.Colors.Cyan
 					elseif opType == "DELETE" then Theme.Colors.Danger
 					else Theme.Colors.TextSecondary
-				self:_BuildPropRow(contentFrame, opType .. " " .. opKey, entry.Time and string.format("%.2fs", entry.Time) or "", opColor, 120 + j)
+				self:_BuildPropRow(contentFrame, opType .." " .. opKey, entry.Time and string.format("%.2fs", entry.Time) or "", opColor, 120 + j)
 			end
 		end
 	end
 end
---[=[
-	@description Implements `DataStoreModule._Stringify`.
-	@param value any -- `value` input parameter.
-	@return string -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:_Stringify(value: any): string
 	local t = type(value)
-	if t == "string" then return '"' .. value .. '"'
+	if t == "string" then return'"' .. value ..'"'
 	elseif t == "number" then return tostring(value)
 	elseif t == "boolean" then return tostring(value)
 	elseif t == "table" then
 		local count = 0
-		for _ in pairs(value) do count += 1 end
+		for _ in pairs(value) do count + = 1 end
 		return string.format("{%d}", count)
-	elseif t == "nil" then return "nil"
+	elseif t == "nil" then return"nil"
 	else return tostring(value) end
 end
---[=[
-	@description Implements `DataStoreModule._TypeColor`.
-	@param value any -- `value` input parameter.
-	@return Color3 -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:_TypeColor(value: any): Color3
 	local t = type(value)
@@ -816,15 +757,7 @@ function DataStoreModule:_TypeColor(value: any): Color3
 	elseif t == "table" then return Theme.Colors.Purple
 	else return Theme.Colors.TextMuted end
 end
---[=[
-	@description Implements `DataStoreModule._BuildPropRow`.
-	@param parent Frame -- `parent` input parameter.
-	@param key string -- `key` input parameter.
-	@param value string -- `value` input parameter.
-	@param color Color3 -- `color` input parameter.
-	@param order number -- `order` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:_BuildPropRow(parent: Frame, key: string, value: string, color: Color3, order: number)
 	local propRow = Instance.new("Frame")
@@ -844,11 +777,7 @@ function DataStoreModule:_BuildPropRow(parent: Frame, key: string, value: string
 	Theme.CreateLabel({ Text = key, Size = UDim2.new(0.45, 0, 1, 0), Color = Theme.Colors.TextSecondary, FontSize = Theme.TextSize.Caption, Parent = propRow })
 	Theme.CreateLabel({ Text = value, Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.48, 0, 0, 0), Color = color, FontSize = Theme.TextSize.Body, FontFace = Theme.Font.Mono, Alignment = Enum.TextXAlignment.Right, Parent = propRow })
 end
---[=[
-	@description Implements `DataStoreModule.Destroy`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end

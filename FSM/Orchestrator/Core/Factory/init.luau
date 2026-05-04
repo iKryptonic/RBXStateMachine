@@ -38,8 +38,8 @@ local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
 local Utility, Logger, Initialized
 
-local EntityAlias = {"Entity", "Entities"}
-local StateMachineAlias = {"StateMachine", "StateMachines", "SM", "FSM"}
+local EntityAlias = {"Entity","Entities"}
+local StateMachineAlias = {"StateMachine","StateMachines","SM","FSM"}
 
 --[=[
 	@description Creates a folder configuration descriptor from a Folder instance.
@@ -52,23 +52,23 @@ local StateMachineAlias = {"StateMachine", "StateMachines", "SM", "FSM"}
 	@writes None
 ]=]
 local function CreateConfiguration(configurationFolder: Folder)
-	assert(configurationFolder ~= nil, "Configuration folder is nil")
-	
+	assert(configurationFolder ~= nil,"Configuration folder is nil")
+
 	local configurationName = configurationFolder.Name
 	if table.find(EntityAlias, configurationName) then configurationName = "Entities" end
 	if table.find(StateMachineAlias, configurationName) then configurationName = "StateMachines" end
-	assert(configurationName == "Entities" or configurationName == "StateMachines", "Invalid configuration folder: " .. configurationFolder:GetFullName())
+	assert(configurationName == "Entities" or configurationName == "StateMachines","Invalid configuration folder: " .. configurationFolder:GetFullName())
 
 	local baseName = (configurationName == "Entities" and "BaseEntity") or "BaseStateMachine"
 	local typeName = (configurationName == "Entities" and "Entity") or "StateMachine"
-	
+
 	local baseModule = Factory.BaseModules[baseName]
 
 	if not baseModule then
 		Logger:Log({ Level = "ERROR", Message = string.format("Base '%s' missing in %s. Check your configuration. Expected %s, found %s", baseName, script.Name, baseName, tostring(baseModule)) })
 		return { Folder = configurationFolder, Base = nil }
 	end
-	
+
 	Logger:Log({ Level = "INFO", Message = string.format("Loaded folder: %s", configurationFolder:GetFullName()) })
 
 	return {
@@ -88,17 +88,17 @@ end
 	@reads CompiledClasses (via Factory.Get)
 	@writes None
 ]=]
-local function ResolveClass(category: "Entity" | "StateMachine", input: any): any?
+local function ResolveClass(category:"Entity" |"StateMachine", input: any): any?
 	if type(input) ~= "string" then return input end
 
 	-- Try ClassFactory
 	if Factory.Get then
-		local ok, result = pcall(function() 
-			return Factory.Get(category, input) 
+		local ok, result = pcall(function()
+			return Factory.Get(category, input)
 		end)
 		if ok and result then return result end
 	end
-	
+
 	return nil
 end
 
@@ -111,7 +111,7 @@ end
 	@writes None
 ]=]
 local function GetClassName(class: any): string
-	if not class then return "Unknown" end
+	if not class then return"Unknown" end
 	return (class.Definition and class.Definition.Name) or class.Name or tostring(class)
 end
 
@@ -120,11 +120,7 @@ local CompiledClasses = {
 	StateMachines = {},
 	Entities = {}
 };
---[=[
-	@description Handles `Initialize` for `Factory`.
-	@param Util any -- `Util` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Factory.Initialize(Util)
 	if Initialized then return end
@@ -137,7 +133,7 @@ function Factory.Initialize(Util)
 		Factory.Registry,
 		Factory.PersistenceManager
 	}
-	
+
 	Utility = Util
 	Logger = Util.Logger.new({ Name = "Factory" })
 
@@ -159,45 +155,36 @@ function Factory.Initialize(Util)
 	end
 	Logger:Log({ Level = "INFO", Message = "Factory initialized" })
 end
---[=[
-	@description Returns the data produced by `Factory.Get`.
-	@param typeName string -- `typeName` input parameter.
-	@param name string -- `name` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Factory.Get(typeName: string, name: string): any
-	assert(Initialized, "Factory not initialized")
+	assert(Initialized,"Factory not initialized")
 	-- Process aliases: Entity -> Entities, StateMachine -> StateMachines
 	local configKey = typeName
 	if typeName == "Entity" then configKey = "Entities" end
 	if typeName == "StateMachine" then configKey = "StateMachines" end
 
 	local category = CompiledClasses[configKey]
-	if not category then 
+	if not category then
 		-- Fallback check
 		category = CompiledClasses[typeName]
 	end
 
 	if not category then
-		Logger:Log({ Level = "ERROR", Message = `[CompiledClass] {typeName} '{name}' is not registered or compiled.` })
+		Logger:Log({ Level = "ERROR", Message = `[CompiledClass] {typeName}'{name}' is not registered or compiled.` })
 		return nil
 	end
 
-	return category[name] or Logger:Log({ Level = "ERROR", Message = `[SubClass] {typeName} '{name}' is not registered or compiled.` })
+	return category[name] or Logger:Log({ Level = "ERROR", Message = `[SubClass] {typeName}'{name}' is not registered or compiled.` })
 end
---[=[
-	@description Returns the data produced by `Factory.GetAll`.
-	@param typeName string -- `typeName` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Factory.GetAll(typeName: string): any
-	assert(Initialized, "Factory not initialized")
+	assert(Initialized,"Factory not initialized")
 	local configKey = typeName
 	if table.find(EntityAlias, configKey) then configKey = "Entities" end
 	if table.find(StateMachineAlias, configKey) then configKey = "StateMachines" end
-	
+
 	local category = CompiledClasses[configKey]
 	if not category then Logger:Log({ Level = "ERROR", Message = string.format("[GetAll] %s '%s' is not registered or compiled.", typeName, configKey) }) end
 	return category
@@ -216,7 +203,7 @@ end
 	@writes None (caller stores result)
 ]=]
 local function CompileClass(name: string, classDef: any, classBase: any)
-	assert(Initialized, "Factory not initialized")
+	assert(Initialized,"Factory not initialized")
 
 	local effectiveDefinition = if classDef.Definition
 		then table.clone(classDef.Definition)
@@ -229,7 +216,7 @@ local function CompileClass(name: string, classDef: any, classBase: any)
 
 	-- Create the subclass using Base.Extend
 	-- The classDef itself is expected to contain methods and properties
-	-- We pass classDef as the "extensionParams" to Extend. 
+	-- We pass classDef as the "extensionParams" to Extend.
 	-- Note: BaseEntity.Extend / BaseStateMachine.Extend expect { Name, Schema/ValidStates, etc }
 	-- They return a "Subclass" table. We then need to mixin the rest of classDef into that Subclass.
 
@@ -302,15 +289,11 @@ local function CompileModule(child: ModuleScript, typeName: string, classBase: a
 		Logger:Log({ Level = "ERROR", Message = string.format("Failed to require '%s' or invalid return type: %s", child.Name, tostring(result)) })
 	end
 end
---[=[
-	@description Implements `Factory.CompileFolder`.
-	@param configurationFolder Folder -- `configurationFolder` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Factory.CompileFolder(configurationFolder: Folder)
-	assert(Initialized, "Factory not initialized")
-	
+	assert(Initialized,"Factory not initialized")
+
 	local FolderConfig = CreateConfiguration(configurationFolder)
 	if not FolderConfig.Base then return end
 
@@ -321,7 +304,7 @@ function Factory.CompileFolder(configurationFolder: Folder)
 			Folders[#Folders + 1] = folderChild
 		end
 	end
-	
+
 	for _, folder in pairs(Folders) do
 		for _, folderChild in folder:GetChildren() do
 			if folderChild:IsA("ModuleScript") then
@@ -330,14 +313,10 @@ function Factory.CompileFolder(configurationFolder: Folder)
 		end
 	end
 end
---[=[
-	@description Creates the result managed by `Factory.CreateEntity`.
-	@param params { EntityClass: any, EntityId: string?, Context: {any}?, Persistent: boolean?, PersistenceKey: string?, InitialData: { [string]: any }? } -- `params` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Context: {any}?, Persistent: boolean?, PersistenceKey: string?, InitialData: { [string]: any }? })
-assert(Initialized, "Factory not initialized")
+assert(Initialized,"Factory not initialized")
 local EntityClass = ResolveClass("Entity", params.EntityClass)
 local entityId = params.EntityId or HttpService:GenerateGUID(false)
 local entityContext = if params.Context then table.clone(params.Context) else {}
@@ -354,8 +333,8 @@ Logger:Log({
 Level = "WARN",
 Message = string.format(
 "CreateEntity('%s'): entity already exists. Returning existing instance. "
-.. "New params (Context, InitialData) are NOT applied. Use a unique EntityId "
-.. "or call Factory.GetEntity('%s') explicitly.",
+.."New params (Context, InitialData) are NOT applied. Use a unique EntityId "
+.."or call Factory.GetEntity('%s') explicitly.",
 entityId, entityId),
 })
 return existing
@@ -379,7 +358,7 @@ end
 end
 sanitizedInitial._v = entity._privateProperties.Version
 local liveId = getLiveEntityId(entity)
-Utility.NetworkManager.BroadcastEntityCommand(liveId, "OnEntityCreated", {
+Utility.NetworkManager.BroadcastEntityCommand(liveId,"OnEntityCreated", {
 EntityId = liveId,
 EntityClassName = entityClassName,
 InitialData = sanitizedInitial,
@@ -492,7 +471,7 @@ if RunService:IsServer() and Utility.NetworkManager then
 if params.Persistent and Factory.PersistenceManager then
 Factory.PersistenceManager.SaveState(entity)
 end
-Utility.NetworkManager.BroadcastEntityCommand(liveId, "OnEntityDestroyed")
+Utility.NetworkManager.BroadcastEntityCommand(liveId,"OnEntityDestroyed")
 Utility.NetworkManager.UnregisterEntityCommands(liveId)
 end
 Factory.Registry.UnregisterEntity(liveId)
@@ -542,7 +521,7 @@ pp.Version = params.InitialData._v
 end
 end
 
-local classGetContext = pp._class and rawget(pp._class, "GetContext")
+local classGetContext = pp._class and rawget(pp._class,"GetContext")
 if type(classGetContext) == "function" then
 local ok, rebuiltContext = pcall(classGetContext, pooled, {
 Name = entityClassName,
@@ -571,7 +550,7 @@ InitialData = params.InitialData,
 end, function(err) return debug.traceback(tostring(err)) end)
 
 if not success then
-Logger:Log({ Level = "ERROR", Message = "Failed to instantiate Entity " .. entityId .. ": " .. tostring(newEntity) })
+Logger:Log({ Level = "ERROR", Message = "Failed to instantiate Entity " .. entityId ..": " .. tostring(newEntity) })
 return nil
 end
 
@@ -600,14 +579,10 @@ wireEntityLifecycle(entity)
 Logger:Log({ Level = "DEBUG", Message = "Created Entity " .. entityId })
 return entity
 end
---[=[
-	@description Creates the result managed by `Factory.CreateStateMachine`.
-	@param params { StateMachineClass: any, StateMachineId: string?, Context: {any}?, AutoStart: boolean?, InitialState: string? } -- `params` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Factory.CreateStateMachine(params: { StateMachineClass: any, StateMachineId: string?, Context: {any}?, AutoStart: boolean?, InitialState: string? })
-	assert(Initialized, "Factory not initialized")
+	assert(Initialized,"Factory not initialized")
 	local StateMachineClass = ResolveClass("StateMachine", params.StateMachineClass)
 	local smId = params.StateMachineId or HttpService:GenerateGUID(false)
 	local smContext = if params.Context then table.clone(params.Context) else {}
@@ -624,8 +599,8 @@ function Factory.CreateStateMachine(params: { StateMachineClass: any, StateMachi
 			Level = "WARN",
 			Message = string.format(
 				"CreateStateMachine('%s'): FSM already exists. Returning existing instance. "
-				.. "New params (Context, AutoStart) are NOT applied. Use a unique StateMachineId "
-				.. "or call Factory.GetStateMachine('%s') explicitly.",
+				.."New params (Context, AutoStart) are NOT applied. Use a unique StateMachineId "
+				.."or call Factory.GetStateMachine('%s') explicitly.",
 				smId, smId),
 		})
 		return existing
@@ -634,7 +609,7 @@ function Factory.CreateStateMachine(params: { StateMachineClass: any, StateMachi
 	local success, newSM = xpcall(StateMachineClass.new, function(err) return debug.traceback(tostring(err)) end, smContext)
 
 	if not success then
-		Logger:Log({ Level = "ERROR", Message = "Failed to instantiate StateMachine " .. smId .. ": " .. tostring(newSM) })
+		Logger:Log({ Level = "ERROR", Message = "Failed to instantiate StateMachine " .. smId ..": " .. tostring(newSM) })
 		return nil
 	end
 
@@ -671,7 +646,7 @@ function Factory.CreateStateMachine(params: { StateMachineClass: any, StateMachi
 	if RunService:IsServer() and Utility.Settings.ServiceManager.Enabled then
 		connections[#connections + 1] = newSM.StateChanged:Connect(function(newState, oldState)
 			if not Utility.NetworkManager then return end
-			Utility.NetworkManager.BroadcastEntityCommand("SyncClient", smId, "ApplyStateMachineStateChanged", newState)
+			Utility.NetworkManager.BroadcastEntityCommand("SyncClient", smId,"ApplyStateMachineStateChanged", newState)
 		end)
 	end
 
@@ -687,12 +662,12 @@ function Factory.CreateStateMachine(params: { StateMachineClass: any, StateMachi
 			if startParams then newSM:Start(startParams) else newSM:Start() end
 		end)
 		if not ok then
-			Logger:Log({ Level = "ERROR", Message = "Failed to auto-start " .. smId .. ": " .. tostring(err) })
+			Logger:Log({ Level = "ERROR", Message = "Failed to auto-start " .. smId ..": " .. tostring(err) })
 			cleanup()
 			return nil
 		end
 		if not newSM.IsActive and Factory.Registry.GetStateMachine(smId) == newSM then
-			Logger:Log({ Level = "ERROR", Message = "StateMachine " .. smId .. " never entered an active state during auto-start; cleaning it up." })
+			Logger:Log({ Level = "ERROR", Message = "StateMachine " .. smId .." never entered an active state during auto-start; cleaning it up." })
 			cleanup()
 			return nil
 		end

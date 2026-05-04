@@ -1,18 +1,11 @@
 --!strict
---[=[
-	@module ServiceBrain
-	@description Defines the `ServiceBrain` module and its exported API.
-]=]
+
 
 local ServiceBrain = {}
 
 local BehaviorTree: any = nil
 local Status: any = nil
---[=[
-	@description Handles `Initialize` for `ServiceBrain`.
-	@param Orchestrator any -- `Orchestrator` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ServiceBrain.Initialize(Orchestrator: any)
 	BehaviorTree = Orchestrator.Factory.BehaviorTree
@@ -92,8 +85,8 @@ local function FetchSubsystemData(ctx: any): string
 		local success, err = pcall(module.FetchData, module, nexus)
 		if not success then
 			local logFn = nexus._Log
-			if logFn then logFn("WARN", "FetchData failed for " .. subsystem .. ": " .. tostring(err))
-			else warn("[ServiceManager] FetchData failed for " .. subsystem .. ": " .. tostring(err)) end
+			if logFn then logFn("WARN","FetchData failed for " .. subsystem ..": " .. tostring(err))
+			else warn("[ServiceManager] FetchData failed for " .. subsystem ..": " .. tostring(err)) end
 			return Status.Failure
 		end
 	end
@@ -141,8 +134,8 @@ local function RenderActiveSubsystem(ctx: any): string
 		end)
 		if not success then
 			local logFn = nexus._Log
-			if logFn then logFn("WARN", "RebuildCurrentLayer failed for " .. subsystem .. ": " .. tostring(err))
-			else warn("[ServiceManager] RebuildCurrentLayer failed for " .. subsystem .. ": " .. tostring(err)) end
+			if logFn then logFn("WARN","RebuildCurrentLayer failed for " .. subsystem ..": " .. tostring(err))
+			else warn("[ServiceManager] RebuildCurrentLayer failed for " .. subsystem ..": " .. tostring(err)) end
 			return Status.Failure
 		end
 	end
@@ -177,11 +170,7 @@ local function SyncContextData(ctx: any): string
 	-- Server mode is handled by ConnectionFSM polling
 	return Status.Success
 end
---[=[
-	@description Creates the result managed by `ServiceBrain.Build`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return (context: any) -> string -- Return value produced by the implementation, if any.
-]=]
+
 
 function ServiceBrain.Build(): (context: any) -> string
 	-- The root tree:

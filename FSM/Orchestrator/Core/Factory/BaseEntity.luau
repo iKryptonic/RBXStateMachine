@@ -31,7 +31,7 @@ local BaseEntity = {}
 -- Metamethods for property syntax (entity.Field = value)
 
 local function __index(proxyTable: any, key: any)
-	-- Support inheritance by looking up the key in the class (metatable) 
+	-- Support inheritance by looking up the key in the class (metatable)
 	local mt: any = getmetatable(proxyTable)
 	if mt then
 		return (mt :: any)[key]
@@ -46,15 +46,11 @@ end
 BaseEntity.__index = __index
 BaseEntity.__newindex = __newindex
 BaseEntity.__tostring = function(self)
-	return string.format("BaseEntity(%s) %s : [%s]", self.OwnerId or "-id-", self.entityName or "-name-", ((self.IsValid==true and "Valid") or (self.IsValid==false and "Invalid")) or "-state-")
+	return string.format("BaseEntity(%s) %s : [%s]", self.OwnerId or "-id-", self.entityName or "-name-", ((self.IsValid == true and "Valid") or (self.IsValid == false and "Invalid")) or "-state-")
 end
 
 local Logger, Signal, _Settings, Initialized;
---[=[
-	@description Handles `Initialize` for `BaseEntity`.
-	@param Util any -- `Util` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity.Initialize(Util)
 	if Initialized then return end
@@ -65,12 +61,7 @@ function BaseEntity.Initialize(Util)
 
 	Logger:Log({ Level = "INFO", Message = "BaseEntity initialized" })
 end
---[=[
-	@description Implements `BaseEntity.new`.
-	@param params { Name: string, OwnerId: string?, Context: { [any]: any }? } -- `params` input parameter.
-	@param class any? -- `class` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity.new(params: { Name: string, OwnerId: string?, Context: { [any]: any }? }, class: any?): any
 	local privateProperties = {
@@ -142,9 +133,9 @@ function BaseEntity.new(params: { Name: string, OwnerId: string?, Context: { [an
 				end
 
 				originalTable:Log
-				{ 
-					Level = "WARN", 
-					Message = string.format("[Entity] Cannot set property '%s' as it does not exist in the Schema.", tostring(key)) 
+				{
+					Level = "WARN",
+					Message = string.format("[Entity] Cannot set property '%s' as it does not exist in the Schema.", tostring(key))
 				}
 				return
 			end
@@ -185,7 +176,7 @@ function BaseEntity.new(params: { Name: string, OwnerId: string?, Context: { [an
 		@return { [string]: any } -- Authoritative committed property values
 		@reads privateProperties.Data
 		@writes None
-	]=]
+]=]
 	proxy.GetRawData = function()
 		return privateProperties.Data
 	end
@@ -193,11 +184,7 @@ function BaseEntity.new(params: { Name: string, OwnerId: string?, Context: { [an
 	setmetatable(proxy, mt)
 	return proxy
 end
---[=[
-	@description Implements `BaseEntity.Extend`.
-	@param extensionParams { Name: string, Schema: { [string]: any }? } -- `extensionParams` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity.Extend(extensionParams: { Name: string, Schema: { [string]: any }? })
 	-- This is the Class Table (where methods like MyEntity:Method() will live)
@@ -212,11 +199,7 @@ function BaseEntity.Extend(extensionParams: { Name: string, Schema: { [string]: 
 		return Subclass.Definition.Name or "UnnamedEntity"
 	end;
 	setmetatable(Subclass, subclassMetaTable)
-	--[=[
-		@description Implements `SubclassAny.new`.
-		@param params any -- `params` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function SubclassAny.new(params)
 		local subclassEntity = BaseEntity.new(params, SubclassAny);
@@ -245,8 +228,8 @@ function BaseEntity.Extend(extensionParams: { Name: string, Schema: { [string]: 
 		local genericGetContextMethod = SubclassAny.GetContext
 		if type(genericGetContextMethod) ~= "function" then
 			subclassEntity:Log
-			{ 
-				Level = "WARN", 
+			{
+				Level = "WARN",
 				Message = string.format("Subclass '%s' did not implement 'GetContext'. No context set.", subclassEntity.entityName or "UnnamedEntity"),
 			}
 		end;
@@ -265,11 +248,7 @@ function BaseEntity.Extend(extensionParams: { Name: string, Schema: { [string]: 
 
 	return Subclass
 end
---[=[
-	@description Implements `BaseEntity.Log`.
-	@param params { Level: string, Message: string } -- `params` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity:Log(params: { Level: string, Message: string })
 	if not self._logger then
@@ -282,40 +261,25 @@ function BaseEntity:Log(params: { Level: string, Message: string })
 		OperationId = self._privateProperties and self._privateProperties.OwnerId or ""
 	}
 end
---[=[
-	@description Implements `BaseEntity.DefineSchema`.
-	@param schema { [string]: any } -- `schema` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity:DefineSchema(schema: { [string]: any })
 	self._privateProperties.Schema = schema
 end
 --[=[
 	@description Updates module state through `BaseEntity.SetContext`.
-	@param key any -- `key` input parameter.
-	@param value any -- `value` input parameter.
-	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function BaseEntity:SetContext(key: any, value: any)
 	self._privateProperties.Context[key] = value
 end
---[=[
-	@description Implements `BaseEntity.Manage`.
-	@param object any -- `object` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity:Manage(object: any)
 	table.insert(self._privateProperties._cleanupTasks, object)
 	return object
 end
---[=[
-	@description Implements `BaseEntity.Serialize`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity:Serialize()
 	local data = {}
@@ -332,11 +296,7 @@ function BaseEntity:Serialize()
 
 	return data
 end
---[=[
-	@description Implements `BaseEntity.Deserialize`.
-	@param data { [string]: any } -- `data` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity:Deserialize(data: { [string]: any })
 	if not data then return end
@@ -350,21 +310,17 @@ function BaseEntity:Deserialize(data: { [string]: any })
 		end
 	end
 end
---[=[
-	@description Implements `BaseEntity.UpdateEntity`.
-	@param lockingCallerId string? -- `lockingCallerId` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity:UpdateEntity(lockingCallerId: string?)
 	local privateProperties = self._privateProperties
 	local fastFailReason = ""
 	local isLockContention = false
 	if not privateProperties.IsValid then
-		fastFailReason ..= "Attempt to call UpdateEntity on destroyed entity. "
+		fastFailReason .. = "Attempt to call UpdateEntity on destroyed entity. "
 	end
 	if privateProperties.EntityLocked and privateProperties.EntityLocked ~= lockingCallerId then
-		fastFailReason ..= "Attempt to call UpdateEntity without holding the lock. "
+		fastFailReason .. = "Attempt to call UpdateEntity without holding the lock. "
 		isLockContention = true
 	end
 	-- Detect "no pending" via the explicit key set so that nil writes count as changes
@@ -376,14 +332,14 @@ function BaseEntity:UpdateEntity(lockingCallerId: string?)
 		hasPending = next(privateProperties.Pending) ~= nil
 	end
 	if not hasPending then
-		fastFailReason ..= "No pending changes to apply in UpdateEntity. "
+		fastFailReason .. = "No pending changes to apply in UpdateEntity. "
 	end
 	if not privateProperties.Mutable then
-		fastFailReason ..= "Attempt to call UpdateEntity on immutable entity. "
+		fastFailReason .. = "Attempt to call UpdateEntity on immutable entity. "
 	end
 	if fastFailReason ~= "" then
 		-- Lock contention during combat is expected; log as WARN not ERROR
-		local level = if isLockContention then "WARN" else "ERROR"
+		local level = if isLockContention then"WARN" else"ERROR"
 		self:Log({ Level = level, Message = "UpdateEntity failed: " .. fastFailReason })
 		return false
 	end
@@ -433,9 +389,9 @@ function BaseEntity:UpdateEntity(lockingCallerId: string?)
 	end
 	table.clear(privateProperties.Pending)
 	table.clear(privateProperties._cache)
-	
+
 	-- Increment Version
-	privateProperties.Version += 1
+	privateProperties.Version + = 1
 	changes._v = privateProperties.Version
 
 	-- Append to version history ring buffer (snapshot was built pre-commit)
@@ -472,54 +428,38 @@ function BaseEntity:UpdateEntity(lockingCallerId: string?)
 	end
 	return success
 end
---[=[
-	@description Implements `BaseEntity.ApplyChanges`.
-	@param changes { [string]: any } -- `changes` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity:ApplyChanges(changes: { [string]: any })
 	self:Log
-	{ 
-		Level = "WARN", 
-		Message = "Abstract Method 'ApplyChanges' called with changes: " .. tostring(changes) 
+	{
+		Level = "WARN",
+		Message = "Abstract Method 'ApplyChanges' called with changes: " .. tostring(changes)
 	}
 	self:Log
-	{ 
-		Level = "WARN", 
-		Message = "Subclasses must implement 'ApplyChanges' to handle property updates." 
+	{
+		Level = "WARN",
+		Message = "Subclasses must implement 'ApplyChanges' to handle property updates."
 	}
 end
---[=[
-	@description Implements `BaseEntity.Cleanup`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity:Cleanup()
 	-- Override in subclasses if needed
 end
---[=[
-	@description Returns the data produced by `BaseEntity.GetValidProperties`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity:GetValidProperties()
 	return self._privateProperties.Schema
 end
---[=[
-	@description Implements `BaseEntity.AcquireLock`.
-	@param callerId string -- `callerId` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity:AcquireLock(callerId: string)
 	if not callerId then
 		self:Log
-		{ 
-			Level = "ERROR", 
-			Message = "AcquireLock called without callerId." 
+		{
+			Level = "ERROR",
+			Message = "AcquireLock called without callerId."
 		}
 		return false
 	end;
@@ -530,19 +470,15 @@ function BaseEntity:AcquireLock(callerId: string)
 	end
 	return false
 end
---[=[
-	@description Implements `BaseEntity.ReleaseLock`.
-	@param callerId string -- `callerId` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity:ReleaseLock(callerId: string)
 	if self._privateProperties.EntityLocked then
 		if self._privateProperties.EntityLocked ~= callerId then
 			self:Log
-			{ 
-				Level = "ERROR", 
-				Message = "ReleaseLock called by non-owner." 
+			{
+				Level = "ERROR",
+				Message = "ReleaseLock called by non-owner."
 			}
 			return false
 		end
@@ -552,11 +488,7 @@ function BaseEntity:ReleaseLock(callerId: string)
 	end
 	return false
 end
---[=[
-	@description Implements `BaseEntity.Destroy`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseEntity:Destroy()
 	local privateProperties = self._privateProperties
@@ -565,7 +497,7 @@ function BaseEntity:Destroy()
 	-- Automated Bubbling: Run every 'Cleanup' method in the class hierarchy
 	local currentClass = privateProperties._class
 	while currentClass do
-		local cleanupHook = rawget(currentClass, "Cleanup")
+		local cleanupHook = rawget(currentClass,"Cleanup")
 		if type(cleanupHook) == "function" then
 			table.insert(privateProperties._cleanupTasks, cleanupHook)
 		end

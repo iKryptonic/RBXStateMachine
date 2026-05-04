@@ -1,8 +1,5 @@
 --!strict
---[=[
-	@module Scheduler
-	@description Defines the `Scheduler` module and its exported API.
-]=]
+
 
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
@@ -35,23 +32,23 @@ local function runTask(func, thread, ...)
 end
 
 local function yielder()
-    while true do
-        runTask(coroutine.yield())
-    end
+	while true do
+		runTask(coroutine.yield())
+	end
 end
 
 -- Static Error Handler to avoid closure creation
 local function ERROR_HANDLER(err)
-    return debug.traceback(tostring(err), 2)
+	return debug.traceback(tostring(err), 2)
 end
 
 local function ValidateRequest()
-	assert(Initialized, "Scheduler not initialized")
+	assert(Initialized,"Scheduler not initialized")
 end
 
 local function ResolveScheduler(self: any)
 	ValidateRequest()
-	if type(self) == "table" and rawget(self, "_heaps") then
+	if type(self) == "table" and rawget(self,"_heaps") then
 		return self
 	end
 	if not defaultInstance then
@@ -61,18 +58,14 @@ local function ResolveScheduler(self: any)
 end
 
 local function GetWeightedTime(self, delay: number, priority: number)
-    -- Higher priority results in a "smaller" (earlier) timestamp for the Min-Heap
-    local weight = self.Settings.PriorityWeight or 0.001
-    return os_clock() + delay - (priority * weight)
+	-- Higher priority results in a "smaller" (earlier) timestamp for the Min-Heap
+	local weight = self.Settings.PriorityWeight or 0.001
+	return os_clock() + delay - (priority * weight)
 end
 
-do 
+do
 	Scheduler.__index = Scheduler
-	--[=[
-		@description Handles `Initialize` for `Scheduler`.
-		@param Util any -- `Util` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler.Initialize(Util: any)
 		if Initialized then return end
@@ -81,11 +74,7 @@ do
 		Scheduler.Logger = Util.Logger.new({Name = "Scheduler"})
 		Scheduler.Strings = Util.StaticStrings
 	end
-	--[=[
-		@description Implements `Scheduler.new`.
-		@param settings any? -- `settings` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler.new(settings: any?)
 		local self = setmetatable({
@@ -104,54 +93,46 @@ do
 			},
 			Logger = nil,
 		}, Scheduler)
-		
+
 		self.PerformanceManager = PerformanceManager.new(self)
 		return self
 	end
-	--[=[
-		@description Implements `Scheduler.Schedule`.
-		@param params any -- `params` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:Schedule(params: any)
-        if not params.TaskName or type(params.TaskAction) ~= "function" then return nil end
-        
-        -- Use the Pool
-        local t = TaskPool.Get()
-        t.Name = params.TaskName
-        t.Action = params.TaskAction
-        t.Delay = params.TaskExecutionDelay or 0
-        t.IsRecurringTask = params.IsRecurringTask or false
-        t.Priority = params.Priority or 1
-        -- Default to Heartbeat if Event is missing or nil
-        t.Event = params.Event or "Heartbeat" 
-        t.NextRun = GetWeightedTime(self, t.Delay, t.Priority)
-        t.CreationTime = os_clock()
-        t.TotalMemory = 0
-        t.MaxMemory = 0
+		if not params.TaskName or type(params.TaskAction) ~= "function" then return nil end
 
-        local isNew = not self.Tasks[t.Name]
-        if not isNew then
-            -- If overwriting, we should ideally release the old one, 
-            -- but since it's in the Heap, lazy removal handles it.
-            self.Tasks[t.Name] = nil 
-        end
+		-- Use the Pool
+		local t = TaskPool.Get()
+		t.Name = params.TaskName
+		t.Action = params.TaskAction
+		t.Delay = params.TaskExecutionDelay or 0
+		t.IsRecurringTask = params.IsRecurringTask or false
+		t.Priority = params.Priority or 1
+		-- Default to Heartbeat if Event is missing or nil
+		t.Event = params.Event or "Heartbeat"
+		t.NextRun = GetWeightedTime(self, t.Delay, t.Priority)
+		t.CreationTime = os_clock()
+		t.TotalMemory = 0
+		t.MaxMemory = 0
 
-        self.Tasks[t.Name] = t
-        if isNew then
-            self._taskCount += 1
-        end
-        if not self._heaps[t.Event] then self._heaps[t.Event] = {} end
-        self:_heapPush(self._heaps[t.Event], t)
-        
-        return t
-    end
-	--[=[
-		@description Implements `Scheduler.Clear`.
-		@param none nil -- This function does not accept explicit parameters.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+		local isNew = not self.Tasks[t.Name]
+		if not isNew then
+			-- If overwriting, we should ideally release the old one,
+			-- but since it's in the Heap, lazy removal handles it.
+			self.Tasks[t.Name] = nil
+		end
+
+		self.Tasks[t.Name] = t
+		if isNew then
+			self._taskCount + = 1
+		end
+		if not self._heaps[t.Event] then self._heaps[t.Event] = {} end
+		self:_heapPush(self._heaps[t.Event], t)
+
+		return t
+	end
+
 
 	function Scheduler:Clear()
 		self.Tasks = {}
@@ -162,14 +143,7 @@ do
 		self._historyIndex = 1
 		self._taskCount = 0
 	end
-	--[=[
-		@description Implements `Scheduler.AddToHistory`.
-		@param taskObj any -- `taskObj` input parameter.
-		@param status any -- `status` input parameter.
-		@param duration any -- `duration` input parameter.
-		@param err string? -- `err` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:AddToHistory(taskObj, status, duration, err: string?)
 		local entry = {
@@ -182,17 +156,13 @@ do
 		self.History[self._historyIndex] = entry
 		self._historyIndex = (self._historyIndex % 100) + 1
 	end
-	--[=[
-		@description Implements `Scheduler.Deschedule`.
-		@param name string -- `name` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:Deschedule(name: string)
 		self = ResolveScheduler(self)
 		if self.Tasks[name] then
-			self:AddToHistory(self.Tasks[name], "Cancelled", 0, "")
-			self._taskCount -= 1
+			self:AddToHistory(self.Tasks[name],"Cancelled", 0,"")
+			self._taskCount - = 1
 			self.Tasks[name] = nil
 			local logger = self.Logger or Scheduler.Logger
 			if logger then
@@ -203,30 +173,18 @@ do
 			end
 		end
 	end
-	--[=[
-		@description Returns the data produced by `Scheduler.GetTask`.
-		@param name string -- `name` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:GetTask(name: string)
 		self = ResolveScheduler(self)
 		return self.Tasks[name]
 	end
-	--[=[
-		@description Returns the data produced by `Scheduler.GetTaskCount`.
-		@param none nil -- This function does not accept explicit parameters.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:GetTaskCount()
 		return self._taskCount
 	end
-	--[=[
-		@description Implements `Scheduler.ExecuteTask`.
-		@param taskOrName string | Task -- `taskOrName` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:ExecuteTask(taskOrName: string | Task)
 		self = ResolveScheduler(self)
@@ -246,11 +204,7 @@ do
 		end
 		self:_internalExecute(task)
 	end
-	--[=[
-		@description Returns the data produced by `Scheduler.GetSyncData`.
-		@param none nil -- This function does not accept explicit parameters.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:GetSyncData()
 		self = ResolveScheduler(self)
@@ -274,21 +228,13 @@ do
 			TaskStats = self.TaskStats
 		}
 	end
-	--[=[
-		@description Implements `Scheduler.CheckAdmin`.
-		@param player Player -- `player` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:CheckAdmin(player: Player)
 		if RunService:IsStudio() then return true end
 		return player.UserId == game.CreatorId
 	end
-	--[=[
-		@description Implements `Scheduler.ResetTask`.
-		@param name string -- `name` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:ResetTask(name: string)
 		self = ResolveScheduler(self)
@@ -312,20 +258,12 @@ do
 			end
 		end
 	end
-	--[=[
-		@description Implements `Scheduler.GenerateKey`.
-		@param none nil -- This function does not accept explicit parameters.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:GenerateKey()
 		return HttpService:GenerateGUID(false)
 	end
-	--[=[
-		@description Returns the data produced by `Scheduler.GetThreadPoolStats`.
-		@param none nil -- This function does not accept explicit parameters.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:GetThreadPoolStats()
 		return {
@@ -335,11 +273,7 @@ do
 			PeakThreads = peakThreads,
 		}
 	end
-	--[=[
-		@description Implements `Scheduler._internalExecute`.
-		@param t any -- `t` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:_internalExecute(t)
 		local thread
@@ -348,12 +282,12 @@ do
 		else
 			thread = coroutine.create(yielder)
 			coroutine.resume(thread) -- Start the yielder
-			totalThreads += 1
+			totalThreads + = 1
 			if totalThreads > peakThreads then
 				peakThreads = totalThreads
 			end
 		end
-		activeThreads += 1
+		activeThreads + = 1
 
 		-- We wrap the logic in a non-allocating wrapper
 		task_spawn(thread, function()
@@ -368,25 +302,25 @@ do
 				t.LastRunTime = start
 
 				local s, e = xpcall(t.Action, ERROR_HANDLER)
-				
+
 				local dur = os_clock() - start
 				local endMem = collectgarbage("count")
 				local memDelta = math.max(0, endMem - startMem) -- Ignore negative delta if GC ran
-				
+
 				self._running[t.Name] = nil
 
 				if self.Tasks[t.Name] == t then
-					t.RunCount += 1
-					t.TotalRunTime += dur
+					t.RunCount + = 1
+					t.TotalRunTime + = dur
 					if dur > t.MaxRunTime then t.MaxRunTime = dur end
-					
+
 					t.TotalMemory = (t.TotalMemory or 0) + memDelta
 					if memDelta > (t.MaxMemory or 0) then t.MaxMemory = memDelta end
-					
+
 					if not t.IsRecurringTask then
 						self:AddToHistory(t, s and "Completed" or "Failed", dur, not s and tostring(e) or nil)
 						self.Tasks[t.Name] = nil
-						self._taskCount -= 1
+						self._taskCount - = 1
 						TaskPool.Release(t)
 					end
 				else
@@ -401,14 +335,10 @@ do
 			end
 		end, thread)
 	end
-	--[=[
-		@description Implements `Scheduler.PrunePool`.
-		@param none nil -- This function does not accept explicit parameters.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:PrunePool()
-    -- Only shrink if the pool is significantly large
+	-- Only shrink if the pool is significantly large
 		if TaskPool._count > 100 then
 			TaskPool.Shrink(20)
 			local logger = self.Logger or Scheduler.Logger
@@ -420,11 +350,7 @@ do
 			end
 		end
 	end
-	--[=[
-		@description Implements `Scheduler.Step`.
-		@param eventName string? -- `eventName` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:Step(eventName: string?)
 		local event = eventName or "Heartbeat"
@@ -434,14 +360,14 @@ do
 		local now = os_clock()
 		local startTime = now
 		local budget = self.Settings.FrameBudget
-		
+
 		-- 1. Collect all due tasks
 		local dueTasks = {}
 		local count = 0
-		
+
 		while #heap > 0 do
 			local t = heap[1]
-			
+
 			-- Lazy Removal check
 			if self.Tasks[t.Name] ~= t then
 				self:_heapPop(heap)
@@ -450,36 +376,36 @@ do
 				end
 				continue
 			end
-			
+
 			if t.NextRun > now then break end
-			
+
 			-- Pop and add to execution list
 			self:_heapPop(heap)
-			count += 1
+			count + = 1
 			dueTasks[count] = t
 		end
-		
+
 		-- 2. Execute and Reschedule
 		for i = 1, count do
 			local t = dueTasks[i]
 			self:_internalExecute(t)
-			
+
 			-- Reschedule if recurring
 			if t.IsRecurringTask and self.Tasks[t.Name] == t then
-				-- IMPORTANT: Ensure NextRun calculated here, but pushed back 
-				-- AFTER we are done popping, effectively shifting it to the next Step execution 
+				-- IMPORTANT: Ensure NextRun calculated here, but pushed back
+				-- AFTER we are done popping, effectively shifting it to the next Step execution
 				-- (because we are inside the same function/frame).
 				-- Even if NextRun is now, it's safe because we already emptied the heap of *currently visible* due tasks.
 				t.NextRun = GetWeightedTime(self, t.Delay, t.Priority)
 				self:_heapPush(heap, t)
 			end
-			
-			-- Budget Check 
+
+			-- Budget Check
 			if (os_clock() - startTime) >= budget then
 				-- If we hit budget, we must re-push the REMAINING tasks (that we popped but didn't run)
 				for j = i + 1, count do
 					local deferred = dueTasks[j]
-					
+
 					-- Optimization: increment deferred priority slightly? No, keep simple.
 					self:_heapPush(heap, deferred)
 				end
@@ -495,12 +421,7 @@ do
 			Budget = budget
 		}
 	end
-	--[=[
-		@description Implements `Scheduler._heapPush`.
-		@param heap any -- `heap` input parameter.
-		@param item any -- `item` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:_heapPush(heap, item)
 		table_insert(heap, item)
@@ -513,21 +434,17 @@ do
 			else break end
 		end
 	end
-	--[=[
-		@description Implements `Scheduler._heapPop`.
-		@param heap any -- `heap` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:_heapPop(heap)
 		local size = #heap
 		if size == 0 then return nil end
 		local root = heap[1]
-		
+
 		if size > 1 then
 			heap[1] = heap[size]
 			heap[size] = nil
-			size -= 1
+			size - = 1
 			local idx = 1
 			while true do
 				local left, right = 2 * idx, 2 * idx + 1
@@ -543,16 +460,12 @@ do
 		end
 		return root
 	end
-	--[=[
-		@description Implements `Scheduler.Start`.
-		@param none nil -- This function does not accept explicit parameters.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:Start()
 		if self._connections.Heartbeat then return end
 
-		local ValidStates = 
+		local ValidStates =
 		{
 			"Heartbeat",
 			"Stepped",
@@ -582,11 +495,7 @@ do
 			Message = "Scheduler started."
 		})
 	end
-	--[=[
-		@description Implements `Scheduler.Stop`.
-		@param none nil -- This function does not accept explicit parameters.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function Scheduler:Stop()
 		for state, conn in pairs(self._connections) do

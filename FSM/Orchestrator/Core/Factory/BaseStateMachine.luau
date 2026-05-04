@@ -31,11 +31,7 @@ local RunService = game:GetService("RunService")
 local BaseStateMachine = {}
 
 local Logger, Signal, Settings, Initialized;
---[=[
-	@description Handles `Initialize` for `BaseStateMachine`.
-	@param Util any -- `Util` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine.Initialize(Util)
 	if Initialized then return end
@@ -67,7 +63,7 @@ local function __index(t, k)
 		if classMember ~= nil then return classMember end
 	end
 
-	local context = rawget(t, "Context")
+	local context = rawget(t,"Context")
 	if context and context[k] ~= nil then
 		return context[k]
 	end
@@ -83,10 +79,10 @@ BaseStateMachine.__tostring = __tostring
 
 -- Standard Priority Levels
 BaseStateMachine.Priorities = {
-	Render = 1,      -- Runs every frame
-	High = 2,        -- Runs every 2 frames
-	Medium = 5,      -- Runs every 5 frames
-	Low = 10,        -- Runs every 10 frames
+	Render = 1, -- Runs every frame
+	High = 2, -- Runs every 2 frames
+	Medium = 5, -- Runs every 5 frames
+	Low = 10, -- Runs every 10 frames
 	Background = 30, -- Runs every 30 frames (0.5s at 60fps)
 }
 
@@ -96,10 +92,10 @@ local GlobalHeartbeat: RBXScriptConnection? = nil
 local GlobalFrameCount = 0
 
 local function initPerf(self: any)
-	if rawget(self, "Perf") ~= nil then
+	if rawget(self,"Perf") ~= nil then
 		return
 	end
-	rawset(self, "Perf", {
+	rawset(self,"Perf", {
 		UpdateCount = 0,
 		TotalUpdateTime = 0,
 		MaxUpdateTime = 0,
@@ -114,11 +110,7 @@ local function initPerf(self: any)
 		_MemSampleInterval = 1.0,
 	})
 end
---[=[
-	@description Implements `BaseStateMachine.new`.
-	@param params { Id: string, Name: string, ValidStates: {string}?, TerminalStates: {string}?, InitialState: string?, Context: any?, Priority: number? } -- `params` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {string}?, TerminalStates: {string}?, InitialState: string?, Context: any?, Priority: number? })
 	local self = setmetatable({}, BaseStateMachine)
@@ -222,11 +214,7 @@ function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {
 	self.StateChanged = self._stateChanged
 	return self
 end
---[=[
-	@description Returns the data produced by `BaseStateMachine.GetOrchestrator`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:GetOrchestrator()
 	if self.Context and self.Context._Orchestrator then
@@ -240,11 +228,7 @@ function BaseStateMachine:GetOrchestrator()
 
 	return nil
 end
---[=[
-	@description Returns the data produced by `BaseStateMachine.GetEntity`.
-	@param entityId string -- `entityId` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:GetEntity(entityId: string)
 	local orchestrator = self:GetOrchestrator()
@@ -256,17 +240,13 @@ function BaseStateMachine:GetEntity(entityId: string)
 end
 
 local function isTerminalState(self: any, stateName: string): boolean
-	local setTable = rawget(self, "TerminalStates")
+	local setTable = rawget(self,"TerminalStates")
 	if type(setTable) == "table" and setTable[stateName] == true then
 		return true
 	end
 	return false
 end
---[=[
-	@description Implements `BaseStateMachine.Extend`.
-	@param extensionParams {className: string, validStates: {string}?, terminalStates: {string}?, InitialState: string?, context: { [any]: any }?, Priority: number?} -- `extensionParams` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine.Extend(extensionParams: {className: string, validStates: {string}?, terminalStates: {string}?, InitialState: string?, context: { [any]: any }?, Priority: number?})
 	-- This is the Class Table (where methods like MyClass:Method() will live)
@@ -277,10 +257,12 @@ function BaseStateMachine.Extend(extensionParams: {className: string, validState
 	-- Static inheritance: make Subclass inherit from BaseStateMachine
 	setmetatable(Subclass, { __index = BaseStateMachine })
 	--[=[
-		@description Implements `Subclass.new`.
-		@param ... any -- `...` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+		@description Creates a concrete FSM instance for the subclass returned by `BaseStateMachine.Extend`. The first variadic argument is treated as the constructor context table, merged with the extension defaults to choose the instance id, valid-state metadata, initial state, priority, and exposed context. After the metatable is installed, `RegisterStates` is invoked immediately so subclass overrides register states against the fully initialized object.
+		@param ... any -- Optional constructor arguments; the first value is expected to be a table containing `Id` or `StateMachineId` plus any per-instance context fields.
+		@return any -- Initialized subclass instance with base signals, context, and registered states ready for `:Start()`.
+		@reads extensionParams.className, extensionParams.validStates, extensionParams.terminalStates, extensionParams.InitialState, extensionParams.Priority
+		@writes self.Id, self.Name, self.Context, self.Priority, self._states, self._transitions
+]=]
 
 	function Subclass.new(...)
 		local fsmArguments = {...}
@@ -313,10 +295,10 @@ function BaseStateMachine.Extend(extensionParams: {className: string, validState
 		if self.RegisterStates then
 			self.RegisterStates(self)
 		else
-			self.Logger:Log({ 
-				Level = "WARN", 
+			self.Logger:Log({
+				Level = "WARN",
 				Message = string.format("Subclass '%s' did not implement 'RegisterStates'.", extensionParams.className),
-				OperationId = self.Id 
+				OperationId = self.Id
 			})
 		end
 
@@ -325,13 +307,7 @@ function BaseStateMachine.Extend(extensionParams: {className: string, validState
 
 	return Subclass
 end
---[=[
-	@description Implements `BaseStateMachine.AddState`.
-	@param name string -- `name` input parameter.
-	@param state any -- `state` input parameter.
-	@param validOutcomes {string}? -- `validOutcomes` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:AddState(name: string, state: any, validOutcomes: {string}?)
 	if self._started then
@@ -339,30 +315,24 @@ function BaseStateMachine:AddState(name: string, state: any, validOutcomes: {str
 			Level = "WARN",
 			Message = string.format(
 				"AddState('%s') called after :Start(). Late-registered states may miss transitions in flight. "
-				.. "Register all states before calling :Start().",
+				.."Register all states before calling :Start().",
 				name),
 			OperationId = self.Id,
 		})
 	end
 	if next(self.validStates) and not self.validStates[name] then
 		self.Logger:Log
-		{ 
-			Level = "ERROR", 
-			Message = string.format("State '%s' is not in the validStates list.", name), 
-			OperationId = self.Id 
+		{
+			Level = "ERROR",
+			Message = string.format("State '%s' is not in the validStates list.", name),
+			OperationId = self.Id
 		}
 		return
 	end
 	self._states[name] = state
 	self._transitions[name] = validOutcomes or {}
 end
---[=[
-	@description Implements `BaseStateMachine.AddSubMachine`.
-	@param name string -- `name` input parameter.
-	@param subMachineClass any -- `subMachineClass` input parameter.
-	@param config any -- `config` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:AddSubMachine(name: string, subMachineClass: any, config: any)
 	local subMachineState = {}:: any;
@@ -370,32 +340,28 @@ function BaseStateMachine:AddSubMachine(name: string, subMachineClass: any, conf
 	local initialSubState = config.InitialState;
 	local storeReference = config.StoreReference; -- Uses config.StoreReference as defined in type
 
-	local FailureMessage = (if not transitions then 
+	local FailureMessage = (if not transitions then
 		"AddSubMachine called without transitions configuration."
 		elseif not initialSubState then
 		"AddSubMachine called without initial sub-state configuration."
-		else 
+		else
 		"");
 
 	if FailureMessage ~= "" then
 		self.Logger:Log
-		{ 
-			Level = "ERROR", 
-			Message = FailureMessage, 
-			OperationId = self.Id 
+		{
+			Level = "ERROR",
+			Message = FailureMessage,
+			OperationId = self.Id
 		}
 		return
 	end
-	--[=[
-		@description Implements `subMachineState.OnEnter`.
-		@param fsm any -- `fsm` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function subMachineState:OnEnter(fsm)
 		self._connections = {}
 		self.Machine = subMachineClass.new({
-			StateMachineId = fsm.Id::string .. "." .. name,
+			StateMachineId = fsm.Id::string .."." .. name,
 			Context = fsm.Context -- Shared context allows data passing
 		})
 
@@ -433,11 +399,7 @@ function BaseStateMachine:AddSubMachine(name: string, subMachineClass: any, conf
 
 		self.Machine:Start({ State = initialSubState})
 	end
-	--[=[
-		@description Implements `subMachineState.OnLeave`.
-		@param fsm any -- `fsm` input parameter.
-		@return any -- Return value produced by the implementation, if any.
-	]=]
+
 
 	function subMachineState:OnLeave(fsm)
 		if self._connections then
@@ -459,23 +421,13 @@ function BaseStateMachine:AddSubMachine(name: string, subMachineClass: any, conf
 
 	self:AddState(name, subMachineState, validOutcomes)
 end
---[=[
-	@description Implements `BaseStateMachine.Manage`.
-	@param object any -- `object` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:Manage(object: any)
 	table.insert(self._cleanupTasks, object)
 	return object
 end
---[=[
-	@description Implements `BaseStateMachine.TrackInstance`.
-	@param inst Instance -- `inst` input parameter.
-	@param label string? -- `label` input parameter.
-	@param trackOnly boolean? -- `trackOnly` input parameter.
-	@return Instance -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:TrackInstance(inst: Instance, label: string?, trackOnly: boolean?): Instance
 	table.insert(self._managedInstances, {
@@ -489,11 +441,7 @@ function BaseStateMachine:TrackInstance(inst: Instance, label: string?, trackOnl
 	end
 	return inst
 end
---[=[
-	@description Returns the data produced by `BaseStateMachine.GetManagedInstances`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return { any } -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:GetManagedInstances(): { any }
 	-- Prune destroyed Instances before returning
@@ -506,11 +454,7 @@ function BaseStateMachine:GetManagedInstances(): { any }
 	self._managedInstances = alive
 	return alive
 end
---[=[
-	@description Implements `BaseStateMachine.DisableInternalLoop`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine.DisableInternalLoop()
 	if GlobalHeartbeat then
@@ -519,18 +463,14 @@ function BaseStateMachine.DisableInternalLoop()
 	end
 	BaseStateMachine._ExternalLoop = true
 end
---[=[
-	@description Implements `BaseStateMachine.Step`.
-	@param dt number -- `dt` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine.Step(dt: number)
-	GlobalFrameCount += 1
+	GlobalFrameCount + = 1
 	for machine in pairs(ActiveMachines) do
 		if machine.IsActive then
 			-- Accumulate delta time for skipped frames
-			machine._accumulatedDt += dt
+			machine._accumulatedDt + = dt
 
 			if (GlobalFrameCount + machine._offset) % machine.Priority == 0 then
 				local stepDt = machine._accumulatedDt
@@ -540,10 +480,10 @@ function BaseStateMachine.Step(dt: number)
 				if machine.Priority == 1 then
 					local success, err = xpcall(machine._Update, xpcallHandler, machine, stepDt)
 					if not success then
-						machine.Logger:Log({ 
-							Level = "ERROR", 
-							Message = string.format("Runtime Error in %s: %s", machine.Name, tostring(err)), 
-							OperationId = machine.Id 
+						machine.Logger:Log({
+							Level = "ERROR",
+							Message = string.format("Runtime Error in %s: %s", machine.Name, tostring(err)),
+							OperationId = machine.Id
 						})
 					end
 				else
@@ -551,10 +491,10 @@ function BaseStateMachine.Step(dt: number)
 					task.spawn(function()
 						local success, err = xpcall(machine._Update, xpcallHandler, machine, stepDt)
 						if not success then
-							machine.Logger:Log({ 
-								Level = "ERROR", 
-								Message = string.format("Runtime Error in %s: %s", machine.Name, tostring(err)), 
-								OperationId = machine.Id 
+							machine.Logger:Log({
+								Level = "ERROR",
+								Message = string.format("Runtime Error in %s: %s", machine.Name, tostring(err)),
+								OperationId = machine.Id
 							})
 						end
 					end)
@@ -563,18 +503,14 @@ function BaseStateMachine.Step(dt: number)
 		end
 	end
 end
---[=[
-	@description Implements `BaseStateMachine.Start`.
-	@param params { State: string?, Args: {any}? }? -- `params` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:Start(params: { State: string?, Args: {any}? }?)
 	if self.IsActive then return end
 	self.IsActive = true
 	self._started = true
 	local startParams = params or {}
-	
+
 	local startState = startParams.State or self.initialState or self.InitialState
 	if not startState then
 		-- validation already warned if InitialState was bad, but if it's nil entirely:
@@ -593,16 +529,16 @@ function BaseStateMachine:Start(params: { State: string?, Args: {any}? }?)
 	end
 
 	self.Logger:Log
-	{ 
-		Level = "DEBUG", 
-		Message = "StateMachine Started. Initial State: " .. tostring(startState), 
-		OperationId = self.Id 
+	{
+		Level = "DEBUG",
+		Message = "StateMachine Started. Initial State: " .. tostring(startState),
+		OperationId = self.Id
 	}
 
 	self:ChangeState
-	{ 
-		Name = startState, 
-		Args = startParams.Args 
+	{
+		Name = startState,
+		Args = startParams.Args
 	}
 
 	if self.IsActive and self._activeStateName == nil then
@@ -619,18 +555,14 @@ function BaseStateMachine:Start(params: { State: string?, Args: {any}? }?)
 		})
 	end
 end
---[=[
-	@description Implements `BaseStateMachine._Update`.
-	@param dt number -- `dt` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:_Update(dt: number)
 	if not self.IsActive then return end
 
 	-- Deferred state transition: detect if State was set externally (e.g. fsm.State = "X")
-	local pendingState = rawget(self, "State")
-	local activeState = rawget(self, "_activeStateName")
+	local pendingState = rawget(self,"State")
+	local activeState = rawget(self,"_activeStateName")
 	if pendingState ~= nil and pendingState ~= activeState then
 		-- Different state requested: clear pending then trigger transition
 		self.State = activeState
@@ -649,7 +581,7 @@ function BaseStateMachine:_Update(dt: number)
 		-- which would crash `nil > 0`. The field is xpcall'd by the heartbeat
 		-- so the error would be silently swallowed but the FSM would skip
 		-- the rest of its frame.
-		local ws = rawget(self, "WaitSpan") or 0
+		local ws = rawget(self,"WaitSpan") or 0
 		if type(ws) == "number" and ws > 0 then
 			local reentryDelay = ws
 			self.WaitSpan = 0
@@ -677,8 +609,8 @@ function BaseStateMachine:_Update(dt: number)
 		mem0 = gcinfo()
 	end
 
-	self.TotalDuration += dt
-	self.StateDuration += dt
+	self.TotalDuration + = dt
+	self.StateDuration + = dt
 
 	-- Pending one-shot timed transition (set by :ScheduleTransition).
 	-- Fire when StateDuration crosses FireAt. Auto-cleared on ChangeState
@@ -809,13 +741,7 @@ function BaseStateMachine:_Update(dt: number)
 		end
 	end
 end
---[=[
-	@description Implements `BaseStateMachine.ScheduleTransition`.
-	@param seconds number -- `seconds` input parameter.
-	@param targetState string -- `targetState` input parameter.
-	@param args {any}? -- `args` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:ScheduleTransition(seconds: number, targetState: string, args: {any}?)
 	if not self.IsActive then return end
@@ -851,11 +777,7 @@ function BaseStateMachine:ScheduleTransition(seconds: number, targetState: strin
 		Args = args,
 	}
 end
---[=[
-	@description Returns whether `BaseStateMachine` cancel scheduled transition.
-	@param none nil -- This function does not accept explicit parameters.
-	@return boolean -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:CancelScheduledTransition(): boolean
 	if self._pendingTimedTransition then
@@ -879,11 +801,7 @@ local function releaseTransitionGuard(self: any)
 		end
 	end
 end
---[=[
-	@description Implements `BaseStateMachine.ChangeState`.
-	@param params { Name: string, Args: {any}?, WaitSpan: number? } -- `params` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, WaitSpan: number? })
 	if not self.IsActive then return end
@@ -912,7 +830,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 		-- Defer this transition. WaitSpan is consumed (only after we've decided
 		-- to actually defer). The deferred task will recurse into ChangeState.
 		self.WaitSpan = 0
-		self._transitionId += 1
+		self._transitionId + = 1
 		local transitionId = self._transitionId
 		releaseTransitionGuard(self)
 		task.delay(delay, function()
@@ -926,10 +844,10 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 	-- ─── VALIDATION (no side effects yet) ───────────────────────────────
 	if next(self.validStates) and not self.validStates[name] then
 		self.Logger:Log
-		{ 
-			Level = "ERROR", 
-			Message = string.format("Cannot transition to state '%s': Not in validStates.", tostring(name)), 
-			OperationId = self.Id 
+		{
+			Level = "ERROR",
+			Message = string.format("Cannot transition to state '%s': Not in validStates.", tostring(name)),
+			OperationId = self.Id
 		}
 		releaseTransitionGuard(self)
 		return
@@ -949,10 +867,10 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 			end
 			if not isLegal then
 				self.Logger:Log
-				{ 
-					Level = "ERROR", 
-					Message = string.format("Illegal transition from '%s' to '%s'", oldState, name), 
-					OperationId = self.Id 
+				{
+					Level = "ERROR",
+					Message = string.format("Illegal transition from '%s' to '%s'", oldState, name),
+					OperationId = self.Id
 				}
 				releaseTransitionGuard(self)
 				return
@@ -961,28 +879,28 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 	end
 
 	-- Allow implicit terminal states (defined below) even if not registered
-	if not newState and not self.TerminalStates[name] then 
+	if not newState and not self.TerminalStates[name] then
 		self.Logger:Log
-		{ 
-			Level = "ERROR", 
-			Message = string.format("State '%s' is not registered in the FSM.", tostring(name)), 
-			OperationId = self.Id 
+		{
+			Level = "ERROR",
+			Message = string.format("State '%s' is not registered in the FSM.", tostring(name)),
+			OperationId = self.Id
 		}
 		releaseTransitionGuard(self)
-		return 
+		return
 	end
 
 	-- ─── COMMIT (validation passed; side effects begin) ─────────────────
 	self.WaitSpan = 0
-	self._transitionId += 1
+	self._transitionId + = 1
 
 	if oldState and newState then
 		local duration = math.floor(self.StateDuration * 1000) / 1000
 		self.Logger:Log
-		{ 
-			Level = "DEBUG", 
-			Message = string.format("Leaving '%s' (Duration: %.3fs)", tostring(oldState), duration), 
-			OperationId = self.Id 
+		{
+			Level = "DEBUG",
+			Message = string.format("Leaving '%s' (Duration: %.3fs)", tostring(oldState), duration),
+			OperationId = self.Id
 		}
 	end
 
@@ -1022,13 +940,13 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 
 	-- Update Transition Count
 	if name == self._activeStateName then
-		self.TransitionCount += 1
+		self.TransitionCount + = 1
 	else
 		self.Logger:Log
-		{ 
-			Level = "DEBUG", 
-			Message = string.format("Transition: '%s' -> '%s'", tostring(self._activeStateName), name), 
-			OperationId = self.Id 
+		{
+			Level = "DEBUG",
+			Message = string.format("Transition: '%s' -> '%s'", tostring(self._activeStateName), name),
+			OperationId = self.Id
 		}
 
 		self.StateDuration = 0
@@ -1061,16 +979,16 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 			-- BaseEntity instances are tables with methods set directly on the
 			-- proxy (GetRawData, GetSchema, UpdateEntity). The inner private
 			-- props are in a closure, so we duck-type via the method.
-			if rawget(t, "GetRawData") and rawget(t, "GetSchema") then
+			if rawget(t,"GetRawData") and rawget(t,"GetSchema") then
 				-- Try to read a friendly name through the proxy's __index
 				-- (which surfaces Data.Name → Context.Name → class.Name).
 				local ok, name = pcall(function() return (t :: any).Name end)
 				return string.format("Entity[%s]", ok and tostring(name) or "?")
 			end
 			-- BaseStateMachine instances have Id + State + _states.
-			if rawget(t, "Id") and rawget(t, "_states") then
-				local stateName = rawget(t, "State") or rawget(t, "_activeStateName") or "?"
-				return string.format("FSM[%s @ %s]", tostring(rawget(t, "Id")), tostring(stateName))
+			if rawget(t,"Id") and rawget(t,"_states") then
+				local stateName = rawget(t,"State") or rawget(t,"_activeStateName") or "?"
+				return string.format("FSM[%s @ %s]", tostring(rawget(t,"Id")), tostring(stateName))
 			end
 			return nil
 		end
@@ -1090,7 +1008,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 				-- Depth cap: deeply nested tables get a summary stub.
 				if depth <= 0 then
 					local n = 0
-					for _ in pairs(value) do n += 1 end
+					for _ in pairs(value) do n + = 1 end
 					return string.format("{table %d keys}", n)
 				end
 				-- Recursive sanitize with breadth cap.
@@ -1098,17 +1016,17 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 				local kept = 0
 				local total = 0
 				for k, v in pairs(value) do
-					total += 1
+					total + = 1
 					if kept >= MAX_KEYS then continue end
 					out[tostring(k)] = sanitize(v, depth - 1)
-					kept += 1
+					kept + = 1
 				end
 				if total > kept then
 					out["…"] = string.format("(%d more)", total - kept)
 				end
 				return out
 			elseif tv == "function" then
-				return "[function]"
+				return"[function]"
 			elseif tv == "nil" then
 				return nil
 			else
@@ -1150,7 +1068,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 	if typeof(newState) == "table" then
 		(newState :: any)._timeoutFired = nil
 	end
-	self._stateChanged:Fire(name, oldState)  -- fire AFTER commit
+	self._stateChanged:Fire(name, oldState) -- fire AFTER commit
 
 	if newState then
 		if isTerminalState(self, name) then
@@ -1158,13 +1076,13 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 			if typeof(newState) == "function" then
 				local ok, cleanupFunction = xpcall(newState, xpcallHandler, self, table.unpack(args))
 				if not ok then
-					self.Logger:Log({Level="ERROR", Message="Terminal function state error: "..tostring(cleanupFunction)})
+					self.Logger:Log({Level = "ERROR", Message = "Terminal function state error: "..tostring(cleanupFunction)})
 				elseif type(cleanupFunction) == "function" then
 					self._legacyCleanup[name] = cleanupFunction
 				end
 			elseif typeof(newState) == "table" and type(newState.OnEnter) == "function" then
 				local ok, err = xpcall(newState.OnEnter, xpcallHandler, newState, self, table.unpack(args))
-				if not ok then self.Logger:Log({Level="ERROR", Message="Terminal OnEnter error: "..tostring(err)}) end
+				if not ok then self.Logger:Log({Level = "ERROR", Message = "Terminal OnEnter error: "..tostring(err)}) end
 			end
 		else
 			-- Non-terminal: defer as before
@@ -1210,10 +1128,10 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 					end
 				end)
 				self.Logger:Log
-				{ 
-					Level = "DEBUG", 
-					Message = string.format("Entered function state '%s'.", name), 
-					OperationId = self.Id 
+				{
+					Level = "DEBUG",
+					Message = string.format("Entered function state '%s'.", name),
+					OperationId = self.Id
 				}
 			elseif typeof(newState) == "table" then
 				if type(newState.OnEnter) == "function" then
@@ -1236,10 +1154,10 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 						end
 					end)
 					self.Logger:Log
-					{ 
-						Level = "DEBUG", 
-						Message = string.format("Entered state object '%s'.", name), 
-						OperationId = self.Id 
+					{
+						Level = "DEBUG",
+						Message = string.format("Entered state object '%s'.", name),
+						OperationId = self.Id
 					}
 				end
 			end
@@ -1262,40 +1180,28 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 	-- ─── RELEASE REENTRANCE GUARD + DRAIN QUEUE ──────────────────────────
 	releaseTransitionGuard(self)
 end
---[=[
-	@description Implements `BaseStateMachine.OnCleanup`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:OnCleanup()
 end
---[=[
-	@description Handles `RegisterStates` for `BaseStateMachine`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:RegisterStates()
 	-- Virtual method intended to be overridden by subclasses
 	self.Logger:Log
-	{ 
-		Level = "WARN", 
-		Message = "Abstract Method 'RegisterStates' called.", 
-		OperationId = self.Id 
+	{
+		Level = "WARN",
+		Message = "Abstract Method 'RegisterStates' called.",
+		OperationId = self.Id
 	}
 	self.Logger:Log
-	{ 
-		Level = "WARN", 
-		Message = "Subclasses must implement 'RegisterStates' to define FSM states.", 
-		OperationId = self.Id 
+	{
+		Level = "WARN",
+		Message = "Subclasses must implement 'RegisterStates' to define FSM states.",
+		OperationId = self.Id
 	}
 end
---[=[
-	@description Implements `BaseStateMachine._Teardown`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:_Teardown()
 	local wasActive = self.IsActive
@@ -1334,28 +1240,20 @@ function BaseStateMachine:_Teardown()
 		self:OnCleanup()
 	end
 end
---[=[
-	@description Implements `BaseStateMachine.Finish`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:Finish()
 	if not self.IsActive then return end
 	self:_Teardown()
 	self._completed:Fire()
 	self.Logger:Log
-	{ 
-		Level = "INFO", 
-		Message = "StateMachine Completed Successfully.", 
-		OperationId = self.Id 
+	{
+		Level = "INFO",
+		Message = "StateMachine Completed Successfully.",
+		OperationId = self.Id
 	}
 end
---[=[
-	@description Implements `BaseStateMachine.Fail`.
-	@param reason string? -- `reason` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:Fail(reason: string?)
 	if not self.IsActive then return end
@@ -1365,32 +1263,28 @@ function BaseStateMachine:Fail(reason: string?)
 	if logs then
 		for _, logEntry in ipairs(logs) do
 			if logEntry.Level == "ERROR" then
-				combinedReason = combinedReason .. logEntry.Message::string .. " | "
+				combinedReason = combinedReason .. logEntry.Message::string .." | "
 			end
 		end
 	end
 	if combinedReason ~= "" then
-		combinedReason = combinedReason:gsub(" | $", "")
-    else
-        combinedReason = "StateMachine failed"
+		combinedReason = combinedReason:gsub(" | $","")
+	else
+		combinedReason = "StateMachine failed"
 	end
 
-    self._error = combinedReason
-    self.Error = combinedReason
+	self._error = combinedReason
+	self.Error = combinedReason
 	self:_Teardown()
 	self._failed:Fire(combinedReason)
 	self.Logger:Log
-	{ 
-		Level = "ERROR", 
-		Message = "StateMachine Failed: " .. combinedReason .. " " .. tostring(self.Context), 
-		OperationId = self.Id 
+	{
+		Level = "ERROR",
+		Message = "StateMachine Failed: " .. combinedReason .." " .. tostring(self.Context),
+		OperationId = self.Id
 	}
 end
---[=[
-	@description Returns whether `BaseStateMachine` cancel.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:Cancel()
 	-- Idempotent: only fire Cancelled once, even if Cancel is called multiple
@@ -1406,17 +1300,13 @@ function BaseStateMachine:Cancel()
 		self._cancelled:Fire()
 	end
 	self.Logger:Log
-	{ 
-		Level = "WARN", 
-		Message = "StateMachine Cancelled.", 
-		OperationId = self.Id 
+	{
+		Level = "WARN",
+		Message = "StateMachine Cancelled.",
+		OperationId = self.Id
 	}
 end
---[=[
-	@description Implements `BaseStateMachine.Destroy`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:Destroy()
 	-- Idempotent: a double-Destroy would otherwise re-iterate cleanup tasks
@@ -1431,14 +1321,14 @@ function BaseStateMachine:Destroy()
 		OperationId = self.Id
 	}
 
-    local orchestrator = self:GetOrchestrator()
-    local registry = orchestrator and orchestrator.Factory and orchestrator.Factory.Registry
-    if registry and type(registry.GetStateMachine) == "function" and type(registry.UnregisterStateMachine) == "function" then
-        local registered = registry.GetStateMachine(self.Id)
-        if registered == self then
-            registry.UnregisterStateMachine(self.Id)
-        end
-    end
+	local orchestrator = self:GetOrchestrator()
+	local registry = orchestrator and orchestrator.Factory and orchestrator.Factory.Registry
+	if registry and type(registry.GetStateMachine) == "function" and type(registry.UnregisterStateMachine) == "function" then
+		local registered = registry.GetStateMachine(self.Id)
+		if registered == self then
+			registry.UnregisterStateMachine(self.Id)
+		end
+	end
 
 	self:_Teardown()
 	-- Log managed Instance cleanup count for diagnostics
@@ -1446,7 +1336,7 @@ function BaseStateMachine:Destroy()
 		local aliveCount = 0
 		for _, entry in ipairs(self._managedInstances) do
 			if entry.Instance and entry.Instance.Parent ~= nil then
-				aliveCount += 1
+				aliveCount + = 1
 			end
 		end
 		if aliveCount > 0 then
@@ -1474,24 +1364,20 @@ function BaseStateMachine:Destroy()
 		if self.Logger.Summary then table.clear(self.Logger.Summary) end
 	end
 
-    local context = self.Context
-    if type(context) == "table" then
-        context._Orchestrator = nil
-        context.Orchestrator = nil
-        context.FSM = nil
-    end
-    self.Context = nil
+	local context = self.Context
+	if type(context) == "table" then
+		context._Orchestrator = nil
+		context.Orchestrator = nil
+		context.FSM = nil
+	end
+	self.Context = nil
 
 	if self._completed then self._completed:Destroy() end
 	if self._failed then self._failed:Destroy() end
 	if self._cancelled then self._cancelled:Destroy() end
 	if self._stateChanged then self._stateChanged:Destroy() end
 end
---[=[
-	@description Implements `BaseStateMachine.Log`.
-	@param params { Level: string, Message: string, Data: any? } -- `params` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BaseStateMachine:Log(params: { Level: string, Message: string, Data: any? })
 	self.Logger:Log

@@ -1,8 +1,5 @@
 --!strict
---[=[
-	@module AnimationController
-	@description Defines the `AnimationController` module and its exported API.
-]=]
+
 
 local TweenService = game:GetService("TweenService")
 
@@ -18,7 +15,7 @@ type AnimationEntry = {
 	TweenInfo: TweenInfo,
 	Delay: number,
 	OnComplete: (() -> ())?,
-	State: "queued" | "playing" | "done",
+	State:"queued" |"playing" |"done",
 	Tween: Tween?,
 }
 
@@ -31,11 +28,7 @@ type PulseEntry = {
 	Tween: Tween?,
 	Active: boolean,
 }
---[=[
-	@description Implements `AnimationController.new`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnimationController.new(): any
 	local self = setmetatable({}, AnimationController)
@@ -46,18 +39,10 @@ function AnimationController.new(): any
 	self._nextId = 0
 	return self
 end
---[=[
-	@description Implements `AnimationController.Animate`.
-	@param target Instance -- `target` input parameter.
-	@param properties { [string]: any } -- `properties` input parameter.
-	@param tweenInfo TweenInfo? -- `tweenInfo` input parameter.
-	@param delay number? -- `delay` input parameter.
-	@param onComplete (() -> ())? -- `onComplete` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnimationController:Animate(target: Instance, properties: { [string]: any }, tweenInfo: TweenInfo?, delay: number?, onComplete: (() -> ())?)
-	self._nextId += 1
+	self._nextId + = 1
 	local id = "anim_" .. tostring(self._nextId)
 
 	local entry: AnimationEntry = {
@@ -74,14 +59,7 @@ function AnimationController:Animate(target: Instance, properties: { [string]: a
 	table.insert(self._queue, entry)
 	return id
 end
---[=[
-	@description Implements `AnimationController.StaggerIn`.
-	@param items { Instance } -- `items` input parameter.
-	@param propertyFrom { [string]: any } -- `propertyFrom` input parameter.
-	@param propertyTo { [string]: any } -- `propertyTo` input parameter.
-	@param tweenInfo TweenInfo? -- `tweenInfo` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnimationController:StaggerIn(items: { Instance }, propertyFrom: { [string]: any }, propertyTo: { [string]: any }, tweenInfo: TweenInfo?)
 	local ti = tweenInfo or Theme.Tween.Fast
@@ -94,15 +72,7 @@ function AnimationController:StaggerIn(items: { Instance }, propertyFrom: { [str
 		self:Animate(item, propertyTo, ti, (i - 1) * self._staggerDelay)
 	end
 end
---[=[
-	@description Implements `AnimationController.StartPulse`.
-	@param id string -- `id` input parameter.
-	@param target Instance -- `target` input parameter.
-	@param property string -- `property` input parameter.
-	@param pulseValue any -- `pulseValue` input parameter.
-	@param tweenInfo TweenInfo? -- `tweenInfo` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnimationController:StartPulse(id: string, target: Instance, property: string, pulseValue: any, tweenInfo: TweenInfo?)
 	-- Stop existing pulse if any
@@ -124,11 +94,7 @@ function AnimationController:StartPulse(id: string, target: Instance, property: 
 		Active = true,
 	}
 end
---[=[
-	@description Implements `AnimationController.StopPulse`.
-	@param id string -- `id` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnimationController:StopPulse(id: string)
 	local pulse = self._pulses[id]
@@ -144,13 +110,7 @@ function AnimationController:StopPulse(id: string)
 	pulse.Active = false
 	self._pulses[id] = nil
 end
---[=[
-	@description Implements `AnimationController.ExpandIn`.
-	@param frame Frame -- `frame` input parameter.
-	@param fromScale number? -- `fromScale` input parameter.
-	@param duration number? -- `duration` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnimationController:ExpandIn(frame: Frame, fromScale: number?, duration: number?)
 	local scale = fromScale or 0.92
@@ -180,12 +140,7 @@ function AnimationController:ExpandIn(frame: Frame, fromScale: number?, duration
 		end)
 	end
 end
---[=[
-	@description Implements `AnimationController.CollapseOut`.
-	@param frame Frame -- `frame` input parameter.
-	@param onDone (() -> ())? -- `onDone` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnimationController:CollapseOut(frame: Frame, onDone: (() -> ())?)
 	local ti = Theme.Tween.Collapse
@@ -206,12 +161,7 @@ function AnimationController:CollapseOut(frame: Frame, onDone: (() -> ())?)
 		if onDone then onDone() end
 	end)
 end
---[=[
-	@description Implements `AnimationController.HoverGlow`.
-	@param button GuiButton -- `button` input parameter.
-	@param glowColor Color3? -- `glowColor` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnimationController:HoverGlow(button: GuiButton, glowColor: Color3?)
 	local color = glowColor or Theme.Colors.Accent
@@ -232,11 +182,7 @@ function AnimationController:HoverGlow(button: GuiButton, glowColor: Color3?)
 		}):Play()
 	end)
 end
---[=[
-	@description Implements `AnimationController.Tick`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnimationController:Tick()
 	local i = 1
@@ -252,8 +198,8 @@ function AnimationController:Tick()
 
 			-- Respect delay
 			if entry.Delay > 0 then
-				entry.Delay -= (1 / 60) -- approximate frame time
-				i += 1
+				entry.Delay - = (1 / 60) -- approximate frame time
+				i + = 1
 				continue
 			end
 
@@ -273,14 +219,10 @@ function AnimationController:Tick()
 			table.remove(self._queue, i)
 			continue
 		end
-		i += 1
+		i + = 1
 	end
 end
---[=[
-	@description Implements `AnimationController.Destroy`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnimationController:Destroy()
 	for _, entry in ipairs(self._queue) do

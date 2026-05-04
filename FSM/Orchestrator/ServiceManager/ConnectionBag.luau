@@ -1,8 +1,5 @@
 --!strict
---[=[
-	@module ConnectionBag
-	@description Defines the `ConnectionBag` module and its exported API.
-]=]
+
 
 local ConnectionBag = {}
 ConnectionBag.__index = ConnectionBag
@@ -19,11 +16,7 @@ export type ConnectionBagInstance = {
 	Count: (self: ConnectionBagInstance) -> number,
 	IsEmpty: (self: ConnectionBagInstance) -> boolean,
 }
---[=[
-	@description Implements `ConnectionBag.new`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return ConnectionBagInstance -- Return value produced by the implementation, if any.
-]=]
+
 
 function ConnectionBag.new(): ConnectionBagInstance
 	local self = setmetatable({
@@ -32,43 +25,27 @@ function ConnectionBag.new(): ConnectionBagInstance
 	}, ConnectionBag)
 	return self :: any
 end
---[=[
-	@description Implements `ConnectionBag.Add`.
-	@param item any -- `item` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ConnectionBag:Add(item: any): any
 	if item == nil then return item end
 	table.insert(self._items, item)
-	self._count += 1
+	self._count + = 1
 	return item
 end
---[=[
-	@description Implements `ConnectionBag.AddTween`.
-	@param tween Tween -- `tween` input parameter.
-	@return Tween -- Return value produced by the implementation, if any.
-]=]
+
 
 function ConnectionBag:AddTween(tween: Tween): Tween
 	self:Add(tween)
 	return tween
 end
---[=[
-	@description Implements `ConnectionBag.AddThread`.
-	@param thread thread -- `thread` input parameter.
-	@return thread -- Return value produced by the implementation, if any.
-]=]
+
 
 function ConnectionBag:AddThread(thread: thread): thread
 	self:Add(thread)
 	return thread
 end
---[=[
-	@description Implements `ConnectionBag.DisconnectAll`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ConnectionBag:DisconnectAll()
 	-- Reverse iteration so tweens get cancelled before their connections
@@ -96,20 +73,12 @@ function ConnectionBag:DisconnectAll()
 	table.clear(self._items)
 	self._count = 0
 end
---[=[
-	@description Implements `ConnectionBag.Count`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return number -- Return value produced by the implementation, if any.
-]=]
+
 
 function ConnectionBag:Count(): number
 	return self._count
 end
---[=[
-	@description Returns whether `ConnectionBag` is empty.
-	@param none nil -- This function does not accept explicit parameters.
-	@return boolean -- Return value produced by the implementation, if any.
-]=]
+
 
 function ConnectionBag:IsEmpty(): boolean
 	return self._count == 0

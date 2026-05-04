@@ -1,8 +1,5 @@
 --!strict
---[=[
-	@module GlassGUI
-	@description Defines the `GlassGUI` module and its exported API.
-]=]
+
 
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
@@ -30,11 +27,7 @@ local function ClampWindowPosition(position: UDim2, anchorPoint: Vector2, absolu
 		math.floor(clampedY - viewport.Y * position.Y.Scale)
 	)
 end
---[=[
-	@description Implements `GlassGUI.new`.
-	@param playerGui PlayerGui -- `playerGui` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI.new(playerGui: PlayerGui): any
 	local self = setmetatable({}, GlassGUI)
@@ -64,11 +57,7 @@ function GlassGUI.new(playerGui: PlayerGui): any
 	self._visible = false
 	return self
 end
---[=[
-	@description Creates the result managed by `GlassGUI.Build`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return ScreenGui -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:Build(): ScreenGui
 	-- Root ScreenGui
@@ -131,11 +120,7 @@ main.AnchorPoint = Vector2.new(0.5, 0.5)
 
 	return sg
 end
---[=[
-	@description Implements `GlassGUI._BuildTitleBar`.
-	@param parent Frame -- `parent` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:_BuildTitleBar(parent: Frame)
 	local bar = Instance.new("Frame")
@@ -188,7 +173,7 @@ function GlassGUI:_BuildTitleBar(parent: Frame)
 	pillStroke.Parent = pill
 
 	pill.MouseButton1Click:Connect(function()
-		local nextMode = if self._contextMode == "client" then "server" else "client"
+		local nextMode = if self._contextMode == "client" then"server" else"client"
 		self:SetContextMode(nextMode)
 		if self._onContextToggle then
 			self._onContextToggle(nextMode)
@@ -261,11 +246,7 @@ function GlassGUI:_BuildTitleBar(parent: Frame)
 		end)
 	end
 end
---[=[
-	@description Implements `GlassGUI._BuildSidebar`.
-	@param parent Frame -- `parent` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:_BuildSidebar(parent: Frame)
 	local sidebar = Instance.new("Frame")
@@ -302,14 +283,14 @@ function GlassGUI:_BuildSidebar(parent: Frame)
 
 	-- Build subsystem icons
 	local subsystems = {
-		{ Id = "TASKS",     Order = 1 },
-		{ Id = "FSM",       Order = 2 },
-		{ Id = "ENTITY",    Order = 3 },
-		{ Id = "NETWORK",   Order = 4 },
+		{ Id = "TASKS", Order = 1 },
+		{ Id = "FSM", Order = 2 },
+		{ Id = "ENTITY", Order = 3 },
+		{ Id = "NETWORK", Order = 4 },
 		{ Id = "DATASTORE", Order = 5 },
-		{ Id = "INSIGHTS",  Order = 6 },
-		{ Id = "CONSOLE",   Order = 7 },
-		{ Id = "LOGS",      Order = 8 },
+		{ Id = "INSIGHTS", Order = 6 },
+		{ Id = "CONSOLE", Order = 7 },
+		{ Id = "LOGS", Order = 8 },
 	}
 
 	-- Short text labels for sidebar icons (fallback when images don't load)
@@ -407,11 +388,7 @@ function GlassGUI:_BuildSidebar(parent: Frame)
 		self._sidebarButtons[sub.Id] = btn
 	end
 end
---[=[
-	@description Implements `GlassGUI._BuildBreadcrumbBar`.
-	@param parent Frame -- `parent` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:_BuildBreadcrumbBar(parent: Frame)
 	local bar = Instance.new("Frame")
@@ -486,12 +463,7 @@ function GlassGUI:_BuildBreadcrumbBar(parent: Frame)
 		if self._onBackClick then self._onBackClick() end
 	end)
 end
---[=[
-	@description Implements `GlassGUI.UpdateBreadcrumbs`.
-	@param crumbs { { Id: string, Label: string, Depth: number } } -- `crumbs` input parameter.
-	@param onCrumbClick ((id: string) -> ())? -- `onCrumbClick` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:UpdateBreadcrumbs(crumbs: { { Id: string, Label: string, Depth: number } }, onCrumbClick: ((id: string) -> ())?)
 	local bar = self._breadcrumbBar
@@ -559,11 +531,7 @@ function GlassGUI:UpdateBreadcrumbs(crumbs: { { Id: string, Label: string, Depth
 		end
 	end
 end
---[=[
-	@description Implements `GlassGUI._BuildBodyContainer`.
-	@param parent Frame -- `parent` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:_BuildBodyContainer(parent: Frame)
 	local body = Instance.new("Frame")
@@ -590,21 +558,13 @@ function GlassGUI:_BuildBodyContainer(parent: Frame)
 	host.ZIndex = 6
 	host.Parent = body
 end
---[=[
-	@description Returns the data produced by `GlassGUI.GetBodyContainer`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return Frame? -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:GetBodyContainer(): Frame?
 	if not self._bodyContainer then return nil end
 	return self._bodyContainer:FindFirstChild("LayerHost") :: Frame?
 end
---[=[
-	@description Implements `GlassGUI._BuildStatusBar`.
-	@param parent Frame -- `parent` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:_BuildStatusBar(parent: Frame)
 	local bar = Instance.new("Frame")
@@ -687,11 +647,7 @@ function GlassGUI:_BuildStatusBar(parent: Frame)
 	perfPad.PaddingRight = UDim.new(0, 8)
 	perfPad.Parent = perfLabel
 end
---[=[
-	@description Implements `GlassGUI.UpdateStatusBar`.
-	@param props { Connected: boolean?, Mode: string?, InsightCount: number?, FPS: number?, } -- `props` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:UpdateStatusBar(props: {
 	Connected: boolean?,
@@ -709,14 +665,14 @@ function GlassGUI:UpdateStatusBar(props: {
 			dot.BackgroundColor3 = if props.Connected then Theme.Colors.Success else Theme.Colors.Danger
 		end
 		if lbl then
-			lbl.Text = if props.Connected then "CONNECTED" else "DISCONNECTED"
+			lbl.Text = if props.Connected then"CONNECTED" else"DISCONNECTED"
 		end
 	end
 
 	if props.InsightCount ~= nil then
 		local lbl = bar:FindFirstChild("InsightLabel") :: TextLabel?
 		if lbl then
-			lbl.Text = tostring(props.InsightCount) .. " insights"
+			lbl.Text = tostring(props.InsightCount) .." insights"
 			lbl.TextColor3 = if props.InsightCount > 0 then Theme.Colors.Warning else Theme.Colors.TextMuted
 		end
 	end
@@ -731,11 +687,7 @@ function GlassGUI:UpdateStatusBar(props: {
 		end
 	end
 end
---[=[
-	@description Implements `GlassGUI._BuildInsightToast`.
-	@param parent Frame -- `parent` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:_BuildInsightToast(parent: Frame)
 	local toast = Instance.new("Frame")
@@ -789,14 +741,7 @@ function GlassGUI:_BuildInsightToast(parent: Frame)
 	descLabel.ZIndex = 51
 	descLabel.TextWrapped = true
 end
---[=[
-	@description Implements `GlassGUI.ShowInsightToast`.
-	@param title string -- `title` input parameter.
-	@param description string -- `description` input parameter.
-	@param severity string? -- `severity` input parameter.
-	@param duration number? -- `duration` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:ShowInsightToast(title: string, description: string, severity: string?, duration: number?)
 	local toast = self._insightToast
@@ -842,12 +787,7 @@ function GlassGUI:ShowInsightToast(title: string, description: string, severity:
 		end
 	end)
 end
---[=[
-	@description Implements `GlassGUI.SelectSubsystem`.
-	@param id string -- `id` input parameter.
-	@param suppressCallback boolean? -- `suppressCallback` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:SelectSubsystem(id: string, suppressCallback: boolean?)
 	local prev = self._activeSubsystem
@@ -890,11 +830,7 @@ function GlassGUI:SelectSubsystem(id: string, suppressCallback: boolean?)
 		self._onSubsystemSelected(id)
 	end
 end
---[=[
-	@description Implements `GlassGUI.Show`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:Show()
 	if not self._screenGui then return end
@@ -920,11 +856,7 @@ function GlassGUI:Show()
 		end
 	end
 end
---[=[
-	@description Implements `GlassGUI.Hide`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:Hide()
 	if not self._screenGui then return end
@@ -943,20 +875,12 @@ function GlassGUI:Hide()
 		end)
 	end
 end
---[=[
-	@description Returns whether `GlassGUI` is visible.
-	@param none nil -- This function does not accept explicit parameters.
-	@return boolean -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:IsVisible(): boolean
 	return self._visible
 end
---[=[
-	@description Implements `GlassGUI.ToggleMinimize`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:ToggleMinimize()
 	self._minimized = not self._minimized
@@ -984,11 +908,7 @@ function GlassGUI:ToggleMinimize()
 		self._onMinimizeToggle(self._minimized)
 	end
 end
---[=[
-	@description Implements `GlassGUI._SetupDragging`.
-	@param main Frame -- `main` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:_SetupDragging(main: Frame)
 	local titleBar = main:FindFirstChild("TitleBar") :: Frame?
@@ -1039,11 +959,7 @@ function GlassGUI:_SetupDragging(main: Frame)
 		end
 	end))
 end
---[=[
-	@description Implements `GlassGUI._SetupResizing`.
-	@param main Frame -- `main` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:_SetupResizing(main: Frame)
 	local MIN_WIDTH = 600
@@ -1109,64 +1025,38 @@ function GlassGUI:_SetupResizing(main: Frame)
 		end
 	end))
 end
---[=[
-	@description Implements `GlassGUI.OnSubsystemSelected`.
-	@param callback (name: string) -> () -- `callback` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:OnSubsystemSelected(callback: (name: string) -> ())
 	self._onSubsystemSelected = callback
 end
---[=[
-	@description Implements `GlassGUI.OnMinimizeToggle`.
-	@param callback (minimized: boolean) -> () -- `callback` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:OnMinimizeToggle(callback: (minimized: boolean) -> ())
 	self._onMinimizeToggle = callback
 end
---[=[
-	@description Implements `GlassGUI.OnClose`.
-	@param callback () -> () -- `callback` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:OnClose(callback: () -> ())
 	self._onClose = callback
 end
---[=[
-	@description Implements `GlassGUI.OnContextToggle`.
-	@param callback (mode: string) -> () -- `callback` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:OnContextToggle(callback: (mode: string) -> ())
 	self._onContextToggle = callback
 end
---[=[
-	@description Implements `GlassGUI.OnBackClick`.
-	@param callback () -> () -- `callback` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:OnBackClick(callback: () -> ())
 	self._onBackClick = callback
 end
---[=[
-	@description Implements `GlassGUI.OnSubsystemReselected`.
-	@param callback (name: string) -> () -- `callback` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:OnSubsystemReselected(callback: (name: string) -> ())
 	self._onSubsystemReselected = callback
 end
 --[=[
 	@description Updates module state through `GlassGUI.SetContextMode`.
-	@param mode string -- `mode` input parameter.
-	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function GlassGUI:SetContextMode(mode: string)
@@ -1176,7 +1066,7 @@ function GlassGUI:SetContextMode(mode: string)
 
 	local isServer = mode == "server"
 	local color = if isServer then Theme.Colors.Purple else Theme.Colors.Accent
-	local text = if isServer then "SERVER" else "CLIENT"
+	local text = if isServer then"SERVER" else"CLIENT"
 
 	pill.Text = text
 	TweenService:Create(pill, Theme.Tween.Fast, {
@@ -1189,11 +1079,7 @@ function GlassGUI:SetContextMode(mode: string)
 		TweenService:Create(stroke, Theme.Tween.Fast, { Color = color }):Play()
 	end
 end
---[=[
-	@description Implements `GlassGUI.Destroy`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function GlassGUI:Destroy()
 	-- Release all stored connections (drag, resize, hover, button clicks).
