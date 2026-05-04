@@ -1,14 +1,11 @@
 --!strict
---[=[
-	@module SpawnCharacterJob
-	@description Defines the `SpawnCharacterJob` state machine module and its exported API.
-]=]
+
 
 local SpawnCharacterJob = {
 	Name = "SpawnCharacterJob",
 	className = "SpawnCharacterJob",
-	validStates = { "Validate", "BindEntity", "ApplyLoadout", "Completed", "Failed" },
-	terminalStates = { "Completed", "Failed" },
+	validStates = {"Validate","BindEntity","ApplyLoadout","Completed","Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Validate",
 }
 
@@ -31,17 +28,10 @@ local function createAndStartStateMachine(
 
 	return machine
 end
---[=[
-	@description Handles `RegisterStates` for `SpawnCharacterJob`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function SpawnCharacterJob:RegisterStates()
-	--[=[
-		@state Validate
-		@description Handles the `Validate` state for `SpawnCharacterJob`.
-	]=]
+
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -59,11 +49,8 @@ function SpawnCharacterJob:RegisterStates()
 
 			fsm.State = "BindEntity"
 		end,
-	}, { "BindEntity", "Failed" })
-	--[=[
-		@state BindEntity
-		@description Handles the `BindEntity` state for `SpawnCharacterJob`.
-	]=]
+	}, {"BindEntity","Failed" })
+
 
 	self:AddState("BindEntity", {
 		OnEnter = function(_, fsm)
@@ -93,11 +80,8 @@ function SpawnCharacterJob:RegisterStates()
 
 			fsm.State = "ApplyLoadout"
 		end,
-	}, { "ApplyLoadout", "Failed" })
-	--[=[
-		@state ApplyLoadout
-		@description Handles the `ApplyLoadout` state for `SpawnCharacterJob`.
-	]=]
+	}, {"ApplyLoadout","Failed" })
+
 
 	self:AddState("ApplyLoadout", {
 		OnEnter = function(_, fsm)
@@ -119,9 +103,9 @@ function SpawnCharacterJob:RegisterStates()
 							"EquipJob",
 							"SpawnEquip_"
 								.. tostring(fsm.CharacterEntityId)
-								.. "_"
+								.."_"
 								.. tostring(hand)
-								.. "_"
+								.."_"
 								.. tostring(os.clock()),
 							{
 								CharacterEntityId = fsm.CharacterEntityId,
@@ -137,17 +121,21 @@ function SpawnCharacterJob:RegisterStates()
 
 			fsm.State = "Completed"
 		end,
-	}, { "Completed", "Failed" })
+	}, {"Completed","Failed" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `SpawnCharacterJob`.
-	]=]
+	@state Completed
+	@description Terminal success sink reached after the spawned character entity is initialized and any persisted loadout equip jobs have been queued. `OnEnter` is a no-op.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `SpawnCharacterJob`.
-	]=]
+	@state Failed
+	@description Terminal failure sink for missing player, character, or entity context during spawn-time binding. `OnEnter` is a no-op because there is no extra rollback after failure.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Failed", function(_fsm) end, {})
 end

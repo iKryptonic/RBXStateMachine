@@ -1,13 +1,10 @@
 --!strict
---[=[
-	@module ProjectileAttackJob
-	@description Defines the `ProjectileAttackJob` state machine module and its exported API.
-]=]
+
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
-assert(Helpers, "Helpers folder not found")
+assert(Helpers,"Helpers folder not found")
 local Shared = ReplicatedStorage:WaitForChild("shared")
 local EquipHelpers = require(Shared:WaitForChild("EquipHelpers"))
 local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
@@ -40,7 +37,7 @@ local ProjectileAttackJob = {
 		"Completed",
 		"Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Validate",
 }
 
@@ -74,7 +71,7 @@ local function getProjectileTemplate(weaponId: string): BasePart?
 	if not assets then
 		return nil
 	end
-	local names = { "Arrow", weaponId .. "Projectile", "UnleashArrow", "ZephyrProjectile" }
+	local names = {"Arrow", weaponId .."Projectile","UnleashArrow","ZephyrProjectile" }
 	for _, name in ipairs(names) do
 		local template = assets:FindFirstChild(name)
 		if template and template:IsA("BasePart") then
@@ -111,17 +108,10 @@ local function getVictimEntity(orchestrator: any, targetModel: Model): any?
 	end
 	return nil
 end
---[=[
-	@description Handles `RegisterStates` for `ProjectileAttackJob`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ProjectileAttackJob:RegisterStates()
-	--[=[
-		@state Validate
-		@description Handles the `Validate` state for `ProjectileAttackJob`.
-	]=]
+
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -190,11 +180,8 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.Context._chargeTime = itemData.ChargeTime or DEFAULT_CHARGE_TIME
 			fsm.State = "AcquireLock"
 		end,
-	}, { "AcquireLock", "Failed" })
-	--[=[
-		@state AcquireLock
-		@description Handles the `AcquireLock` state for `ProjectileAttackJob`.
-	]=]
+	}, {"AcquireLock","Failed" })
+
 
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
@@ -206,96 +193,75 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.Context._lockHeld = true
 			fsm.State = "ValidateMana"
 		end,
-	}, { "ValidateMana", "Failed" })
-	--[=[
-		@state ValidateMana
-		@description Handles the `ValidateMana` state for `ProjectileAttackJob`.
-	]=]
+	}, {"ValidateMana","Failed" })
+
 
 	self:AddState("ValidateMana", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
 			local manaCost = fsm.Context._manaCost or 0
 			if (charEntity.Mana or 0) < manaCost then
-				StateTransitionHelpers.queueRelease(fsm, "Failed", "Not enough mana")
+				StateTransitionHelpers.queueRelease(fsm,"Failed","Not enough mana")
 				return
 			end
 			fsm.State = "DeductMana"
 		end,
-	}, { "DeductMana", "ReleaseLock" })
-	--[=[
-		@state DeductMana
-		@description Handles the `DeductMana` state for `ProjectileAttackJob`.
-	]=]
+	}, {"DeductMana","ReleaseLock" })
+
 
 	self:AddState("DeductMana", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
 			local manaCost = fsm.Context._manaCost or 0
 			if not ResourceHelpers.deductMana(charEntity, manaCost) then
-				StateTransitionHelpers.queueRelease(fsm, "Failed", "Not enough mana")
+				StateTransitionHelpers.queueRelease(fsm,"Failed","Not enough mana")
 				return
 			end
 			charEntity:UpdateEntity(fsm.Id)
 			fsm.State = "EmitChargeAnimation"
 		end,
-	}, { "EmitChargeAnimation" })
-	--[=[
-		@state EmitChargeAnimation
-		@description Handles the `EmitChargeAnimation` state for `ProjectileAttackJob`.
-	]=]
+	}, {"EmitChargeAnimation" })
+
 
 	self:AddState("EmitChargeAnimation", {
 		OnEnter = function(_, fsm)
-			IntentHelpers.appendIntent(fsm:GetOrchestrator(), fsm.Context._charEntity, "Animation", { Name = "Charge1", Speed = 0.25, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
+			IntentHelpers.appendIntent(fsm:GetOrchestrator(), fsm.Context._charEntity,"Animation", { Name = "Charge1", Speed = 0.25, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 			fsm.State = "WaitCharge"
 		end,
-	}, { "WaitCharge" })
-	--[=[
-		@state WaitCharge
-		@description Handles the `WaitCharge` state for `ProjectileAttackJob`.
-	]=]
+	}, {"WaitCharge" })
+
 
 	self:AddState("WaitCharge", {
 		OnEnter = function(_, fsm)
 			local chargeTime = fsm.Context._chargeTime or DEFAULT_CHARGE_TIME
 			if chargeTime > 0 then
-				fsm:ScheduleTransition(chargeTime, "ValidateForFire")
+				fsm:ScheduleTransition(chargeTime,"ValidateForFire")
 			else
 				fsm.State = "ValidateForFire"
 			end
 		end,
-	}, { "ValidateForFire", "Failed" })
-	--[=[
-		@state ValidateForFire
-		@description Handles the `ValidateForFire` state for `ProjectileAttackJob`.
-	]=]
+	}, {"ValidateForFire","Failed" })
+
 
 	self:AddState("ValidateForFire", {
 		OnEnter = function(_, fsm)
 			local rootPart = fsm.Context._rootPart
 			if not rootPart or not rootPart.Parent then
-				StateTransitionHelpers.queueRelease(fsm, "Failed", "Character root lost before firing")
+				StateTransitionHelpers.queueRelease(fsm,"Failed","Character root lost before firing")
 				return
 			end
 			fsm.State = "EmitFireAnimation"
 		end,
-	}, { "EmitFireAnimation", "ReleaseLock" })
-	--[=[
-		@state EmitFireAnimation
-		@description Handles the `EmitFireAnimation` state for `ProjectileAttackJob`.
-	]=]
+	}, {"EmitFireAnimation","ReleaseLock" })
+
 
 	self:AddState("EmitFireAnimation", {
 		OnEnter = function(_, fsm)
-			IntentHelpers.appendIntent(fsm:GetOrchestrator(), fsm.Context._charEntity, "Animation", { Name = "Charge2", Speed = 0.5, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
+			IntentHelpers.appendIntent(fsm:GetOrchestrator(), fsm.Context._charEntity,"Animation", { Name = "Charge2", Speed = 0.5, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 			fsm.State = "SpawnProjectile"
 		end,
-	}, { "SpawnProjectile" })
-	--[=[
-		@state SpawnProjectile
-		@description Handles the `SpawnProjectile` state for `ProjectileAttackJob`.
-	]=]
+	}, {"SpawnProjectile" })
+
 
 	self:AddState("SpawnProjectile", {
 		OnEnter = function(_, fsm)
@@ -314,18 +280,15 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.Context._projectile = projectile
 			fsm.State = "ConfigurePhysics"
 		end,
-	}, { "ConfigurePhysics" })
-	--[=[
-		@state ConfigurePhysics
-		@description Handles the `ConfigurePhysics` state for `ProjectileAttackJob`.
-	]=]
+	}, {"ConfigurePhysics" })
+
 
 	self:AddState("ConfigurePhysics", {
 		OnEnter = function(_, fsm)
 			local projectile = fsm.Context._projectile
 			local rootPart = fsm.Context._rootPart
 			if not projectile or not rootPart or not rootPart.Parent then
-				StateTransitionHelpers.queueRelease(fsm, "Failed", "Projectile configuration context missing")
+				StateTransitionHelpers.queueRelease(fsm,"Failed","Projectile configuration context missing")
 				return
 			end
 			projectile.CFrame = rootPart.CFrame * CFrame.new(0, 0, -3)
@@ -339,17 +302,14 @@ function ProjectileAttackJob:RegisterStates()
 			Debris:AddItem(projectile, fsm.Context._lifetime or DEFAULT_PROJECTILE_LIFETIME)
 			fsm.State = "RegisterHitDetection"
 		end,
-	}, { "RegisterHitDetection", "ReleaseLock" })
-	--[=[
-		@state RegisterHitDetection
-		@description Handles the `RegisterHitDetection` state for `ProjectileAttackJob`.
-	]=]
+	}, {"RegisterHitDetection","ReleaseLock" })
+
 
 	self:AddState("RegisterHitDetection", {
 		OnEnter = function(_, fsm)
 			local projectile = fsm.Context._projectile
 			if not projectile then
-				StateTransitionHelpers.queueRelease(fsm, "Failed", "Projectile missing")
+				StateTransitionHelpers.queueRelease(fsm,"Failed","Projectile missing")
 				return
 			end
 
@@ -384,21 +344,15 @@ function ProjectileAttackJob:RegisterStates()
 			fsm.Context._hitConn = hitConn
 			fsm.State = "WaitForImpact"
 		end,
-	}, { "WaitForImpact", "ReleaseLock", "ProcessHit" })
-	--[=[
-		@state WaitForImpact
-		@description Handles the `WaitForImpact` state for `ProjectileAttackJob`.
-	]=]
+	}, {"WaitForImpact","ReleaseLock","ProcessHit" })
+
 
 	self:AddState("WaitForImpact", {
 		OnEnter = function(_, fsm)
-			fsm:ScheduleTransition(fsm.Context._lifetime or DEFAULT_PROJECTILE_LIFETIME, "DestroyProjectile")
+			fsm:ScheduleTransition(fsm.Context._lifetime or DEFAULT_PROJECTILE_LIFETIME,"DestroyProjectile")
 		end,
-	}, { "DestroyProjectile", "ProcessHit" })
-	--[=[
-		@state ProcessHit
-		@description Handles the `ProcessHit` state for `ProjectileAttackJob`.
-	]=]
+	}, {"DestroyProjectile","ProcessHit" })
+
 
 	self:AddState("ProcessHit", {
 		OnEnter = function(_, fsm)
@@ -416,11 +370,8 @@ function ProjectileAttackJob:RegisterStates()
 			end
 			fsm.State = "ApplyProjectileKnockback"
 		end,
-	}, { "ApplyProjectileKnockback" })
-	--[=[
-		@state ApplyProjectileKnockback
-		@description Handles the `ApplyProjectileKnockback` state for `ProjectileAttackJob`.
-	]=]
+	}, {"ApplyProjectileKnockback" })
+
 
 	self:AddState("ApplyProjectileKnockback", {
 		OnEnter = function(_, fsm)
@@ -438,26 +389,20 @@ function ProjectileAttackJob:RegisterStates()
 						knockDir = rootPart.CFrame.LookVector
 					end
 				end
-				victimRoot.AssemblyLinearVelocity += knockDir * 30 + Vector3.new(0, 10, 0)
+				victimRoot.AssemblyLinearVelocity + = knockDir * 30 + Vector3.new(0, 10, 0)
 			end
 			fsm.State = "DestroyProjectile"
 		end,
-	}, { "DestroyProjectile" })
-	--[=[
-		@state DestroyProjectile
-		@description Handles the `DestroyProjectile` state for `ProjectileAttackJob`.
-	]=]
+	}, {"DestroyProjectile" })
+
 
 	self:AddState("DestroyProjectile", {
 		OnEnter = function(_, fsm)
 			cleanupProjectile(fsm)
 			fsm.State = "ReleaseLock"
 		end,
-	}, { "ReleaseLock" })
-	--[=[
-		@state ReleaseLock
-		@description Handles the `ReleaseLock` state for `ProjectileAttackJob`.
-	]=]
+	}, {"ReleaseLock" })
+
 
 	self:AddState("ReleaseLock", {
 		OnEnter = function(_, fsm)
@@ -473,25 +418,25 @@ function ProjectileAttackJob:RegisterStates()
 			end
 			fsm.State = "Completed"
 		end,
-	}, { "Completed", "Failed" })
+	}, {"Completed","Failed" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `ProjectileAttackJob`.
-	]=]
+	@state Completed
+	@description Terminal success sink reached after the projectile lifecycle finishes and any held attack lock has already been released. `OnEnter` is a no-op because all projectile cleanup happens before entry or in `OnCleanup`.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `ProjectileAttackJob`.
-	]=]
+	@state Failed
+	@description Terminal failure sink for projectile spawn, travel, or hit-processing errors. `OnEnter` is a no-op; `OnCleanup` destroys the projectile instance and releases any remaining held lock.
+		Transitions: none.
+		Writes: none in-state; cleanup writes may still run.
+]=]
 
 	self:AddState("Failed", function() end, {})
 end
---[=[
-	@description Implements `ProjectileAttackJob.OnCleanup`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ProjectileAttackJob:OnCleanup()
 	cleanupProjectile(self)

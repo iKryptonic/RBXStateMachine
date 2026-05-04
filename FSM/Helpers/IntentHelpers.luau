@@ -76,7 +76,7 @@ function IntentHelpers.appendIntent(
 	targetCharId: string?,
 	lockId: string?
 )
-	local intentSchema = ModuleLoader.requireSharedModule(orchestrator, "IntentSchema")
+	local intentSchema = ModuleLoader.requireSharedModule(orchestrator,"IntentSchema")
 	intentSchema.AppendIntent(characterEntity, {
 		Kind = kind,
 		Payload = payload,

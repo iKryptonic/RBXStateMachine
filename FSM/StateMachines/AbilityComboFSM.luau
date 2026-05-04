@@ -1,13 +1,10 @@
 --!strict
---[=[
-	@module AbilityComboFSM
-	@description Defines the `AbilityComboFSM` state machine module and its exported API.
-]=]
+
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
-assert(Helpers, "Helpers folder not found")
+assert(Helpers,"Helpers folder not found")
 local Shared = ReplicatedStorage:WaitForChild("shared")
 local EquipHelpers = require(Shared:WaitForChild("EquipHelpers"))
 local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
@@ -29,12 +26,12 @@ local AbilityComboFSM = {
 		"Completed",
 		"Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "ValidateAbility",
 }
 
 local function getAbilityCombosDefs(orchestrator: any)
-	return ModuleLoader.requireSharedModule(orchestrator, "AbilityCombosDefs")
+	return ModuleLoader.requireSharedModule(orchestrator,"AbilityCombosDefs")
 end
 
 local function getEntities(fsm: any): (any?, any?)
@@ -144,23 +141,13 @@ local function recordCooldown(entity: any, abilityId: string, cooldownEnd: numbe
 		entity:UpdateEntity(lockId)
 	end
 end
---[=[
-	@description Handles `RegisterStates` for `AbilityComboFSM`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AbilityComboFSM:RegisterStates()
-	--[=[
-		@state Idle
-		@description Handles the `Idle` state for `AbilityComboFSM`.
-	]=]
 
-	self:AddState("Idle", function() end, { "ValidateAbility" })
-	--[=[
-		@state ValidateAbility
-		@description Handles the `ValidateAbility` state for `AbilityComboFSM`.
-	]=]
+
+	self:AddState("Idle", function() end, {"ValidateAbility" })
+
 
 	self:AddState("ValidateAbility", {
 		OnEnter = function(_, fsm)
@@ -224,11 +211,8 @@ function AbilityComboFSM:RegisterStates()
 			fsm.Context._comboStepIndex = math.max(1, tonumber(fsm.Context._comboStepIndex) or 1)
 			fsm.State = "CheckMana"
 		end,
-	}, { "CheckMana", "Failed" })
-	--[=[
-		@state CheckMana
-		@description Handles the `CheckMana` state for `AbilityComboFSM`.
-	]=]
+	}, {"CheckMana","Failed" })
+
 
 	self:AddState("CheckMana", {
 		OnEnter = function(_, fsm)
@@ -250,11 +234,8 @@ function AbilityComboFSM:RegisterStates()
 			end
 			fsm.State = "DeductMana"
 		end,
-	}, { "DeductMana", "Failed" })
-	--[=[
-		@state DeductMana
-		@description Handles the `DeductMana` state for `AbilityComboFSM`.
-	]=]
+	}, {"DeductMana","Failed" })
+
 
 	self:AddState("DeductMana", {
 		OnEnter = function(_, fsm)
@@ -275,11 +256,8 @@ function AbilityComboFSM:RegisterStates()
 			end
 			fsm.State = "PlayComboStep"
 		end,
-	}, { "PlayComboStep", "Failed" })
-	--[=[
-		@state PlayComboStep
-		@description Handles the `PlayComboStep` state for `AbilityComboFSM`.
-	]=]
+	}, {"PlayComboStep","Failed" })
+
 
 	self:AddState("PlayComboStep", {
 		OnEnter = function(_, fsm)
@@ -293,7 +271,7 @@ function AbilityComboFSM:RegisterStates()
 			fsm.Context._currentStep = step
 			fsm.Context._currentStepIndex = stepIndex
 
-			local animationName = if typeof(step.Animation) == "string" then step.Animation else ""
+			local animationName = if typeof(step.Animation) == "string" then step.Animation else""
 			if animationName ~= "" then
 				local onAnimate = fsm.Context._onAnimate
 				if typeof(onAnimate) == "function" then
@@ -318,11 +296,8 @@ function AbilityComboFSM:RegisterStates()
 			end
 			fsm.State = "ProcessComboEvents"
 		end,
-	}, { "ProcessComboEvents", "Failed" })
-	--[=[
-		@state ProcessComboEvents
-		@description Handles the `ProcessComboEvents` state for `AbilityComboFSM`.
-	]=]
+	}, {"ProcessComboEvents","Failed" })
+
 
 	self:AddState("ProcessComboEvents", {
 		OnEnter = function(_, fsm)
@@ -348,11 +323,8 @@ function AbilityComboFSM:RegisterStates()
 			end
 			fsm.State = "AdvanceStep"
 		end,
-	}, { "AdvanceStep", "Failed" })
-	--[=[
-		@state AdvanceStep
-		@description Handles the `AdvanceStep` state for `AbilityComboFSM`.
-	]=]
+	}, {"AdvanceStep","Failed" })
+
 
 	self:AddState("AdvanceStep", {
 		OnEnter = function(_, fsm)
@@ -369,11 +341,8 @@ function AbilityComboFSM:RegisterStates()
 				fsm.State = "Cooldown"
 			end
 		end,
-	}, { "PlayComboStep", "Cooldown", "Failed" })
-	--[=[
-		@state Cooldown
-		@description Handles the `Cooldown` state for `AbilityComboFSM`.
-	]=]
+	}, {"PlayComboStep","Cooldown","Failed" })
+
 
 	self:AddState("Cooldown", {
 		OnEnter = function(_, fsm)
@@ -394,17 +363,21 @@ function AbilityComboFSM:RegisterStates()
 			end
 			fsm.State = "Completed"
 		end,
-	}, { "Completed", "Failed" })
+	}, {"Completed","Failed" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `AbilityComboFSM`.
-	]=]
+	@state Completed
+	@description Terminal success sink reached after `Cooldown` records the new cooldown timestamp on the character and player entities. `OnEnter` is a no-op because all cooldown writes already happened.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `AbilityComboFSM`.
-	]=]
+	@state Failed
+	@description Terminal failure sink for ability validation, mana spending, combo-step resolution, or cooldown-context errors. `OnEnter` is a no-op because failure bookkeeping happens before entry.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Failed", function() end, {})
 end

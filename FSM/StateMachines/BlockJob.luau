@@ -1,24 +1,24 @@
 --!strict
 --[=[
-    @Name BlockJob
-    @Author iKrypto
-    @Description Starts and maintains a blocking stance on a character by validating the entity, marking `IsBlocking`, applying movement restriction, broadcasting the replicated entity update, emitting the blocking animation intent, waiting for the entity to be released, then restoring movement and broadcasting the unblock update before ending in `Completed`. If the FSM dies mid-block, `OnCleanup` restores the blocking flags. Historical integrations must target `Completed`; the deprecated `Complete` spelling is intentionally not used.
+	@Name BlockJob
+	@Author iKrypto
+	@Description Starts and maintains a blocking stance on a character by validating the entity, marking `IsBlocking`, applying movement restriction, broadcasting the replicated entity update, emitting the blocking animation intent, waiting for the entity to be released, then restoring movement and broadcasting the unblock update before ending in `Completed`. If the FSM dies mid-block, `OnCleanup` restores the blocking flags. Historical integrations must target `Completed`; the deprecated `Complete` spelling is intentionally not used.
 
-    State flow diagram:
-    Validate → AcquireBlockState → ApplyMovementRestriction → BroadcastBlockUpdate → EmitBlockIntent → WaitForRelease → ReleaseBlockState → RestoreMovement → BroadcastUnblockUpdate → Completed
-             ↘ OnCleanup restore → Failed
+	State flow diagram:
+	Validate → AcquireBlockState → ApplyMovementRestriction → BroadcastBlockUpdate → EmitBlockIntent → WaitForRelease → ReleaseBlockState → RestoreMovement → BroadcastUnblockUpdate → Completed
+				↘ OnCleanup restore → Failed
 
-    Context fields:
-    - CharacterEntity: any -- resolved character entity being blocked/unblocked.
-    - _startedBlocking: boolean -- whether the block state was broadcast and therefore needs cleanup on failure.
+	Context fields:
+	- CharacterEntity: any -- resolved character entity being blocked/unblocked.
+	- _startedBlocking: boolean -- whether the block state was broadcast and therefore needs cleanup on failure.
 
-    Required params:
-    - CharacterEntityId: string -- character entity id that should enter the blocking stance.
+	Required params:
+	- CharacterEntityId: string -- character entity id that should enter the blocking stance.
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
-assert(Helpers, "Helpers folder not found")
+assert(Helpers,"Helpers folder not found")
 local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
 
 local BlockJob = {
@@ -37,20 +37,13 @@ local BlockJob = {
 		"Completed",
 		"Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Validate",
 }
---[=[
-	@description Handles `RegisterStates` for `BlockJob`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BlockJob:RegisterStates()
---[=[
-	@state Validate
-	@description Handles the `Validate` state for `BlockJob`.
-]=]
+
 
 self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -68,11 +61,8 @@ self:AddState("Validate", {
 			fsm.CharacterEntity = charEntity
 			fsm.State = "AcquireBlockState"
 		end,
-	}, { "AcquireBlockState", "Failed" })
---[=[
-	@state AcquireBlockState
-	@description Handles the `AcquireBlockState` state for `BlockJob`.
-]=]
+	}, {"AcquireBlockState","Failed" })
+
 
 self:AddState("AcquireBlockState", {
 		OnEnter = function(_, fsm)
@@ -84,11 +74,8 @@ self:AddState("AcquireBlockState", {
 			charEntity.IsBlocking = true
 			fsm.State = "ApplyMovementRestriction"
 		end,
-	}, { "ApplyMovementRestriction", "Failed" })
---[=[
-	@state ApplyMovementRestriction
-	@description Handles the `ApplyMovementRestriction` state for `BlockJob`.
-]=]
+	}, {"ApplyMovementRestriction","Failed" })
+
 
 self:AddState("ApplyMovementRestriction", {
 		OnEnter = function(_, fsm)
@@ -100,11 +87,8 @@ self:AddState("ApplyMovementRestriction", {
 			charEntity.MoveSpeedCap = 0
 			fsm.State = "BroadcastBlockUpdate"
 		end,
-	}, { "BroadcastBlockUpdate", "Failed" })
---[=[
-	@state BroadcastBlockUpdate
-	@description Handles the `BroadcastBlockUpdate` state for `BlockJob`.
-]=]
+	}, {"BroadcastBlockUpdate","Failed" })
+
 
 self:AddState("BroadcastBlockUpdate", {
 		OnEnter = function(_, fsm)
@@ -120,17 +104,14 @@ self:AddState("BroadcastBlockUpdate", {
 			fsm._startedBlocking = true
 			fsm.State = "EmitBlockIntent"
 		end,
-	}, { "EmitBlockIntent", "Failed" })
---[=[
-	@state EmitBlockIntent
-	@description Handles the `EmitBlockIntent` state for `BlockJob`.
-]=]
+	}, {"EmitBlockIntent","Failed" })
+
 
 self:AddState("EmitBlockIntent", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
 			local ok, err = pcall(function()
-				IntentHelpers.appendIntent(fsm:GetOrchestrator(), charEntity, "Animation", { Name = "Blocking" }, fsm.CharacterEntityId, fsm.CharacterEntityId)
+				IntentHelpers.appendIntent(fsm:GetOrchestrator(), charEntity,"Animation", { Name = "Blocking" }, fsm.CharacterEntityId, fsm.CharacterEntityId)
 			end)
 			if not ok then
 				fsm:Fail("Failed to emit blocking intent: " .. tostring(err))
@@ -138,11 +119,8 @@ self:AddState("EmitBlockIntent", {
 			end
 			fsm.State = "WaitForRelease"
 		end,
-	}, { "WaitForRelease", "Failed" })
---[=[
-	@state WaitForRelease
-	@description Handles the `WaitForRelease` state for `BlockJob`.
-]=]
+	}, {"WaitForRelease","Failed" })
+
 
 self:AddState("WaitForRelease", {
 		OnHeartbeat = function(_, fsm, _dt)
@@ -155,11 +133,8 @@ self:AddState("WaitForRelease", {
 				fsm.State = "ReleaseBlockState"
 			end
 		end,
-	}, { "ReleaseBlockState", "Failed" })
---[=[
-	@state ReleaseBlockState
-	@description Handles the `ReleaseBlockState` state for `BlockJob`.
-]=]
+	}, {"ReleaseBlockState","Failed" })
+
 
 self:AddState("ReleaseBlockState", {
 		OnEnter = function(_, fsm)
@@ -171,11 +146,8 @@ self:AddState("ReleaseBlockState", {
 			charEntity.IsBlocking = false
 			fsm.State = "RestoreMovement"
 		end,
-	}, { "RestoreMovement", "Failed" })
---[=[
-	@state RestoreMovement
-	@description Handles the `RestoreMovement` state for `BlockJob`.
-]=]
+	}, {"RestoreMovement","Failed" })
+
 
 self:AddState("RestoreMovement", {
 		OnEnter = function(_, fsm)
@@ -187,11 +159,8 @@ self:AddState("RestoreMovement", {
 			charEntity.MoveSpeedCap = 16
 			fsm.State = "BroadcastUnblockUpdate"
 		end,
-	}, { "BroadcastUnblockUpdate", "Failed" })
---[=[
-	@state BroadcastUnblockUpdate
-	@description Handles the `BroadcastUnblockUpdate` state for `BlockJob`.
-]=]
+	}, {"BroadcastUnblockUpdate","Failed" })
+
 
 self:AddState("BroadcastUnblockUpdate", {
 		OnEnter = function(_, fsm)
@@ -207,25 +176,25 @@ self:AddState("BroadcastUnblockUpdate", {
 			fsm._startedBlocking = false
 			fsm.State = "Completed"
 		end,
-	}, { "Completed", "Failed" })
+	}, {"Completed","Failed" })
 --[=[
 	@state Completed
-	@description Handles the `Completed` terminal state for `BlockJob`.
+	@description Terminal success sink reached after `BroadcastUnblockUpdate` replicates the restored movement state and cleared block flag. `OnEnter` is a no-op because the character writes already happened earlier.
+		Transitions: none.
+		Writes: none.
 ]=]
 
 self:AddState("Completed", function() end, {})
 --[=[
 	@state Failed
-	@description Handles the `Failed` terminal state for `BlockJob`.
+	@description Terminal failure sink for validation, replication, or intent errors during block setup and release. `OnEnter` is a no-op; `OnCleanup` clears `IsBlocking`, restores `MoveSpeedCap`, and updates the entity when blocking had started.
+		Transitions: none.
+		Writes: none in-state; rollback writes happen in `OnCleanup`.
 ]=]
 
 self:AddState("Failed", function() end, {})
 end
---[=[
-	@description Implements `BlockJob.OnCleanup`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BlockJob:OnCleanup()
 	if not self._startedBlocking then

@@ -34,7 +34,7 @@ end
 ]=]
 
 function ResourceHelpers.deductStamina(charEntity: any, cost: number): boolean
-	return deductResource(charEntity, "Stamina", cost)
+	return deductResource(charEntity,"Stamina", cost)
 end
 --[=[
 	@description Attempts to spend mana from a character entity by delegating to deductResource. The helper
@@ -47,7 +47,7 @@ end
 ]=]
 
 function ResourceHelpers.deductMana(charEntity: any, cost: number): boolean
-	return deductResource(charEntity, "Mana", cost)
+	return deductResource(charEntity,"Mana", cost)
 end
 --[=[
 	@description Restores a numeric resource toward its configured maximum. Current and max values are read

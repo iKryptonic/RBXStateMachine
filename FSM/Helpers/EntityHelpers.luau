@@ -81,13 +81,13 @@ end
 function EntityHelpers.validateCharacterAlive(charEntity: any): (boolean, string?)
 	local character, humanoid, root = EntityHelpers.getCharacterParts(charEntity)
 	if not character then
-		return false, "Character model not found"
+		return false,"Character model not found"
 	end
 	if not humanoid or humanoid.Health <= 0 then
-		return false, "Character cannot act"
+		return false,"Character cannot act"
 	end
 	if not root then
-		return false, "HumanoidRootPart not found"
+		return false,"HumanoidRootPart not found"
 	end
 	return true, nil
 end

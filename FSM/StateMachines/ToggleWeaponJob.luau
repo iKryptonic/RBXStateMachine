@@ -1,16 +1,13 @@
 --!strict
---[=[
-	@module ToggleWeaponJob
-	@description Defines the `ToggleWeaponJob` state machine module and its exported API.
-]=]
+
 
 local HttpService = game:GetService("HttpService")
 
 local ToggleWeaponJob = {
 	Name = "ToggleWeaponJob",
 	className = "ToggleWeaponJob",
-	validStates = { "Validate", "ResolveCurrentState", "ChooseBranch", "RunEquip", "RunUnEquip", "Completed", "Failed" },
-	terminalStates = { "Completed", "Failed" },
+	validStates = {"Validate","ResolveCurrentState","ChooseBranch","RunEquip","RunUnEquip","Completed","Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Validate",
 }
 
@@ -24,7 +21,7 @@ local function beginChildJob(
 	failureLabel: string
 )
 	if not childClass then
-		fsm:Fail(failureLabel .. " job is unavailable")
+		fsm:Fail(failureLabel .." job is unavailable")
 		return
 	end
 
@@ -40,7 +37,7 @@ local function beginChildJob(
 		AutoStart = false,
 	})
 	if not subJob then
-		fsm:Fail("Failed to create " .. failureLabel .. " job")
+		fsm:Fail("Failed to create " .. failureLabel .." job")
 		return
 	end
 
@@ -57,29 +54,22 @@ local function beginChildJob(
 	end))
 	fsm:Manage(subJob.Failed:Connect(function(reason)
 		if fsm.IsActive and fsm.State == stateName then
-			local suffix = if reason and tostring(reason) ~= "" then ": " .. tostring(reason) else ""
-			fsm:Fail(failureLabel .. " failed" .. suffix)
+			local suffix = if reason and tostring(reason) ~= "" then": " .. tostring(reason) else""
+			fsm:Fail(failureLabel .." failed" .. suffix)
 		end
 	end))
 	fsm:Manage(subJob.Cancelled:Connect(function()
 		if fsm.IsActive and fsm.State == stateName then
-			fsm:Fail(failureLabel .. " cancelled")
+			fsm:Fail(failureLabel .." cancelled")
 		end
 	end))
 
 	subJob:Start({ State = initialState })
 end
---[=[
-	@description Handles `RegisterStates` for `ToggleWeaponJob`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ToggleWeaponJob:RegisterStates()
-	--[=[
-		@state Validate
-		@description Handles the `Validate` state for `ToggleWeaponJob`.
-	]=]
+
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -115,11 +105,8 @@ function ToggleWeaponJob:RegisterStates()
 			fsm.Hand = "Right"
 			fsm.State = "ResolveCurrentState"
 		end,
-	}, { "ResolveCurrentState", "Failed" })
-	--[=[
-		@state ResolveCurrentState
-		@description Handles the `ResolveCurrentState` state for `ToggleWeaponJob`.
-	]=]
+	}, {"ResolveCurrentState","Failed" })
+
 
 	self:AddState("ResolveCurrentState", {
 		OnEnter = function(_, fsm)
@@ -156,11 +143,8 @@ function ToggleWeaponJob:RegisterStates()
 			fsm.IsEquipped = equippedItemId ~= nil
 			fsm.State = "ChooseBranch"
 		end,
-	}, { "ChooseBranch", "Failed" })
-	--[=[
-		@state ChooseBranch
-		@description Handles the `ChooseBranch` state for `ToggleWeaponJob`.
-	]=]
+	}, {"ChooseBranch","Failed" })
+
 
 	self:AddState("ChooseBranch", {
 		OnEnter = function(_, fsm)
@@ -177,44 +161,38 @@ function ToggleWeaponJob:RegisterStates()
 
 			local inventory = fsm.PlayerEntity.Inventory
 			if typeof(inventory) == "table" and #inventory > 0 and not table.find(inventory, itemId) then
-				fsm:Fail("Weapon " .. itemId .. " not in inventory")
+				fsm:Fail("Weapon " .. itemId .." not in inventory")
 				return
 			end
 
 			fsm.ItemId = itemId
 			fsm.State = "RunEquip"
 		end,
-	}, { "RunEquip", "RunUnEquip", "Failed" })
-	--[=[
-		@state RunEquip
-		@description Handles the `RunEquip` state for `ToggleWeaponJob`.
-	]=]
+	}, {"RunEquip","RunUnEquip","Failed" })
+
 
 	self:AddState("RunEquip", {
 		OnEnter = function(_, fsm)
-			beginChildJob(fsm, fsm:GetOrchestrator(), "RunEquip", "EquipJob", "ValidateRequest", {
+			beginChildJob(fsm, fsm:GetOrchestrator(),"RunEquip","EquipJob","ValidateRequest", {
 				CharacterEntityId = fsm.CharacterEntityId,
 				PlayerEntityId = fsm.PlayerEntityId,
 				ItemId = fsm.ItemId,
 				Hand = fsm.Hand,
-			}, "Sub-equip")
+			},"Sub-equip")
 		end,
-	}, { "Completed", "Failed" })
-	--[=[
-		@state RunUnEquip
-		@description Handles the `RunUnEquip` state for `ToggleWeaponJob`.
-	]=]
+	}, {"Completed","Failed" })
+
 
 	self:AddState("RunUnEquip", {
 		OnEnter = function(_, fsm)
-			beginChildJob(fsm, fsm:GetOrchestrator(), "RunUnEquip", "UnEquipJob", "ValidateRequest", {
+			beginChildJob(fsm, fsm:GetOrchestrator(),"RunUnEquip","UnEquipJob","ValidateRequest", {
 				CharacterEntityId = fsm.CharacterEntityId,
 				PlayerEntityId = fsm.PlayerEntityId,
 				ItemId = fsm.EquippedItemId,
 				Hand = fsm.Hand,
-			}, "Sub-unequip")
+			},"Sub-unequip")
 		end,
-	}, { "Completed", "Failed" })
+	}, {"Completed","Failed" })
 end
 
 return ToggleWeaponJob

@@ -1,58 +1,58 @@
 --!strict
 --[=[
-    @Name PlayerEntity
-    @Description Persistent player-profile entity that stores long-lived progression, inventory,
-    ability loadouts, talent selections, stats, and client-facing preferences for a single player.
+	@Name PlayerEntity
+	@Description Persistent player-profile entity that stores long-lived progression, inventory,
+	ability loadouts, talent selections, stats, and client-facing preferences for a single player.
 
-    Schema Fields:
-    - UserId: number (Replicate: true, Persist: true) -- Authoritative save owner and entity identity key.
-    - Class: string (Replicate: true, Persist: true) -- Current class/archetype selection.
-    - Level: number (Replicate: true, Persist: true) -- Persistent progression level.
-    - XP: number (Replicate: true, Persist: true) -- Current experience toward the next level.
-    - MaxXP: number (Replicate: true, Persist: true) -- Experience threshold for leveling.
-    - Inventory: any (Replicate: true, Persist: true) -- Owned item/ability id list, including starter migration items.
-    - BagContents: any (Replicate: true, Persist: true) -- Additional bag/container storage data.
-    - Equipped: any (Replicate: true, Persist: true) -- Persistent equipment mapping/state.
-    - WeaponEqp: string (Replicate: true, Persist: true) -- Selected weapon inventory id for spawn/equip flows.
-    - LearnedAbilities: any (Replicate: true, Persist: true) -- Permanently learned active ability ids.
-    - EquippedAbilities: any (Replicate: true, Persist: true) -- Recently added equipped active-ability loadout data.
-    - AbilityCooldowns: any (Replicate: true, Persist: false) -- Session-only mirror of player-scoped ability cooldowns.
-    - UnlockedAbilities: any (Replicate: true, Persist: true) -- Recently added passive/talent-driven unlock cache.
-    - TalentSelections: any (Replicate: true, Persist: true) -- Recently added chosen talent ids by tier.
-    - SkillPoints: number (Replicate: true, Persist: true) -- Spendable talent/skill points remaining.
-    - StatPoints: number (Replicate: true, Persist: true) -- Unspent attribute points.
-    - Strength: number (Replicate: true, Persist: true) -- Persistent strength allocation.
-    - Agility: number (Replicate: true, Persist: true) -- Persistent agility allocation.
-    - Vitality: number (Replicate: true, Persist: true) -- Persistent vitality allocation.
-    - Endurance: number (Replicate: true, Persist: true) -- Persistent endurance allocation.
-    - Intelligence: number (Replicate: true, Persist: true) -- Persistent intelligence allocation.
-    - Luck: number (Replicate: true, Persist: true) -- Persistent luck allocation.
-    - AbilityBindings: any (Replicate: true, Persist: true) -- Persistent hotkey-to-ability mapping.
-    - QuickItemSlots: any (Replicate: true, Persist: true) -- Persistent consumable/quick-slot mapping.
-    - ActionBar: any (Replicate: true, Persist: true) -- Persistent UI/action-bar ordering data.
-    - Settings: any (Replicate: true, Persist: true) -- Persistent per-player gameplay/UI preferences.
-    - Cooldowns: any (Replicate: true, Persist: false) -- Session-only generic cooldown cache.
-    - Revision: number (Replicate: true, Persist: false) -- Session revision counter for live entity updates.
-    - DataVersion: number (Replicate: false, Persist: true) -- Save schema version used for migrations.
+	Schema Fields:
+	- UserId: number (Replicate: true, Persist: true) -- Authoritative save owner and entity identity key.
+	- Class: string (Replicate: true, Persist: true) -- Current class/archetype selection.
+	- Level: number (Replicate: true, Persist: true) -- Persistent progression level.
+	- XP: number (Replicate: true, Persist: true) -- Current experience toward the next level.
+	- MaxXP: number (Replicate: true, Persist: true) -- Experience threshold for leveling.
+	- Inventory: any (Replicate: true, Persist: true) -- Owned item/ability id list, including starter migration items.
+	- BagContents: any (Replicate: true, Persist: true) -- Additional bag/container storage data.
+	- Equipped: any (Replicate: true, Persist: true) -- Persistent equipment mapping/state.
+	- WeaponEqp: string (Replicate: true, Persist: true) -- Selected weapon inventory id for spawn/equip flows.
+	- LearnedAbilities: any (Replicate: true, Persist: true) -- Permanently learned active ability ids.
+	- EquippedAbilities: any (Replicate: true, Persist: true) -- Recently added equipped active-ability loadout data.
+	- AbilityCooldowns: any (Replicate: true, Persist: false) -- Session-only mirror of player-scoped ability cooldowns.
+	- UnlockedAbilities: any (Replicate: true, Persist: true) -- Recently added passive/talent-driven unlock cache.
+	- TalentSelections: any (Replicate: true, Persist: true) -- Recently added chosen talent ids by tier.
+	- SkillPoints: number (Replicate: true, Persist: true) -- Spendable talent/skill points remaining.
+	- StatPoints: number (Replicate: true, Persist: true) -- Unspent attribute points.
+	- Strength: number (Replicate: true, Persist: true) -- Persistent strength allocation.
+	- Agility: number (Replicate: true, Persist: true) -- Persistent agility allocation.
+	- Vitality: number (Replicate: true, Persist: true) -- Persistent vitality allocation.
+	- Endurance: number (Replicate: true, Persist: true) -- Persistent endurance allocation.
+	- Intelligence: number (Replicate: true, Persist: true) -- Persistent intelligence allocation.
+	- Luck: number (Replicate: true, Persist: true) -- Persistent luck allocation.
+	- AbilityBindings: any (Replicate: true, Persist: true) -- Persistent hotkey-to-ability mapping.
+	- QuickItemSlots: any (Replicate: true, Persist: true) -- Persistent consumable/quick-slot mapping.
+	- ActionBar: any (Replicate: true, Persist: true) -- Persistent UI/action-bar ordering data.
+	- Settings: any (Replicate: true, Persist: true) -- Persistent per-player gameplay/UI preferences.
+	- Cooldowns: any (Replicate: true, Persist: false) -- Session-only generic cooldown cache.
+	- Revision: number (Replicate: true, Persist: false) -- Session revision counter for live entity updates.
+	- DataVersion: number (Replicate: false, Persist: true) -- Save schema version used for migrations.
 
-    Used by:
-    - LoadPlayerJob for creation, default seeding, and legacy-save migration.
-    - PersistenceManager and PlayerEntity persistence tests for save serialization.
-    - InventoryItemFSM, EquipJob, ToggleWeaponJob, and SpawnCharacterJob for inventory/loadout reads.
-    - CastFSM and related UI/input systems for learned abilities, bindings, quick slots, and cooldown mirrors.
+	Used by:
+	- LoadPlayerJob for creation, default seeding, and legacy-save migration.
+	- PersistenceManager and PlayerEntity persistence tests for save serialization.
+	- InventoryItemFSM, EquipJob, ToggleWeaponJob, and SpawnCharacterJob for inventory/loadout reads.
+	- CastFSM and related UI/input systems for learned abilities, bindings, quick slots, and cooldown mirrors.
 
-    Lifecycle:
-    - Created by LoadPlayerJob as Player_<UserId> when a player joins.
-    - Hydrated from persisted data on the server and replicated to clients for UI and command flows.
-    - Updated throughout play by gameplay FSMs and helper systems.
-    - Torn down with the player's session; persisted fields are serialized before teardown when persistence is enabled.
+	Lifecycle:
+	- Created by LoadPlayerJob as Player_<UserId> when a player joins.
+	- Hydrated from persisted data on the server and replicated to clients for UI and command flows.
+	- Updated throughout play by gameplay FSMs and helper systems.
+	- Torn down with the player's session; persisted fields are serialized before teardown when persistence is enabled.
 
-    Defaults and Migration:
-    - GetContext seeds starter progression, starter inventory, empty tables, and default bindings/quick slots.
-    - LoadPlayerJob backfills missing tables and invalid scalar values on older saves.
-    - DataVersion defaults to 1 when absent.
-    - EquippedAbilities, UnlockedAbilities, and TalentSelections were added recently for the ability/talent pass;
-      legacy saves may omit them and are migrated to empty tables.
+	Defaults and Migration:
+	- GetContext seeds starter progression, starter inventory, empty tables, and default bindings/quick slots.
+	- LoadPlayerJob backfills missing tables and invalid scalar values on older saves.
+	- DataVersion defaults to 1 when absent.
+	- EquippedAbilities, UnlockedAbilities, and TalentSelections were added recently for the ability/talent pass;
+		legacy saves may omit them and are migrated to empty tables.
 ]=]
 
 local PlayerEntity = {
@@ -257,7 +257,7 @@ Class = context.Class or "Beginner",
 Level = context.Level or 1,
 XP = context.XP or 0,
 MaxXP = context.MaxXP or 100,
-Inventory = context.Inventory or { "1", "2", "3", "4", "5", "6", "7", "8", "Kama", "Gale", "Artura", "ArturaUnleash", "GaleUnleash", "KamaUnleash", "Shade", "ShadeUnleash", "Zephyr", "ZephyrUnleash"  },
+Inventory = context.Inventory or {"1","2","3","4","5","6","7","8","Kama","Gale","Artura","ArturaUnleash","GaleUnleash","KamaUnleash","Shade","ShadeUnleash","Zephyr","ZephyrUnleash" },
 BagContents = context.BagContents or {},
 Equipped = context.Equipped or {},
 WeaponEqp = context.WeaponEqp or "",
@@ -275,7 +275,7 @@ Endurance = context.Endurance or 0,
 Intelligence = context.Intelligence or 0,
 Luck = context.Luck or 0,
 AbilityBindings = context.AbilityBindings or { Q = "", E = "", R = "", F = "" },
-QuickItemSlots = context.QuickItemSlots or { "", "", "", "" },
+QuickItemSlots = context.QuickItemSlots or {"","","","" },
 ActionBar = context.ActionBar or {},
 Settings = context.Settings or {},
 Cooldowns = context.Cooldowns or {},

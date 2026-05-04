@@ -17,13 +17,13 @@ local CrowdControlHelpers = {}
 
 function CrowdControlHelpers.acquireCCLock(charEntity: any): (boolean, string?)
 	if charEntity.CCLock then
-		return false, "CCLock already held"
+		return false,"CCLock already held"
 	end
 
 	charEntity.CCLock = true
 	if charEntity:UpdateEntity() == false then
 		charEntity.CCLock = false
-		return false, "Failed to acquire CCLock"
+		return false,"Failed to acquire CCLock"
 	end
 	return true, nil
 end

@@ -1,13 +1,10 @@
 --!strict
---[=[
-	@module ServiceManager
-	@description Defines the `ServiceManager` module and its exported API.
-]=]
+
 
 local RunService = game:GetService("RunService")
 local Players = game:GetService("Players")
 
-local ReactiveStore  = require(script.ReactiveStore)
+local ReactiveStore = require(script.ReactiveStore)
 local ZAxisNavigator = require(script.ZAxisNavigator)
 local AnimationController = require(script.AnimationController)
 local AnalyticsEngine = require(script.AnalyticsEngine)
@@ -16,15 +13,15 @@ local GlassGUI = require(script.GlassGUI)
 local Theme = require(script.Theme)
 
 -- Subsystem modules
-local TasksModule     = require(script.Subsystems.TasksModule)
-local FSMModule       = require(script.Subsystems.FSMModule)
-local EntityModule    = require(script.Subsystems.EntityModule)
-local NetworkModule   = require(script.Subsystems.NetworkModule)
+local TasksModule = require(script.Subsystems.TasksModule)
+local FSMModule = require(script.Subsystems.FSMModule)
+local EntityModule = require(script.Subsystems.EntityModule)
+local NetworkModule = require(script.Subsystems.NetworkModule)
 local DataStoreModule = require(script.Subsystems.DataStoreModule)
-local InsightsModule  = require(script.Subsystems.InsightsModule)
-local ConsoleModule   = require(script.Subsystems.ConsoleModule)
-local LogsModule      = require(script.Subsystems.LogsModule)
-local ProfilerModule  = require(script.Subsystems.ProfilerModule)
+local InsightsModule = require(script.Subsystems.InsightsModule)
+local ConsoleModule = require(script.Subsystems.ConsoleModule)
+local LogsModule = require(script.Subsystems.LogsModule)
+local ProfilerModule = require(script.Subsystems.ProfilerModule)
 
 -- ══════════════════════════════════════════════════════════════
 -- MODULE
@@ -41,7 +38,7 @@ local _animationController: any = nil
 local _analyticsEngine: any = nil
 local _gui: any = nil
 local _brainTree: ((ctx: any) -> string)? = nil
-local _contextMode: string = "client" -- "client" | "server"
+local _contextMode: string = "client"-- "client" | "server"
 local _activeSubsystem: string? = nil
 local _lastDataRefresh: number = 0
 local _dataRefreshInterval: number = 2.0 -- refresh data every 2s (avoids excessive UI rebuilds)
@@ -52,11 +49,7 @@ local _logs: { { Level: string, Message: string, Timestamp: number } } = {}
 local _fpsAccum: number = 0
 local _fpsFrames: number = 0
 local _lastFPS: number = 60
---[=[
-	@description Handles `Initialize` for `ServiceManager`.
-	@param Orchestrator any -- `Orchestrator` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ServiceManager.Initialize(Orchestrator: any)
 	if _initialized then return end
@@ -78,15 +71,15 @@ function ServiceManager.Initialize(Orchestrator: any)
 
 	-- 3. Create subsystem module instances
 	_subsystemModules = {
-		TASKS     = TasksModule.new(),
-		FSM       = FSMModule.new(),
-		ENTITY    = EntityModule.new(),
-		NETWORK   = NetworkModule.new(),
+		TASKS = TasksModule.new(),
+		FSM = FSMModule.new(),
+		ENTITY = EntityModule.new(),
+		NETWORK = NetworkModule.new(),
 		DATASTORE = DataStoreModule.new(),
-		INSIGHTS  = InsightsModule.new(),
-		CONSOLE   = ConsoleModule.new(),
-		LOGS      = LogsModule.new(),
-		PROFILER  = ProfilerModule.new(),
+		INSIGHTS = InsightsModule.new(),
+		CONSOLE = ConsoleModule.new(),
+		LOGS = LogsModule.new(),
+		PROFILER = ProfilerModule.new(),
 	}
 
 	-- 4. Build GUI
@@ -127,8 +120,8 @@ function ServiceManager.Initialize(Orchestrator: any)
 	-- 8. FPS tracking + per-frame perf strip animation
 	if RunService:IsClient() then
 		RunService.RenderStepped:Connect(function(dt)
-			_fpsAccum += dt
-			_fpsFrames += 1
+			_fpsAccum + = dt
+			_fpsFrames + = 1
 			if _fpsAccum >= 0.5 then
 				_lastFPS = _fpsFrames / _fpsAccum
 				_fpsAccum = 0
@@ -201,7 +194,7 @@ function ServiceManager.Initialize(Orchestrator: any)
 				if _navigator then
 					local layers = (_navigator :: any)._layers or {}
 					for _, layer in pairs(layers) do
-						if layer.Context and layer.Id and string.find(layer.Id, "fsm.visualizer") then
+						if layer.Context and layer.Id and string.find(layer.Id,"fsm.visualizer") then
 							if arg == "live" then
 								layer.Context.PlaybackMode = "live"
 								layer.Context.PlaybackStep = nil
@@ -296,9 +289,9 @@ function ServiceManager.Initialize(Orchestrator: any)
 					if d and d.RecentCalls and #d.RecentCalls > 0 then
 						local last = d.RecentCalls[#d.RecentCalls]
 						local lines = {}
-						table.insert(lines, "Args=" .. tostring(last.Args))
+						table.insert(lines,"Args=" .. tostring(last.Args))
 						if last.ArgsStruct then
-							table.insert(lines, "ArgsStruct.n=" .. tostring(last.ArgsStruct.n))
+							table.insert(lines,"ArgsStruct.n=" .. tostring(last.ArgsStruct.n))
 							for i = 1, last.ArgsStruct.n or 0 do
 								local v = last.ArgsStruct[i]
 								table.insert(lines, string.format("[%d] type=%s", i, type(v)))
@@ -309,11 +302,11 @@ function ServiceManager.Initialize(Orchestrator: any)
 								end
 							end
 						else
-							table.insert(lines, "NO ArgsStruct")
+							table.insert(lines,"NO ArgsStruct")
 						end
-						rs:SetAttribute("ServiceManagerResult", table.concat(lines, "\n"))
+						rs:SetAttribute("ServiceManagerResult", table.concat(lines,"\n"))
 					else
-						rs:SetAttribute("ServiceManagerResult", "no calls for " .. tostring(arg))
+						rs:SetAttribute("ServiceManagerResult","no calls for " .. tostring(arg))
 					end
 				end
 			end
@@ -325,13 +318,9 @@ function ServiceManager.Initialize(Orchestrator: any)
 		end)
 	end
 
-	_Log("INFO", "ServiceManager initialized")
+	_Log("INFO","ServiceManager initialized")
 end
---[=[
-	@description Implements `ServiceManager.Show`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ServiceManager.Show()
 	if _gui then
@@ -342,20 +331,12 @@ function ServiceManager.Show()
 		end
 	end
 end
---[=[
-	@description Implements `ServiceManager.Hide`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ServiceManager.Hide()
 	if _gui then _gui:Hide() end
 end
---[=[
-	@description Implements `ServiceManager.Toggle`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ServiceManager.Toggle()
 	if _gui then
@@ -366,11 +347,7 @@ function ServiceManager.Toggle()
 		end
 	end
 end
---[=[
-	@description Implements `ServiceManager.SwitchSubsystem`.
-	@param name string -- `name` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ServiceManager.SwitchSubsystem(name: string)
 	if not _subsystemModules[name] then return end
@@ -398,8 +375,6 @@ function ServiceManager.SwitchSubsystem(name: string)
 end
 --[=[
 	@description Updates module state through `ServiceManager.SetContextMode`.
-	@param mode string -- `mode` input parameter.
-	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function ServiceManager.SetContextMode(mode: string)
@@ -439,7 +414,7 @@ function ServiceManager.SetContextMode(mode: string)
 			_store:Set("nexus.connected", true)
 		else
 			_store:Set("nexus.connected", false)
-			_Log("WARN", "Server poll failed on mode switch: " .. tostring(data))
+			_Log("WARN","Server poll failed on mode switch: " .. tostring(data))
 		end
 	end
 
@@ -480,22 +455,14 @@ function ServiceManager.SetContextMode(mode: string)
 	-- Force every subsystem to re-fetch on the next tick.
 	_lastDataRefresh = 0
 
-	_Log("INFO", "Context mode switched to: " .. mode)
+	_Log("INFO","Context mode switched to: " .. mode)
 end
---[=[
-	@description Returns the data produced by `ServiceManager.GetStore`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ServiceManager.GetStore(): any
 	return _store
 end
---[=[
-	@description Implements `ServiceManager.Destroy`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ServiceManager.Destroy()
 	if _serverPollConnection then
@@ -521,7 +488,7 @@ function ServiceManager.Destroy()
 	table.clear(_subsystemModules)
 	table.clear(_logs)
 	_initialized = false
-	_Log("INFO", "ServiceManager destroyed")
+	_Log("INFO","ServiceManager destroyed")
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -574,7 +541,7 @@ function _TickBrain()
 	local context = { Nexus = ServiceManager }
 	local ok, result = pcall(_brainTree :: any, context)
 	if not ok then
-		_Log("ERROR", "Brain tick failed: " .. tostring(result))
+		_Log("ERROR","Brain tick failed: " .. tostring(result))
 	end
 
 	-- Sync _lastDataRefresh back from the module
@@ -611,11 +578,7 @@ function _TickBrain()
 		end
 	end
 end
---[=[
-	@description Implements `ServiceManager._SyncClientContext`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ServiceManager:_SyncClientContext()
 	-- Client mode: data comes directly from the Orchestrator module
@@ -650,7 +613,7 @@ function _StartServerPolling()
 			else
 				_store:Set("nexus.connected", false)
 				if _contextMode == "server" then
-					_Log("WARN", "Server poll failed: " .. tostring(data))
+					_Log("WARN","Server poll failed: " .. tostring(data))
 				end
 			end
 
@@ -666,7 +629,7 @@ end
 function _RegisterRootLayers()
 	if not _navigator then return end
 
-	local subsystems = { "TASKS", "FSM", "ENTITY", "NETWORK", "DATASTORE", "INSIGHTS", "CONSOLE", "LOGS", "PROFILER" }
+	local subsystems = {"TASKS","FSM","ENTITY","NETWORK","DATASTORE","INSIGHTS","CONSOLE","LOGS","PROFILER" }
 	for _, name in ipairs(subsystems) do
 		local module = _subsystemModules[name]
 		if module then
@@ -712,7 +675,7 @@ function _SetupGUICallbacks()
 
 	-- Minimize handler
 	_gui:OnMinimizeToggle(function(minimized: boolean)
-		_Log("INFO", if minimized then "Window minimized" else "Window restored")
+		_Log("INFO", if minimized then"Window minimized" else"Window restored")
 	end)
 
 	-- Back button handler — navigate up one level in the drill-down stack
@@ -755,11 +718,7 @@ end
 
 -- Now that _Log is defined, set it on the module table
 ServiceManager._Log = _Log
---[=[
-	@description Handles `RegisterServerHandlers` for `ServiceManager`.
-	@param Orchestrator any -- `Orchestrator` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 	if not RunService:IsServer() then return end
@@ -770,7 +729,7 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 	-- This guard makes re-registration a no-op so the framework stays stable
 	-- across multi-init scenarios.
 	if ServiceManager._serverHandlersRegistered then
-		_Log("WARN", "RegisterServerHandlers called twice; ignoring second registration")
+		_Log("WARN","RegisterServerHandlers called twice; ignoring second registration")
 		return
 	end
 	ServiceManager._serverHandlersRegistered = true
@@ -1053,8 +1012,8 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 					local ref = _fsmLiveRefs[id]
 					if ref then
 						-- FSM was destroyed — read its final state
-						local err = rawget(ref, "Error") or rawget(ref, "_error")
-						local lastState = rawget(ref, "State") or shadow.CurrentState
+						local err = rawget(ref,"Error") or rawget(ref,"_error")
+						local lastState = rawget(ref,"State") or shadow.CurrentState
 						shadow.CurrentState = lastState
 						shadow.State = lastState
 						shadow.IsActive = false
@@ -1207,7 +1166,7 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 				for entityId, commands in pairs(NetworkManager.EntityCommandCallbacks) do
 					if type(commands) == "table" then
 						for cmdName, _ in pairs(commands) do
-							local fullName = entityId .. ":" .. cmdName
+							local fullName = entityId ..":" .. cmdName
 							local stats = NetworkManager._invokeStats and NetworkManager._invokeStats[fullName]
 							local rstats = NetworkManager._remoteStats and NetworkManager._remoteStats["Remote:EntityCommand:" .. fullName]
 							network.Commands[fullName] = {
@@ -1240,7 +1199,7 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 			end
 
 			-- Also include remote instances directly on NM
-			local remoteNames = { "OrchestratorEvent", "OrchestratorFunction", "EntityUpdateEvent", "EntityCommandEvent" }
+			local remoteNames = {"OrchestratorEvent","OrchestratorFunction","EntityUpdateEvent","EntityCommandEvent" }
 			for _, remoteName in ipairs(remoteNames) do
 				local remote = NetworkManager[remoteName]
 				if remote and not network.Remotes[remoteName] then
@@ -1302,14 +1261,14 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 		-- that gcinfo() can't see. Identifies heavy services and top offenders.
 		do
 			local instMem: { [string]: any } = { Services = {}, TopOffenders = {}, TotalDescendants = 0 }
-			local serviceNames = {"ReplicatedStorage", "Workspace", "ServerScriptService", "ServerStorage", "Lighting", "StarterGui", "StarterPlayer", "SoundService"}
+			local serviceNames = {"ReplicatedStorage","Workspace","ServerScriptService","ServerStorage","Lighting","StarterGui","StarterPlayer","SoundService"}
 			for _, svcName in ipairs(serviceNames) do
 				local ok2, svc = pcall(function() return game:GetService(svcName) end)
 				if ok2 and svc then
 					local c = 0
-					for _ in svc:GetDescendants() do c += 1 end
+					for _ in svc:GetDescendants() do c + = 1 end
 					instMem.Services[svcName] = c
-					instMem.TotalDescendants += c
+					instMem.TotalDescendants + = c
 				end
 			end
 			-- Top offenders: children of RS/Workspace with many descendants
@@ -1317,7 +1276,7 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 			if rs2 then
 				for _, child in rs2:GetChildren() do
 					local c = 0
-					for _ in child:GetDescendants() do c += 1 end
+					for _ in child:GetDescendants() do c + = 1 end
 					if c > 50 then
 						table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "RS" })
 					end
@@ -1325,7 +1284,7 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 			end
 			for _, child in game.Workspace:GetChildren() do
 				local c = 0
-				for _ in child:GetDescendants() do c += 1 end
+				for _ in child:GetDescendants() do c + = 1 end
 				if c > 100 then
 					table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "WS" })
 				end
@@ -1341,9 +1300,9 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 				local pg = player:FindFirstChild("PlayerGui")
 				if pg then
 					local c = 0
-					for _ in pg:GetDescendants() do c += 1 end
+					for _ in pg:GetDescendants() do c + = 1 end
 					instMem.Services["PlayerGui:" .. player.Name] = c
-					instMem.TotalDescendants += c
+					instMem.TotalDescendants + = c
 				end
 			end
 			-- Detect duplicate assets (cloned multiple times)
@@ -1394,7 +1353,7 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 				if child:IsA("Folder") then continue end
 				-- Check for suspicious objects (small parts, hitboxes, clones)
 				local desc = 0
-				for _ in child:GetDescendants() do desc += 1 end
+				for _ in child:GetDescendants() do desc + = 1 end
 				local isSuspicious = child.Name:lower():find("hitbox")
 					or child.Name:lower():find("clone")
 					or child.Name:lower():find("projectile")
@@ -1467,7 +1426,7 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 		return snapshot
 	end, false)
 
-	_Log("INFO", "ServiceManager server handlers registered")
+	_Log("INFO","ServiceManager server handlers registered")
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -1476,7 +1435,7 @@ end
 
 function _CountKeys(tbl: { [any]: any }): number
 	local count = 0
-	for _ in pairs(tbl) do count += 1 end
+	for _ in pairs(tbl) do count + = 1 end
 	return count
 end
 

@@ -1,8 +1,5 @@
 --!nocheck
---[=[
-	@module Test_AttackTimelinePurity
-	@description Defines the `Test_AttackTimelinePurity` module and its exported API.
-]=]
+
 
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)
 
@@ -34,11 +31,7 @@ local function timelineIsPure(combo)
 
 	return true
 end
---[=[
-	@description Implements `Test_AttackTimelinePurity.Run`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Test_AttackTimelinePurity.Run()
 	local tester = TestBase.new("AttackTimelinePurity")
@@ -46,45 +39,45 @@ function Test_AttackTimelinePurity.Run()
 	tester:RunTest("Sample combo keyframe arrays are pure data", function(t)
 		local slashCombo = {
 			t = 24,
-			{ "Sound", 1, "541909814", 0.5, 1 },
-			{ "Effect", 8, "HitSpark", 1 },
-			{ "Damage", 12, "1248511833", 0.5, 1 },
+			{"Sound", 1,"541909814", 0.5, 1 },
+			{"Effect", 8,"HitSpark", 1 },
+			{"Damage", 12,"1248511833", 0.5, 1 },
 		}
 		local slamCombo = {
 			t = 36,
-			{ "Animation", 1, "GroundSlam" },
-			{ "Effect", 18, "GroundSlam", 1 },
-			{ "Damage", 24, "541909814", 0.75, 1 },
+			{"Animation", 1,"GroundSlam" },
+			{"Effect", 18,"GroundSlam", 1 },
+			{"Damage", 24,"541909814", 0.75, 1 },
 		}
 
-		t:Assert(timelineIsPure(slashCombo), "Slash combo timeline should contain only primitive keyframe data")
-		t:Assert(timelineIsPure(slamCombo), "Slam combo timeline should contain only primitive keyframe data")
-		t:Assert(slashCombo.t > 0, "Slash combo should define a positive total frame count")
-		t:Assert(slamCombo.t > 0, "Slam combo should define a positive total frame count")
+		t:Assert(timelineIsPure(slashCombo),"Slash combo timeline should contain only primitive keyframe data")
+		t:Assert(timelineIsPure(slamCombo),"Slam combo timeline should contain only primitive keyframe data")
+		t:Assert(slashCombo.t > 0,"Slash combo should define a positive total frame count")
+		t:Assert(slamCombo.t > 0,"Slam combo should define a positive total frame count")
 	end)
 
 	tester:RunTest("Validator rejects functions, instances, threads, and invalid totals", function(t)
 		local invalidFunctionCombo = {
 			t = 12,
-			{ "Damage", 6, function() end },
+			{"Damage", 6, function() end },
 		}
 		local invalidInstanceCombo = {
 			t = 12,
-			{ "Effect", 4, Instance.new("Folder") },
+			{"Effect", 4, Instance.new("Folder") },
 		}
 		local invalidThreadCombo = {
 			t = 12,
-			{ "Sound", 2, coroutine.create(function() end) },
+			{"Sound", 2, coroutine.create(function() end) },
 		}
 		local invalidTotalFramesCombo = {
 			t = 0,
-			{ "Damage", 2, "541909814" },
+			{"Damage", 2,"541909814" },
 		}
 
-		t:Assert(not timelineIsPure(invalidFunctionCombo), "Functions should not appear in combo keyframe arrays")
-		t:Assert(not timelineIsPure(invalidInstanceCombo), "Instances should not appear in combo keyframe arrays")
-		t:Assert(not timelineIsPure(invalidThreadCombo), "Threads should not appear in combo keyframe arrays")
-		t:Assert(not timelineIsPure(invalidTotalFramesCombo), "Timeline total frame count should be a positive number")
+		t:Assert( not timelineIsPure(invalidFunctionCombo),"Functions should not appear in combo keyframe arrays")
+		t:Assert( not timelineIsPure(invalidInstanceCombo),"Instances should not appear in combo keyframe arrays")
+		t:Assert( not timelineIsPure(invalidThreadCombo),"Threads should not appear in combo keyframe arrays")
+		t:Assert( not timelineIsPure(invalidTotalFramesCombo),"Timeline total frame count should be a positive number")
 
 		invalidInstanceCombo[1][3]:Destroy()
 	end)

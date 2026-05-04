@@ -1,8 +1,5 @@
 --!nocheck
---[=[
-	@module Test_EquipJob
-	@description Defines the `Test_EquipJob` state machine module and its exported API.
-]=]
+
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local ServerStorage = game:GetService("ServerStorage")
@@ -31,9 +28,9 @@ local function findModule(moduleName: string, ancestorNames: { string }): Module
 end
 
 local function cloneStateMachineModule(moduleName: string): ModuleScript
-	local source = findModule(moduleName, { "StateMachines", "FSM", "RBXStateMachine" })
+	local source = findModule(moduleName, {"StateMachines","FSM","RBXStateMachine" })
 	local clone = source:Clone()
-	clone.Name = moduleName .. "_TestClone"
+	clone.Name = moduleName .."_TestClone"
 	clone.Parent = ServerStorage
 	return clone
 end
@@ -114,33 +111,29 @@ local function captureStates(job)
 	job:RegisterStates()
 	return states
 end
---[=[
-	@description Implements `Test_EquipJob.Run`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Test_EquipJob.Run()
 	local tester = TestBase.new("EquipJob")
 
 	tester:RunTest("Module loads and exposes expected API", function(t)
 		local ok, job, cleanup = loadEquipJob({ GetEntity = function() return nil end })
-		t:Assert(ok, "EquipJob should require without error when shared.StateMachine.EquipJob is registered")
+		t:Assert(ok,"EquipJob should require without error when shared.StateMachine.EquipJob is registered")
 		if not ok then
 			cleanup()
 			return
 		end
-		t:AssertEquals(job.Name, "EquipJob", "EquipJob should keep its declared Name")
-		t:Assert(type(job.RegisterStates) == "function", "EquipJob should expose RegisterStates")
+		t:AssertEquals(job.Name,"EquipJob","EquipJob should keep its declared Name")
+		t:Assert(type(job.RegisterStates) == "function","EquipJob should expose RegisterStates")
 		if type(job.RegisterStates) ~= "function" then
 			cleanup()
 			return
 		end
 
 		local states = captureStates(job)
-		t:Assert(states.ValidateRequest ~= nil, "EquipJob should register ValidateRequest")
-		t:Assert(states.CommitState ~= nil, "EquipJob should register CommitState")
-		t:Assert(states.ReleaseEquipLock ~= nil, "EquipJob should register ReleaseEquipLock")
+		t:Assert(states.ValidateRequest ~= nil,"EquipJob should register ValidateRequest")
+		t:Assert(states.CommitState ~= nil,"EquipJob should register CommitState")
+		t:Assert(states.ReleaseEquipLock ~= nil,"EquipJob should register ReleaseEquipLock")
 		cleanup()
 	end)
 
@@ -151,7 +144,7 @@ function Test_EquipJob.Run()
 			},
 			Player_01 = {
 				EntityId = "Player_01",
-				Inventory = { "Sword01", "Shield01", "Ghost01" },
+				Inventory = {"Sword01","Shield01","Ghost01" },
 			},
 		}
 		local orchestrator = {
@@ -159,19 +152,19 @@ function Test_EquipJob.Run()
 				return entities[entityId]
 			end,
 		}
-		local cleanupAssets = setupAssets({ "Sword01", "Shield01", "Hammer01" })
+		local cleanupAssets = setupAssets({"Sword01","Shield01","Hammer01" })
 		local ok, job, cleanup = loadEquipJob(orchestrator)
 		local function cleanupAll()
 			cleanupAssets()
 			cleanup()
 		end
-		t:Assert(ok, "EquipJob should load for validation tests")
+		t:Assert(ok,"EquipJob should load for validation tests")
 		if not ok then
 			cleanupAll()
 			return
 		end
 		if type(job.RegisterStates) ~= "function" then
-			t:Assert(false, "EquipJob should expose RegisterStates for validation tests")
+			t:Assert(false,"EquipJob should expose RegisterStates for validation tests")
 			cleanupAll()
 			return
 		end
@@ -189,11 +182,7 @@ function Test_EquipJob.Run()
 				Failure = nil,
 				State = nil,
 			}
-			--[=[
-				@description Implements `fsm.Fail`.
-				@param reason any -- `reason` input parameter.
-				@return any -- Return value produced by the implementation, if any.
-			]=]
+
 
 			function fsm:Fail(reason)
 				self.Failure = reason
@@ -203,28 +192,28 @@ function Test_EquipJob.Run()
 		end
 
 		local missingCharacter = runValidate({ CharacterEntityId = "Missing", PlayerEntityId = "Player_01", ItemId = "Sword01" })
-		t:AssertEquals(missingCharacter.Failure, "CharacterEntity not found", "ValidateRequest should require a valid character entity")
+		t:AssertEquals(missingCharacter.Failure,"CharacterEntity not found","ValidateRequest should require a valid character entity")
 
 		local missingPlayer = runValidate({ CharacterEntityId = "Char_01", PlayerEntityId = "Missing", ItemId = "Sword01" })
-		t:AssertEquals(missingPlayer.Failure, "PlayerEntity not found", "ValidateRequest should require a valid player entity")
+		t:AssertEquals(missingPlayer.Failure,"PlayerEntity not found","ValidateRequest should require a valid player entity")
 
 		local missingItem = runValidate({ CharacterEntityId = "Char_01", PlayerEntityId = "Player_01", ItemId = nil })
-		t:AssertEquals(missingItem.Failure, "No ItemId provided", "ValidateRequest should require ItemId")
+		t:AssertEquals(missingItem.Failure,"No ItemId provided","ValidateRequest should require ItemId")
 
 		local missingAsset = runValidate({ CharacterEntityId = "Char_01", PlayerEntityId = "Player_01", ItemId = "Ghost01" })
-		t:AssertEquals(missingAsset.Failure, "Asset not found for item: Ghost01", "ValidateRequest should reject items whose assets are missing")
+		t:AssertEquals(missingAsset.Failure,"Asset not found for item: Ghost01","ValidateRequest should reject items whose assets are missing")
 
 		local invalidHand = runValidate({ CharacterEntityId = "Char_01", PlayerEntityId = "Player_01", ItemId = "Sword01", Hand = "Foot" })
-		t:AssertEquals(invalidHand.Failure, "Invalid hand: Foot", "ValidateRequest should reject invalid hands")
+		t:AssertEquals(invalidHand.Failure,"Invalid hand: Foot","ValidateRequest should reject invalid hands")
 
 		local missingInventoryItem = runValidate({ CharacterEntityId = "Char_01", PlayerEntityId = "Player_01", ItemId = "Hammer01", Hand = "Right" })
-		t:AssertEquals(missingInventoryItem.Failure, "Item Hammer01 not in inventory", "ValidateRequest should reject items not present in inventory")
+		t:AssertEquals(missingInventoryItem.Failure,"Item Hammer01 not in inventory","ValidateRequest should reject items not present in inventory")
 
 		local success = runValidate({ CharacterEntityId = "Char_01", PlayerEntityId = "Player_01", ItemId = "Sword01" })
-		t:AssertEquals(success.Failure, nil, "ValidateRequest should accept a valid request")
-		t:AssertEquals(success.Context.Hand, "Right", "ValidateRequest should default Hand to Right")
-		t:AssertEquals(success.Context.ItemId, "Sword01", "ValidateRequest should store ItemId in context")
-		t:AssertEquals(success.State, "AcquireEquipLock", "ValidateRequest should advance to AcquireEquipLock on success")
+		t:AssertEquals(success.Failure, nil,"ValidateRequest should accept a valid request")
+		t:AssertEquals(success.Context.Hand,"Right","ValidateRequest should default Hand to Right")
+		t:AssertEquals(success.Context.ItemId,"Sword01","ValidateRequest should store ItemId in context")
+		t:AssertEquals(success.State,"AcquireEquipLock","ValidateRequest should advance to AcquireEquipLock on success")
 		cleanupAll()
 	end)
 

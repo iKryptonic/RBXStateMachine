@@ -1,38 +1,38 @@
 --!strict
 --[=[
-    @Name UnEquipJob
-    @Author iKrypto
-    @Description Unequips the current item from a requested hand by validating the request, serializing access with the per-hand equip lock, resolving the currently mounted asset, either dropping or stowing that asset, committing replicated entity and inventory state, emitting the unequip intent, and releasing the lock. Failures route through `Rollback`, which currently performs no physical restoration beyond ensuring the lock is released before the terminal `Failed` state. Historical integrations must target `Completed`; the deprecated `Complete` spelling is intentionally not used.
+	@Name UnEquipJob
+	@Author iKrypto
+	@Description Unequips the current item from a requested hand by validating the request, serializing access with the per-hand equip lock, resolving the currently mounted asset, either dropping or stowing that asset, committing replicated entity and inventory state, emitting the unequip intent, and releasing the lock. Failures route through `Rollback`, which currently performs no physical restoration beyond ensuring the lock is released before the terminal `Failed` state. Historical integrations must target `Completed`; the deprecated `Complete` spelling is intentionally not used.
 
-    State flow diagram:
-    ValidateRequest → AcquireEquipLock → ResolveExistingItem → DoUnEquip → CommitState → EmitIntent → ReleaseEquipLock → Completed
-                    ↘ Rollback → ReleaseEquipLock → Failed
+	State flow diagram:
+	ValidateRequest → AcquireEquipLock → ResolveExistingItem → DoUnEquip → CommitState → EmitIntent → ReleaseEquipLock → Completed
+					↘ Rollback → ReleaseEquipLock → Failed
 
-    Context fields:
-    - Hand: string -- normalized hand name (`Right` or `Left`).
-    - _equipLockRetryCount: number -- retry counter while waiting for the per-hand equip lock.
-    - _equipLockHeld: boolean -- whether this job currently owns the per-hand equip lock.
-    - _resolvedHandPart: BasePart? -- hand part resolved from the live character.
-    - _resolvedWeld: WeldConstraint? -- weld binding the currently mounted item to the hand.
-    - _resolvedItem: Instance? -- currently mounted item model, if one exists.
-    - _resolvedItemData: any? -- resolved metadata for the mounted item.
-    - _resolvedItemId: string -- best-effort item id inferred from entity state or the mounted model name.
-    - _wasStowed: boolean -- set only when `DoUnEquip` stows a stowable item instead of dropping it. `CommitState` uses this flag to keep equipped fields and `WeaponEqp` intact so the item remains logically equipped while visually moved to a stowed position.
-    - _failureReason: string? -- reason recorded by rollback helpers and logged during lock release.
+	Context fields:
+	- Hand: string -- normalized hand name (`Right` or `Left`).
+	- _equipLockRetryCount: number -- retry counter while waiting for the per-hand equip lock.
+	- _equipLockHeld: boolean -- whether this job currently owns the per-hand equip lock.
+	- _resolvedHandPart: BasePart? -- hand part resolved from the live character.
+	- _resolvedWeld: WeldConstraint? -- weld binding the currently mounted item to the hand.
+	- _resolvedItem: Instance? -- currently mounted item model, if one exists.
+	- _resolvedItemData: any? -- resolved metadata for the mounted item.
+	- _resolvedItemId: string -- best-effort item id inferred from entity state or the mounted model name.
+	- _wasStowed: boolean -- set only when `DoUnEquip` stows a stowable item instead of dropping it. `CommitState` uses this flag to keep equipped fields and `WeaponEqp` intact so the item remains logically equipped while visually moved to a stowed position.
+	- _failureReason: string? -- reason recorded by rollback helpers and logged during lock release.
 
-    Required params:
-    - CharacterEntityId: string -- character entity whose hand will be processed.
-    - PlayerEntityId: string? -- optional player entity id; falls back to the character link when omitted.
-    - Hand: string? -- optional hand override; defaults to `Right`.
-    - ForceRemove: boolean? -- when true, always drops/destroys the physical item instead of stowing it.
+	Required params:
+	- CharacterEntityId: string -- character entity whose hand will be processed.
+	- PlayerEntityId: string? -- optional player entity id; falls back to the character link when omitted.
+	- Hand: string? -- optional hand override; defaults to `Right`.
+	- ForceRemove: boolean? -- when true, always drops/destroys the physical item instead of stowing it.
 
-    Notes:
-    - Unlike `EquipJob`, this FSM does not use tracked clone bookkeeping; it works against the already-mounted item resolved from the live character.
+	Notes:
+	- Unlike `EquipJob`, this FSM does not use tracked clone bookkeeping; it works against the already-mounted item resolved from the live character.
 ]=]
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
-assert(Helpers, "Helpers folder not found")
+assert(Helpers,"Helpers folder not found")
 local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
 local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
 
@@ -51,7 +51,7 @@ local UnEquipJob = {
 		"Completed",
 		"Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "ValidateRequest",
 }
 
@@ -59,44 +59,44 @@ local cachedEquipHelpers = nil :: any
 local cachedIntentSchema = nil :: any
 
 --[=[
-    @description Lazily resolves and caches the shared `EquipHelpers` module for repeated use across states.
-    @param orchestrator any -- Orchestrator passed into `ModuleLoader.requireSharedModule`.
-    @return any -- Cached `EquipHelpers` module table.
+	@description Lazily resolves and caches the shared `EquipHelpers` module for repeated use across states.
+	@param orchestrator any -- Orchestrator passed into `ModuleLoader.requireSharedModule`.
+	@return any -- Cached `EquipHelpers` module table.
 ]=]
 local function getEquipHelpers(orchestrator: any)
 	if not cachedEquipHelpers then
-		cachedEquipHelpers = ModuleLoader.requireSharedModule(orchestrator, "EquipHelpers")
+		cachedEquipHelpers = ModuleLoader.requireSharedModule(orchestrator,"EquipHelpers")
 	end
 	return cachedEquipHelpers
 end
 
 --[=[
-    @description Lazily resolves and caches the shared `IntentSchema` module used to append unequip intents.
-    @param orchestrator any -- Orchestrator passed into `ModuleLoader.requireSharedModule`.
-    @return any -- Cached `IntentSchema` module table.
+	@description Lazily resolves and caches the shared `IntentSchema` module used to append unequip intents.
+	@param orchestrator any -- Orchestrator passed into `ModuleLoader.requireSharedModule`.
+	@return any -- Cached `IntentSchema` module table.
 ]=]
 local function getIntentSchema(orchestrator: any)
 	if not cachedIntentSchema then
-		cachedIntentSchema = ModuleLoader.requireSharedModule(orchestrator, "IntentSchema")
+		cachedIntentSchema = ModuleLoader.requireSharedModule(orchestrator,"IntentSchema")
 	end
 	return cachedIntentSchema
 end
 
 --[=[
-    @description Maps a hand name to the matching character entity equipped-property field.
-    @param hand string -- `Right` or `Left`.
-    @return string -- `EquippedRight` for the right hand, otherwise `EquippedLeft`.
+	@description Maps a hand name to the matching character entity equipped-property field.
+	@param hand string -- `Right` or `Left`.
+	@return string -- `EquippedRight` for the right hand, otherwise `EquippedLeft`.
 ]=]
 local function getHandProperty(hand: string): string
-	return if hand == "Right" then "EquippedRight" else "EquippedLeft"
+	return if hand == "Right" then"EquippedRight" else"EquippedLeft"
 end
 
 --[=[
-    @description Re-resolves the character entity, player entity, and live character model, falling back to the Roblox `Players` service if the cached character instance was replaced server-side.
-    @param fsm any -- Active unequip FSM instance.
-    @return any? -- Current character entity.
-    @return any? -- Current player entity.
-    @return any? -- Live character model.
+	@description Re-resolves the character entity, player entity, and live character model, falling back to the Roblox `Players` service if the cached character instance was replaced server-side.
+	@param fsm any -- Active unequip FSM instance.
+	@return any? -- Current character entity.
+	@return any? -- Current player entity.
+	@return any? -- Live character model.
 ]=]
 local function ensureEntitiesAlive(fsm): (any?, any?, any?)
 	local orchestrator = fsm:GetOrchestrator()
@@ -134,17 +134,10 @@ local function ensureEntitiesAlive(fsm): (any?, any?, any?)
 	end
 	return charEntity, playerEntity, character
 end
---[=[
-	@description Handles `RegisterStates` for `UnEquipJob`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function UnEquipJob:RegisterStates()
---[=[
-	@state ValidateRequest
-	@description Handles the `ValidateRequest` state for `UnEquipJob`.
-]=]
+
 
 self:AddState("ValidateRequest", {
 		OnEnter = function(_, fsm)
@@ -164,11 +157,8 @@ self:AddState("ValidateRequest", {
 			fsm.Context.Hand = hand
 			fsm.State = "AcquireEquipLock"
 		end,
-	}, { "AcquireEquipLock", "Failed" })
---[=[
-	@state AcquireEquipLock
-	@description Handles the `AcquireEquipLock` state for `UnEquipJob`.
-]=]
+	}, {"AcquireEquipLock","Failed" })
+
 
 self:AddState("AcquireEquipLock", {
 		OnEnter = function(_, fsm)
@@ -200,17 +190,14 @@ self:AddState("AcquireEquipLock", {
 			charEntity:UpdateEntity()
 			fsm.State = "ResolveExistingItem"
 		end,
-	}, { "ResolveExistingItem", "Rollback", "Failed" })
---[=[
-	@state ResolveExistingItem
-	@description Handles the `ResolveExistingItem` state for `UnEquipJob`.
-]=]
+	}, {"ResolveExistingItem","Rollback","Failed" })
+
 
 self:AddState("ResolveExistingItem", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
-				StateTransitionHelpers.queueRollback(fsm, "Entities no longer alive during ResolveExistingItem")
+				StateTransitionHelpers.queueRollback(fsm,"Entities no longer alive during ResolveExistingItem")
 				return
 			end
 
@@ -219,7 +206,7 @@ self:AddState("ResolveExistingItem", {
 			local hand = fsm.Hand :: string
 			local handPart = equipHelpers.GetHandPart(character, hand)
 			if not handPart then
-				StateTransitionHelpers.queueRollback(fsm, "Hand part not found for hand: " .. hand)
+				StateTransitionHelpers.queueRollback(fsm,"Hand part not found for hand: " .. hand)
 				return
 			end
 
@@ -238,17 +225,14 @@ self:AddState("ResolveExistingItem", {
 			fsm.Context._resolvedItemId = currentItemId or ""
 			fsm.State = "DoUnEquip"
 		end,
-	}, { "DoUnEquip", "Rollback", "Failed" })
---[=[
-	@state DoUnEquip
-	@description Handles the `DoUnEquip` state for `UnEquipJob`.
-]=]
+	}, {"DoUnEquip","Rollback","Failed" })
+
 
 self:AddState("DoUnEquip", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
-				StateTransitionHelpers.queueRollback(fsm, "Entities no longer alive during DoUnEquip")
+				StateTransitionHelpers.queueRollback(fsm,"Entities no longer alive during DoUnEquip")
 				return
 			end
 
@@ -282,17 +266,14 @@ self:AddState("DoUnEquip", {
 
 			fsm.State = "CommitState"
 		end,
-	}, { "CommitState", "Rollback", "Failed" })
---[=[
-	@state CommitState
-	@description Handles the `CommitState` state for `UnEquipJob`.
-]=]
+	}, {"CommitState","Rollback","Failed" })
+
 
 self:AddState("CommitState", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
-				StateTransitionHelpers.queueRollback(fsm, "Entities no longer alive during CommitState")
+				StateTransitionHelpers.queueRollback(fsm,"Entities no longer alive during CommitState")
 				return
 			end
 
@@ -331,17 +312,14 @@ self:AddState("CommitState", {
 
 			fsm.State = "EmitIntent"
 		end,
-	}, { "EmitIntent", "Rollback", "Failed" })
---[=[
-	@state EmitIntent
-	@description Handles the `EmitIntent` state for `UnEquipJob`.
-]=]
+	}, {"EmitIntent","Rollback","Failed" })
+
 
 self:AddState("EmitIntent", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
-				StateTransitionHelpers.queueRollback(fsm, "Entities no longer alive during EmitIntent")
+				StateTransitionHelpers.queueRollback(fsm,"Entities no longer alive during EmitIntent")
 				return
 			end
 
@@ -357,11 +335,8 @@ self:AddState("EmitIntent", {
 
 			fsm.State = "ReleaseEquipLock"
 		end,
-	}, { "ReleaseEquipLock", "Rollback", "Failed" })
---[=[
-	@state ReleaseEquipLock
-	@description Handles the `ReleaseEquipLock` state for `UnEquipJob`.
-]=]
+	}, {"ReleaseEquipLock","Rollback","Failed" })
+
 
 self:AddState("ReleaseEquipLock", {
 		OnEnter = function(_, fsm)
@@ -384,26 +359,27 @@ self:AddState("ReleaseEquipLock", {
 				fsm.State = "Completed"
 			end
 		end,
-	}, { "Completed", "Failed" })
---[=[
-	@state Rollback
-	@description Handles the `Rollback` state for `UnEquipJob`.
-]=]
+	}, {"Completed","Failed" })
+
 
 self:AddState("Rollback", {
 		OnEnter = function(_, fsm)
 			fsm.State = "ReleaseEquipLock"
 		end,
-	}, { "ReleaseEquipLock" })
+	}, {"ReleaseEquipLock" })
 --[=[
 	@state Completed
-	@description Handles the `Completed` terminal state for `UnEquipJob`.
+	@description Terminal success sink reached after `ReleaseEquipLock` persists the unequipped state and frees the per-hand equip lock. `OnEnter` is a no-op because the entity and inventory writes already happened.
+		Transitions: none.
+		Writes: none.
 ]=]
 
 self:AddState("Completed", function(_fsm) end, {})
 --[=[
 	@state Failed
-	@description Handles the `Failed` terminal state for `UnEquipJob`.
+	@description Terminal failure sink reached when `ReleaseEquipLock` sees `Context._failureReason` after rollback. `OnEnter` is a no-op because rollback and lock release occur before entry.
+		Transitions: none.
+		Writes: none.
 ]=]
 
 self:AddState("Failed", function(_fsm) end, {})

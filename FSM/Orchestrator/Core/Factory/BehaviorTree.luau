@@ -24,11 +24,7 @@ BehaviorTree.BehaviorTreeStatus = {
 }
 
 local Logger, Initialized;
---[=[
-	@description Handles `Initialize` for `BehaviorTree`.
-	@param Util any -- `Util` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function BehaviorTree.Initialize(Util)
 	if Initialized then return end
@@ -39,8 +35,8 @@ function BehaviorTree.Initialize(Util)
 end
 
 local function ValidateRequest()
-	assert(Initialized, "BehaviorTree not initialized")
-	assert(type(Logger) == "table", "Logger not initialized")
+	assert(Initialized,"BehaviorTree not initialized")
+	assert(type(Logger) == "table","Logger not initialized")
 end
 
 local function normalizeStatus(status: any): string
@@ -52,11 +48,7 @@ local function normalizeStatus(status: any): string
 	end
 	return BehaviorTree.BehaviorTreeStatus.Failure
 end
---[=[
-	@description Implements `BehaviorTree.Selector`.
-	@param children { (context: any) -> string } -- `children` input parameter.
-	@return (context: any) -> string -- Return value produced by the implementation, if any.
-]=]
+
 
 function BehaviorTree.Selector(children: { (context: any) -> string }): (context: any) -> string
 	ValidateRequest()
@@ -70,11 +62,7 @@ function BehaviorTree.Selector(children: { (context: any) -> string }): (context
 		return BehaviorTree.BehaviorTreeStatus.Failure
 	end
 end
---[=[
-	@description Implements `BehaviorTree.Sequence`.
-	@param children { (context: any) -> string } -- `children` input parameter.
-	@return (context: any) -> string -- Return value produced by the implementation, if any.
-]=]
+
 
 function BehaviorTree.Sequence(children: { (context: any) -> string }): (context: any) -> string
 	ValidateRequest()
@@ -88,11 +76,7 @@ function BehaviorTree.Sequence(children: { (context: any) -> string }): (context
 		return BehaviorTree.BehaviorTreeStatus.Success
 	end
 end
---[=[
-	@description Implements `BehaviorTree.Inverter`.
-	@param child (context: any) -> string -- `child` input parameter.
-	@return (context: any) -> string -- Return value produced by the implementation, if any.
-]=]
+
 
 function BehaviorTree.Inverter(child: (context: any) -> string): (context: any) -> string
 	ValidateRequest()
@@ -106,11 +90,7 @@ function BehaviorTree.Inverter(child: (context: any) -> string): (context: any) 
 		return status
 	end
 end
---[=[
-	@description Implements `BehaviorTree.Succeeder`.
-	@param child (context: any) -> string -- `child` input parameter.
-	@return (context: any) -> string -- Return value produced by the implementation, if any.
-]=]
+
 
 function BehaviorTree.Succeeder(child: (context: any) -> string): (context: any) -> string
 	ValidateRequest()
@@ -124,8 +104,6 @@ function BehaviorTree.Succeeder(child: (context: any) -> string): (context: any)
 end
 --[=[
 	@description Updates module state through `BehaviorTree.SetState`.
-	@param stateName string -- `stateName` input parameter.
-	@return (fsm: any) -> string -- Return value produced by the implementation, if any.
 ]=]
 
 function BehaviorTree.SetState(stateName: string): (fsm: any) -> string
@@ -137,11 +115,7 @@ function BehaviorTree.SetState(stateName: string): (fsm: any) -> string
 		return BehaviorTree.BehaviorTreeStatus.Success
 	end
 end
---[=[
-	@description Implements `BehaviorTree.Condition`.
-	@param predicate (context: any) -> boolean -- `predicate` input parameter.
-	@return (context: any) -> string -- Return value produced by the implementation, if any.
-]=]
+
 
 function BehaviorTree.Condition(predicate: (context: any) -> boolean): (context: any) -> string
 	ValidateRequest()

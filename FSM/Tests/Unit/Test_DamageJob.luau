@@ -1,8 +1,5 @@
 --!nocheck
---[=[
-	@module Test_DamageJob
-	@description Defines the `Test_DamageJob` state machine module and its exported API.
-]=]
+
 
 local ServerStorage = game:GetService("ServerStorage")
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)
@@ -29,12 +26,12 @@ local function findModule(moduleName: string, ancestorNames: { string }): Module
 	error("Module not found: " .. moduleName)
 end
 
-local DamageCalculator = require(findModule("DamageCalculator", { "shared", "MainModule" }))
+local DamageCalculator = require(findModule("DamageCalculator", {"shared","MainModule" }))
 
 local function cloneStateMachineModule(moduleName: string): ModuleScript
-	local source = findModule(moduleName, { "StateMachines", "FSM", "RBXStateMachine" })
+	local source = findModule(moduleName, {"StateMachines","FSM","RBXStateMachine" })
 	local clone = source:Clone()
-	clone.Name = moduleName .. "_TestClone"
+	clone.Name = moduleName .."_TestClone"
 	clone.Parent = ServerStorage
 	return clone
 end
@@ -80,11 +77,7 @@ local function captureStates(job)
 	job:RegisterStates()
 	return states
 end
---[=[
-	@description Implements `Test_DamageJob.Run`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Test_DamageJob.Run()
 	local tester = TestBase.new("DamageJob")
@@ -109,7 +102,7 @@ function Test_DamageJob.Run()
 			local blocked = DamageCalculator.Compute(baseDamage, true)
 			local expected = math.clamp(math.floor(unblocked * 0.25), 3, 110)
 			t:AssertEquals(blocked, expected, string.format("Blocking should quarter the seeded damage roll for seed %d", seed))
-			t:Assert(blocked < unblocked, "Blocked damage should be lower than unblocked damage")
+			t:Assert(blocked < unblocked,"Blocked damage should be lower than unblocked damage")
 		end
 	end)
 
@@ -119,8 +112,8 @@ function Test_DamageJob.Run()
 				Attack = 57,
 			},
 		}
-		t:AssertEquals(DamageCalculator.GetWeaponBaseDamage(itemData), 57, "GetWeaponBaseDamage should read WeaponStats.Attack")
-		t:AssertEquals(DamageCalculator.GetWeaponBaseDamage({}), 10, "GetWeaponBaseDamage should fall back to default attack")
+		t:AssertEquals(DamageCalculator.GetWeaponBaseDamage(itemData), 57,"GetWeaponBaseDamage should read WeaponStats.Attack")
+		t:AssertEquals(DamageCalculator.GetWeaponBaseDamage({}), 10,"GetWeaponBaseDamage should fall back to default attack")
 	end)
 
 	tester:RunTest("DamageJob loads and validates required context", function(t)
@@ -137,22 +130,22 @@ function Test_DamageJob.Run()
 			end,
 		}
 		local ok, job, cleanup = loadDamageJob(orchestrator)
-		t:Assert(ok, "DamageJob should require without error when shared.StateMachine.DamageJob is registered")
+		t:Assert(ok,"DamageJob should require without error when shared.StateMachine.DamageJob is registered")
 		if not ok then
 			cleanup()
 			return
 		end
-		t:AssertEquals(job.Name, "DamageJob", "DamageJob should keep its declared Name")
-		t:Assert(type(job.RegisterStates) == "function", "DamageJob should expose RegisterStates")
+		t:AssertEquals(job.Name,"DamageJob","DamageJob should keep its declared Name")
+		t:Assert(type(job.RegisterStates) == "function","DamageJob should expose RegisterStates")
 		if type(job.RegisterStates) ~= "function" then
 			cleanup()
 			return
 		end
 
 		local states = captureStates(job)
-		t:Assert(states.Validate ~= nil, "DamageJob should register Validate")
-		t:Assert(states.CheckHitNonce ~= nil, "DamageJob should register CheckHitNonce")
-		t:Assert(states.ComputeDamage ~= nil, "DamageJob should register ComputeDamage")
+		t:Assert(states.Validate ~= nil,"DamageJob should register Validate")
+		t:Assert(states.CheckHitNonce ~= nil,"DamageJob should register CheckHitNonce")
+		t:Assert(states.ComputeDamage ~= nil,"DamageJob should register ComputeDamage")
 
 		local validate = states.Validate.Definition.OnEnter
 		local originalOrchestrator = shared.fsm
@@ -167,11 +160,7 @@ function Test_DamageJob.Run()
 				State = nil,
 				Failure = nil,
 			}
-			--[=[
-				@description Implements `fsm.Fail`.
-				@param reason any -- `reason` input parameter.
-				@return any -- Return value produced by the implementation, if any.
-			]=]
+
 
 			function fsm:Fail(reason)
 				self.Failure = reason
@@ -181,13 +170,13 @@ function Test_DamageJob.Run()
 		end
 
 		local noOrchestrator = runValidate({ AttackerCharEntityId = "Attacker_01", VictimUserId = 44 }, nil)
-		t:AssertEquals(noOrchestrator.Failure, "Orchestrator unavailable", "Validate should require an orchestrator")
+		t:AssertEquals(noOrchestrator.Failure,"Orchestrator unavailable","Validate should require an orchestrator")
 
 		local missingAttackerId = runValidate({ AttackerCharEntityId = nil, VictimUserId = 44 }, orchestrator)
-		t:AssertEquals(missingAttackerId.Failure, "AttackerCharEntityId is required", "Validate should require AttackerCharEntityId")
+		t:AssertEquals(missingAttackerId.Failure,"AttackerCharEntityId is required","Validate should require AttackerCharEntityId")
 
 		local attackerNotFound = runValidate({ AttackerCharEntityId = "Missing", VictimUserId = 44 }, orchestrator)
-		t:AssertEquals(attackerNotFound.Failure, "Attacker entity not found", "Validate should require an attacker entity")
+		t:AssertEquals(attackerNotFound.Failure,"Attacker entity not found","Validate should require an attacker entity")
 
 		local missingUserId = runValidate({ AttackerCharEntityId = "BrokenAttacker", VictimUserId = 44 }, {
 			GetEntity = function(entityId)
@@ -197,18 +186,18 @@ function Test_DamageJob.Run()
 				return nil
 			end,
 		})
-		t:AssertEquals(missingUserId.Failure, "Attacker entity missing UserId", "Validate should require attacker UserId")
+		t:AssertEquals(missingUserId.Failure,"Attacker entity missing UserId","Validate should require attacker UserId")
 
 		local missingVictim = runValidate({ AttackerCharEntityId = "Attacker_01", VictimUserId = nil }, orchestrator)
-		t:AssertEquals(missingVictim.Failure, "VictimUserId is required", "Validate should require VictimUserId")
+		t:AssertEquals(missingVictim.Failure,"VictimUserId is required","Validate should require VictimUserId")
 
 		local success = runValidate({ AttackerCharEntityId = "Attacker_01", VictimUserId = 44 }, orchestrator)
-		t:AssertEquals(success.Failure, nil, "Validate should accept a valid damage request")
-		t:AssertEquals(success.Context.AttackName, "BasicAttack", "Validate should default AttackName")
-		t:AssertEquals(success.Context._attackerEntity, attackerEntity, "Validate should cache attacker entity")
-		t:AssertEquals(success.Context._attackerUserId, 9001, "Validate should cache attacker UserId")
-		t:Assert(type(success.Context._nonce) == "string" and success.Context._nonce ~= "", "Validate should generate a nonce")
-		t:AssertEquals(success.State, "CheckHitNonce", "Validate should advance to CheckHitNonce")
+		t:AssertEquals(success.Failure, nil,"Validate should accept a valid damage request")
+		t:AssertEquals(success.Context.AttackName,"BasicAttack","Validate should default AttackName")
+		t:AssertEquals(success.Context._attackerEntity, attackerEntity,"Validate should cache attacker entity")
+		t:AssertEquals(success.Context._attackerUserId, 9001,"Validate should cache attacker UserId")
+		t:Assert(type(success.Context._nonce) == "string" and success.Context._nonce ~= "","Validate should generate a nonce")
+		t:AssertEquals(success.State,"CheckHitNonce","Validate should advance to CheckHitNonce")
 
 		shared.fsm = originalOrchestrator
 		cleanup()

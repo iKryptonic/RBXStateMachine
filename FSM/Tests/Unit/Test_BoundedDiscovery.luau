@@ -1,8 +1,5 @@
 --!nocheck
---[=[
-	@module Test_BoundedDiscovery
-	@description Defines the `Test_BoundedDiscovery` module and its exported API.
-]=]
+
 
 local TestBase = require((script.Parent:FindFirstChild("TestBase") or script.Parent.Parent:FindFirstChild("TestBase")) :: any)
 
@@ -24,11 +21,7 @@ local function boundedDiscover(container: Instance, childName: string, intervalS
 	end
 	return nil, os.clock() - startedAt
 end
---[=[
-	@description Implements `Test_BoundedDiscovery.Run`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Test_BoundedDiscovery.Run()
 	local tester = TestBase.new("BoundedDiscovery")
@@ -44,10 +37,10 @@ function Test_BoundedDiscovery.Run()
 			part.Parent = folder
 		end)
 
-		local discovered, elapsed = boundedDiscover(folder, "LatePart", 0.05, 3)
-		t:Assert(discovered ~= nil, "Bounded discovery should find the part once it appears")
-		t:Assert(elapsed >= 0.10, "Discovery should wait until after the delayed spawn")
-		t:Assert(elapsed < 3, "Discovery should finish before the timeout window")
+		local discovered, elapsed = boundedDiscover(folder,"LatePart", 0.05, 3)
+		t:Assert(discovered ~= nil,"Bounded discovery should find the part once it appears")
+		t:Assert(elapsed >= 0.10,"Discovery should wait until after the delayed spawn")
+		t:Assert(elapsed < 3,"Discovery should finish before the timeout window")
 
 		folder:Destroy()
 	end)
@@ -57,8 +50,8 @@ function Test_BoundedDiscovery.Run()
 		folder.Name = "DiscoveryTimeoutFolder"
 		folder.Parent = workspace
 
-		local discovered, elapsed = boundedDiscover(folder, "NeverAppears", 0.05, 3)
-		t:AssertEquals(discovered, nil, "Bounded discovery should return nil when the part never appears")
+		local discovered, elapsed = boundedDiscover(folder,"NeverAppears", 0.05, 3)
+		t:AssertEquals(discovered, nil,"Bounded discovery should return nil when the part never appears")
 		t:Assert(elapsed >= 2.95, string.format("Timeout should run for about 3 seconds (got %.3f)", elapsed))
 		t:Assert(elapsed < 3.5, string.format("Timeout should remain bounded near 3 seconds (got %.3f)", elapsed))
 

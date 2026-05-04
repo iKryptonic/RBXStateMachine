@@ -1,8 +1,5 @@
 --!strict
---[=[
-	@module TargetLockFSM
-	@description Defines the `TargetLockFSM` state machine module and its exported API.
-]=]
+
 
 local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
@@ -20,7 +17,7 @@ local TargetLockFSM = {
 		"Completed",
 		"Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Idle",
 }
 
@@ -84,7 +81,7 @@ local function ensureIndicator(fsm: any, targetCharacter: Model)
 	billboard.StudsOffset = Vector3.new(0, 2.5, 0)
 	billboard.ResetOnSpawn = false
 	billboard.Parent = adornPart
-	fsm:TrackInstance(billboard, "LockOnIndicator")
+	fsm:TrackInstance(billboard,"LockOnIndicator")
 
 	local label = Instance.new("TextLabel")
 	label.Name = "Diamond"
@@ -101,17 +98,10 @@ local function ensureIndicator(fsm: any, targetCharacter: Model)
 	fsm.Context._indicatorLabel = label
 	fsm.Context._indicatorAdornee = adornPart
 end
---[=[
-	@description Handles `RegisterStates` for `TargetLockFSM`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function TargetLockFSM:RegisterStates()
-	--[=[
-		@state Idle
-		@description Handles the `Idle` state for `TargetLockFSM`.
-	]=]
+
 
 	self:AddState("Idle", {
 		OnEnter = function(_, fsm)
@@ -125,11 +115,8 @@ function TargetLockFSM:RegisterStates()
 			fsm.Context._targetEntityId = ""
 			destroyIndicator(fsm)
 		end,
-	}, { "Scanning", "Completed" })
-	--[=[
-		@state Scanning
-		@description Handles the `Scanning` state for `TargetLockFSM`.
-	]=]
+	}, {"Scanning","Completed" })
+
 
 	self:AddState("Scanning", {
 		OnEnter = function(_, fsm)
@@ -202,11 +189,8 @@ function TargetLockFSM:RegisterStates()
 
 			fsm.State = "Locked"
 		end,
-	}, { "Locked", "Idle" })
-	--[=[
-		@state Locked
-		@description Handles the `Locked` state for `TargetLockFSM`.
-	]=]
+	}, {"Locked","Idle" })
+
 
 	self:AddState("Locked", {
 		OnEnter = function(_, _fsm)
@@ -252,25 +236,25 @@ function TargetLockFSM:RegisterStates()
 			-- Still valid — refresh indicator
 			ensureIndicator(fsm, character)
 		end,
-	}, { "Idle", "Completed" })
+	}, {"Idle","Completed" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `TargetLockFSM`.
-	]=]
+	@state Completed
+	@description Terminal success sink reserved for explicit shutdown of the target-lock FSM. Normal locking toggles between `Idle`, `Scanning`, and `Locked`, breaking back to `Idle` when the target is invalid.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `TargetLockFSM`.
-	]=]
+	@state Failed
+	@description Terminal failure sink reserved for future lock-acquisition errors. The current implementation never routes here, and `OnEnter` is a no-op.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Failed", function() end, {})
 end
---[=[
-	@description Implements `TargetLockFSM.ToggleLock`.
-	@param fsm any -- `fsm` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function TargetLockFSM.ToggleLock(fsm: any)
 	if fsm.State == "Locked" then
@@ -279,11 +263,7 @@ function TargetLockFSM.ToggleLock(fsm: any)
 		fsm.State = "Scanning"
 	end
 end
---[=[
-	@description Returns the data produced by `TargetLockFSM.GetTarget`.
-	@param fsm any -- `fsm` input parameter.
-	@return any? -- Return value produced by the implementation, if any.
-]=]
+
 
 function TargetLockFSM.GetTarget(fsm: any): any?
 	local targetEntityId = fsm.Context._targetEntityId
@@ -294,11 +274,7 @@ function TargetLockFSM.GetTarget(fsm: any): any?
 	if not orchestrator then return nil end
 	return orchestrator.GetEntity(targetEntityId)
 end
---[=[
-	@description Returns whether `TargetLockFSM` is locked.
-	@param fsm any -- `fsm` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
-]=]
+
 
 function TargetLockFSM.IsLocked(fsm: any): boolean
 	return fsm.State == "Locked"

@@ -1,12 +1,9 @@
 --!strict
---[=[
-	@module MeleeAttackJob
-	@description Defines the `MeleeAttackJob` state machine module and its exported API.
-]=]
+
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
-assert(Helpers, "Helpers folder not found")
+assert(Helpers,"Helpers folder not found")
 local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
 local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
 local CombatHelpers = require(Helpers:WaitForChild("CombatHelpers"))
@@ -34,7 +31,7 @@ local MeleeAttackJob = {
 		"Completed",
 		"Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Validate",
 }
 
@@ -85,7 +82,7 @@ local MELEE_SEQUENCES = {
 }
 
 local function appendAnimationIntent(orchestrator: any, charEntity: any, fsm: any, phase: any)
-	IntentHelpers.appendIntent(orchestrator, charEntity, "Animation", { Name = phase.Name, Speed = phase.Speed, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
+	IntentHelpers.appendIntent(orchestrator, charEntity,"Animation", { Name = phase.Name, Speed = phase.Speed, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 end
 
 local function emitDueAnimationPhases(fsm: any, elapsed: number)
@@ -107,22 +104,15 @@ local function emitDueAnimationPhases(fsm: any, elapsed: number)
 		if typeof(phase) == "table" then
 			appendAnimationIntent(fsm:GetOrchestrator(), charEntity, fsm, phase)
 		end
-		nextPhaseIndex += 1
+		nextPhaseIndex + = 1
 	end
 
 	fsm.Context._nextPhaseIndex = nextPhaseIndex
 end
---[=[
-	@description Handles `RegisterStates` for `MeleeAttackJob`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function MeleeAttackJob:RegisterStates()
-	--[=[
-		@state Validate
-		@description Handles the `Validate` state for `MeleeAttackJob`.
-	]=]
+
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -180,11 +170,8 @@ function MeleeAttackJob:RegisterStates()
 			fsm.Context._comboSlot = comboSlot
 			fsm.State = "AcquireLock"
 		end,
-	}, { "AcquireLock", "Completed", "Failed" })
-	--[=[
-		@state AcquireLock
-		@description Handles the `AcquireLock` state for `MeleeAttackJob`.
-	]=]
+	}, {"AcquireLock","Completed","Failed" })
+
 
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
@@ -196,44 +183,35 @@ function MeleeAttackJob:RegisterStates()
 			fsm.Context._lockHeld = true
 			fsm.State = "ValidateStamina"
 		end,
-	}, { "ValidateStamina", "Completed", "Failed" })
-	--[=[
-		@state ValidateStamina
-		@description Handles the `ValidateStamina` state for `MeleeAttackJob`.
-	]=]
+	}, {"ValidateStamina","Completed","Failed" })
+
 
 	self:AddState("ValidateStamina", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
 			local staminaCost = fsm.Context._staminaCost or 0
 			if (charEntity.Stamina or 0) < staminaCost then
-				StateTransitionHelpers.queueRelease(fsm, "Failed", "Not enough stamina")
+				StateTransitionHelpers.queueRelease(fsm,"Failed","Not enough stamina")
 				return
 			end
 			fsm.State = "DeductStamina"
 		end,
-	}, { "DeductStamina", "ReleaseLock" })
-	--[=[
-		@state DeductStamina
-		@description Handles the `DeductStamina` state for `MeleeAttackJob`.
-	]=]
+	}, {"DeductStamina","ReleaseLock" })
+
 
 	self:AddState("DeductStamina", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
 			local staminaCost = fsm.Context._staminaCost or 0
 			if not ResourceHelpers.deductStamina(charEntity, staminaCost) then
-				StateTransitionHelpers.queueRelease(fsm, "Failed", "Not enough stamina")
+				StateTransitionHelpers.queueRelease(fsm,"Failed","Not enough stamina")
 				return
 			end
 			charEntity:UpdateEntity(fsm.Id)
 			fsm.State = "ResolveSequence"
 		end,
-	}, { "ResolveSequence" })
-	--[=[
-		@state ResolveSequence
-		@description Handles the `ResolveSequence` state for `MeleeAttackJob`.
-	]=]
+	}, {"ResolveSequence" })
+
 
 	self:AddState("ResolveSequence", {
 		OnEnter = function(_, fsm)
@@ -242,7 +220,7 @@ function MeleeAttackJob:RegisterStates()
 			local damage = DEFAULT_MELEE_DAMAGE[comboSlot] or 5
 			local seqDef = MELEE_SEQUENCES[comboSlot]
 			if not seqDef then
-				StateTransitionHelpers.queueRelease(fsm, "Failed", "Melee sequence not found")
+				StateTransitionHelpers.queueRelease(fsm,"Failed","Melee sequence not found")
 				return
 			end
 
@@ -259,7 +237,7 @@ function MeleeAttackJob:RegisterStates()
 
 			local phases = seqDef.Moves[pointer]
 			if typeof(phases) ~= "table" or #phases == 0 then
-				StateTransitionHelpers.queueRelease(fsm, "Failed", "Melee phases not found")
+				StateTransitionHelpers.queueRelease(fsm,"Failed","Melee phases not found")
 				return
 			end
 
@@ -267,7 +245,7 @@ function MeleeAttackJob:RegisterStates()
 			local totalDuration = 0
 			for index, phase in ipairs(phases) do
 				phaseStartTimes[index] = totalDuration
-				totalDuration += phase.Duration
+				totalDuration + = phase.Duration
 			end
 
 			fsm.Context._damage = damage
@@ -278,11 +256,8 @@ function MeleeAttackJob:RegisterStates()
 			fsm.Context._damageScanOffset = totalDuration * 0.5
 			fsm.State = "EmitPhaseAnimation"
 		end,
-	}, { "EmitPhaseAnimation", "ReleaseLock" })
-	--[=[
-		@state EmitPhaseAnimation
-		@description Handles the `EmitPhaseAnimation` state for `MeleeAttackJob`.
-	]=]
+	}, {"EmitPhaseAnimation","ReleaseLock" })
+
 
 	self:AddState("EmitPhaseAnimation", {
 		OnEnter = function(_, fsm)
@@ -290,44 +265,35 @@ function MeleeAttackJob:RegisterStates()
 			local charEntity = fsm.Context._charEntity
 			local firstPhase = typeof(phases) == "table" and phases[1] or nil
 			if not charEntity or typeof(firstPhase) ~= "table" then
-				StateTransitionHelpers.queueRelease(fsm, "Failed", "Initial melee phase missing")
+				StateTransitionHelpers.queueRelease(fsm,"Failed","Initial melee phase missing")
 				return
 			end
 			appendAnimationIntent(fsm:GetOrchestrator(), charEntity, fsm, firstPhase)
 			fsm.Context._nextPhaseIndex = 2
 			fsm.State = "ScheduleDamageWindow"
 		end,
-	}, { "ScheduleDamageWindow", "ReleaseLock" })
-	--[=[
-		@state ScheduleDamageWindow
-		@description Handles the `ScheduleDamageWindow` state for `MeleeAttackJob`.
-	]=]
+	}, {"ScheduleDamageWindow","ReleaseLock" })
+
 
 	self:AddState("ScheduleDamageWindow", {
 		OnEnter = function(_, fsm)
 			local damageScanOffset = fsm.Context._damageScanOffset or 0
 			if damageScanOffset > 0 then
-				fsm:ScheduleTransition(damageScanOffset, "ScanVictims")
+				fsm:ScheduleTransition(damageScanOffset,"ScanVictims")
 				fsm.State = "WaitForDamageWindow"
 			else
 				fsm.State = "ScanVictims"
 			end
 		end,
-	}, { "WaitForDamageWindow", "ScanVictims" })
-	--[=[
-		@state WaitForDamageWindow
-		@description Handles the `WaitForDamageWindow` state for `MeleeAttackJob`.
-	]=]
+	}, {"WaitForDamageWindow","ScanVictims" })
+
 
 	self:AddState("WaitForDamageWindow", {
 		OnHeartbeat = function(_, fsm)
 			emitDueAnimationPhases(fsm, fsm.StateDuration)
 		end,
-	}, { "ScanVictims", "Failed" })
-	--[=[
-		@state ScanVictims
-		@description Handles the `ScanVictims` state for `MeleeAttackJob`.
-	]=]
+	}, {"ScanVictims","Failed" })
+
 
 	self:AddState("ScanVictims", {
 		OnEnter = function(_, fsm)
@@ -347,11 +313,8 @@ function MeleeAttackJob:RegisterStates()
 				fsm.State = "WaitForRecovery"
 			end
 		end,
-	}, { "ProcessVictim", "WaitForRecovery" })
-	--[=[
-		@state ProcessVictim
-		@description Handles the `ProcessVictim` state for `MeleeAttackJob`.
-	]=]
+	}, {"ProcessVictim","WaitForRecovery" })
+
 
 	self:AddState("ProcessVictim", {
 		OnEnter = function(_, fsm)
@@ -389,11 +352,8 @@ function MeleeAttackJob:RegisterStates()
 
 			fsm.State = "ApplyKnockback"
 		end,
-	}, { "ApplyKnockback", "WaitForRecovery" })
-	--[=[
-		@state ApplyKnockback
-		@description Handles the `ApplyKnockback` state for `MeleeAttackJob`.
-	]=]
+	}, {"ApplyKnockback","WaitForRecovery" })
+
 
 	self:AddState("ApplyKnockback", {
 		OnEnter = function(_, fsm)
@@ -413,11 +373,8 @@ function MeleeAttackJob:RegisterStates()
 				fsm.State = "WaitForRecovery"
 			end
 		end,
-	}, { "ProcessVictim", "WaitForRecovery" })
-	--[=[
-		@state WaitForRecovery
-		@description Handles the `WaitForRecovery` state for `MeleeAttackJob`.
-	]=]
+	}, {"ProcessVictim","WaitForRecovery" })
+
 
 	self:AddState("WaitForRecovery", {
 		OnEnter = function(_, fsm)
@@ -425,7 +382,7 @@ function MeleeAttackJob:RegisterStates()
 			local damageScanOffset = fsm.Context._damageScanOffset or 0
 			local remainingDuration = math.max(totalDuration - damageScanOffset, 0)
 			if remainingDuration > 0 then
-				fsm:ScheduleTransition(remainingDuration, "ReleaseLock")
+				fsm:ScheduleTransition(remainingDuration,"ReleaseLock")
 			else
 				fsm.State = "ReleaseLock"
 			end
@@ -434,11 +391,8 @@ function MeleeAttackJob:RegisterStates()
 			local damageScanOffset = fsm.Context._damageScanOffset or 0
 			emitDueAnimationPhases(fsm, damageScanOffset + fsm.StateDuration)
 		end,
-	}, { "ReleaseLock", "Failed" })
-	--[=[
-		@state ReleaseLock
-		@description Handles the `ReleaseLock` state for `MeleeAttackJob`.
-	]=]
+	}, {"ReleaseLock","Failed" })
+
 
 	self:AddState("ReleaseLock", {
 		OnEnter = function(_, fsm)
@@ -454,17 +408,21 @@ function MeleeAttackJob:RegisterStates()
 			end
 			fsm.State = "Completed"
 		end,
-	}, { "Completed", "Failed" })
+	}, {"Completed","Failed" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `MeleeAttackJob`.
-	]=]
+	@state Completed
+	@description Terminal success sink reached after `ReleaseLock` drops the held character lock at the end of the melee timeline. `OnEnter` is a no-op because the job has already finished its work.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `MeleeAttackJob`.
-	]=]
+	@state Failed
+	@description Terminal failure sink entered when `ReleaseLock` forwards `_releaseReason` into `Fail`. `OnEnter` is a no-op because lock cleanup and failure bookkeeping happen before entry.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Failed", function() end, {})
 end

@@ -1,15 +1,12 @@
 --!strict
---[=[
-	@module AnalyticsEngine
-	@description Defines the `AnalyticsEngine` module and its exported API.
-]=]
+
 
 local AnalyticsEngine = {}
 AnalyticsEngine.__index = AnalyticsEngine
 
 export type Insight = {
 	Id: string,
-	Severity: "CRITICAL" | "WARNING" | "INFO" | "SUGGESTION",
+	Severity:"CRITICAL" |"WARNING" |"INFO" |"SUGGESTION",
 	Subsystem: string,
 	Title: string,
 	Description: string,
@@ -26,11 +23,7 @@ export type Insight = {
 }
 
 export type RuleFn = (nexus: any, emit: (Insight) -> ()) -> ()
---[=[
-	@description Implements `AnalyticsEngine.new`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine.new(): any
 	local self = setmetatable({}, AnalyticsEngine)
@@ -46,20 +39,12 @@ function AnalyticsEngine.new(): any
 	self:_RegisterBuiltinRules()
 	return self
 end
---[=[
-	@description Returns whether `AnalyticsEngine` has pending work.
-	@param none nil -- This function does not accept explicit parameters.
-	@return boolean -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:HasPendingWork(): boolean
 	return os.clock() - self._lastCycle >= self._cycleInterval
 end
---[=[
-	@description Implements `AnalyticsEngine.RunCycle`.
-	@param nexus any -- `nexus` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:RunCycle(nexus: any)
 	self._lastCycle = os.clock()
@@ -119,11 +104,7 @@ function AnalyticsEngine:RunCycle(nexus: any)
 		end
 	end
 end
---[=[
-	@description Returns the data produced by `AnalyticsEngine.GetActiveInsights`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return { Insight } -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:GetActiveInsights(): { Insight }
 	local result = {}
@@ -145,29 +126,17 @@ function AnalyticsEngine:GetActiveInsights(): { Insight }
 	end)
 	return result
 end
---[=[
-	@description Returns the data produced by `AnalyticsEngine.GetHistory`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return { Insight } -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:GetHistory(): { Insight }
 	return self._history
 end
---[=[
-	@description Returns the data produced by `AnalyticsEngine.GetInsight`.
-	@param id string -- `id` input parameter.
-	@return Insight? -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:GetInsight(id: string): Insight?
 	return self._insights[id]
 end
---[=[
-	@description Implements `AnalyticsEngine.DismissInsight`.
-	@param id string -- `id` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:DismissInsight(id: string)
 	local insight = self._insights[id]
@@ -175,12 +144,7 @@ function AnalyticsEngine:DismissInsight(id: string)
 		insight.Dismissed = true
 	end
 end
---[=[
-	@description Implements `AnalyticsEngine.SnoozeInsight`.
-	@param id string -- `id` input parameter.
-	@param seconds number? -- `seconds` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:SnoozeInsight(id: string, seconds: number?)
 	local insight = self._insights[id]
@@ -189,54 +153,34 @@ function AnalyticsEngine:SnoozeInsight(id: string, seconds: number?)
 		insight.SnoozedUntil = os.clock() + (seconds or 60)
 	end
 end
---[=[
-	@description Implements `AnalyticsEngine.ResolveInsight`.
-	@param id string -- `id` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:ResolveInsight(id: string)
 	-- Resolution removes from active and history (user marked it done)
 	self._insights[id] = nil
 end
---[=[
-	@description Implements `AnalyticsEngine.AddRule`.
-	@param rule RuleFn -- `rule` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:AddRule(rule: RuleFn)
 	table.insert(self._rules, rule)
 end
---[=[
-	@description Returns the data produced by `AnalyticsEngine.GetRuleCount`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return number -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:GetRuleCount(): number
 	return #self._rules
 end
---[=[
-	@description Implements `AnalyticsEngine.Destroy`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:Destroy()
 	table.clear(self._insights)
 	table.clear(self._rules)
 	table.clear(self._history)
 end
---[=[
-	@description Implements `AnalyticsEngine._CreateInsight`.
-	@param params { Id: string, Severity: "CRITICAL" | "WARNING" | "INFO" | "SUGGESTION", Subsystem: string, Title: string, Description: string, Metric: number?, Threshold: number?, RelatedIds: { string }?, ActionableHints: { { Label: string, Command: string? } }?, } -- `params` input parameter.
-	@return Insight -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:_CreateInsight(params: {
 	Id: string,
-	Severity: "CRITICAL" | "WARNING" | "INFO" | "SUGGESTION",
+	Severity:"CRITICAL" |"WARNING" |"INFO" |"SUGGESTION",
 	Subsystem: string,
 	Title: string,
 	Description: string,
@@ -259,11 +203,7 @@ function AnalyticsEngine:_CreateInsight(params: {
 		ActionableHints = params.ActionableHints,
 	}
 end
---[=[
-	@description Implements `AnalyticsEngine._RegisterBuiltinRules`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AnalyticsEngine:_RegisterBuiltinRules()
 	-- Rule 1: FSM State Stall Detection (multi-emit: one per stalled FSM)
@@ -342,7 +282,7 @@ function AnalyticsEngine:_RegisterBuiltinRules()
 
 		local count = 0
 		for _ in pairs(entities) do
-			count += 1
+			count + = 1
 		end
 
 		if count > 500 then
@@ -372,7 +312,7 @@ function AnalyticsEngine:_RegisterBuiltinRules()
 		if memMB > 512 then
 			emit(self:_CreateInsight({
 				Id = "memory_pressure",
-				Severity = if memMB > 800 then "CRITICAL" else "WARNING",
+				Severity = if memMB > 800 then"CRITICAL" else"WARNING",
 				Subsystem = "TASKS",
 				Title = "Memory Pressure",
 				Description = string.format(
@@ -399,7 +339,7 @@ function AnalyticsEngine:_RegisterBuiltinRules()
 		local renderCount = 0
 		for _, fsm in pairs(machines) do
 			if fsm.IsActive and fsm.Priority == 1 then
-				renderCount += 1
+				renderCount + = 1
 			end
 		end
 
@@ -495,7 +435,7 @@ function AnalyticsEngine:_RegisterBuiltinRules()
 
 		local taskCount = 0
 		for _ in pairs(tasks) do
-			taskCount += 1
+			taskCount + = 1
 		end
 
 		-- Only fire when there are literally zero tasks registered (real misconfiguration).
@@ -526,7 +466,7 @@ function AnalyticsEngine:_RegisterBuiltinRules()
 		for _, entity in pairs(entities) do
 			pcall(function()
 				if entity._privateProperties and entity._privateProperties.IsValid == false then
-					deadCount += 1
+					deadCount + = 1
 				end
 			end)
 		end
@@ -556,7 +496,7 @@ function AnalyticsEngine:_RegisterBuiltinRules()
 		if fps < 30 then
 			emit(self:_CreateInsight({
 				Id = "fps_degraded",
-				Severity = if fps < 15 then "CRITICAL" else "WARNING",
+				Severity = if fps < 15 then"CRITICAL" else"WARNING",
 				Subsystem = "TASKS",
 				Title = "Frame Rate Degraded",
 				Description = string.format(

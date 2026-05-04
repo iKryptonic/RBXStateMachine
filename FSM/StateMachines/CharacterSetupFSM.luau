@@ -1,8 +1,5 @@
 --!strict
---[=[
-	@module CharacterSetupFSM
-	@description Defines the `CharacterSetupFSM` state machine module and its exported API.
-]=]
+
 
 local CharacterSetupFSM = {
 	Name = "CharacterSetupFSM",
@@ -19,7 +16,7 @@ local CharacterSetupFSM = {
 		"Completed",
 		"Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Validating",
 }
 
@@ -105,17 +102,10 @@ local function safeInvoke(factory: any, fsm: any, ...: any): any
 	end
 	return result
 end
---[=[
-	@description Handles `RegisterStates` for `CharacterSetupFSM`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function CharacterSetupFSM:RegisterStates()
-	--[=[
-		@state Validating
-		@description Handles the `Validating` state for `CharacterSetupFSM`.
-	]=]
+
 
 	self:AddState("Validating", {
 		OnEnter = function(_, fsm)
@@ -128,16 +118,16 @@ function CharacterSetupFSM:RegisterStates()
 			local parts = getRequiredParts(character)
 			local missing = {}
 			if not parts.Humanoid then
-				table.insert(missing, "Humanoid")
+				table.insert(missing,"Humanoid")
 			end
 			if not parts.RootPart then
-				table.insert(missing, "HumanoidRootPart")
+				table.insert(missing,"HumanoidRootPart")
 			end
 			if not parts.Torso then
-				table.insert(missing, "Torso")
+				table.insert(missing,"Torso")
 			end
 			if not parts.Head then
-				table.insert(missing, "Head")
+				table.insert(missing,"Head")
 			end
 			for limbName, limb in pairs(parts.Limbs) do
 				if not limb then
@@ -146,7 +136,7 @@ function CharacterSetupFSM:RegisterStates()
 			end
 
 			if #missing > 0 then
-				fsm:Fail("Character missing required parts: " .. table.concat(missing, ", "))
+				fsm:Fail("Character missing required parts: " .. table.concat(missing,", "))
 				return
 			end
 
@@ -162,11 +152,8 @@ function CharacterSetupFSM:RegisterStates()
 			})
 			fsm.State = "DisablingDefaults"
 		end,
-	}, { "DisablingDefaults", "Failed" })
-	--[=[
-		@state DisablingDefaults
-		@description Handles the `DisablingDefaults` state for `CharacterSetupFSM`.
-	]=]
+	}, {"DisablingDefaults","Failed" })
+
 
 	self:AddState("DisablingDefaults", {
 		OnEnter = function(_, fsm)
@@ -194,11 +181,8 @@ function CharacterSetupFSM:RegisterStates()
 			})
 			fsm.State = "AwaitingEntities"
 		end,
-	}, { "AwaitingEntities", "Failed" })
-	--[=[
-		@state AwaitingEntities
-		@description Handles the `AwaitingEntities` state for `CharacterSetupFSM`.
-	]=]
+	}, {"AwaitingEntities","Failed" })
+
 
 	self:AddState("AwaitingEntities", {
 		OnEnter = function(_, fsm)
@@ -210,7 +194,7 @@ function CharacterSetupFSM:RegisterStates()
 					tostring(fsm.CharacterEntityId or "unknown")
 				),
 			})
-			fsm:ScheduleTransition(10, "Failed", { "Timed out waiting for CharacterEntity/PlayerEntity" })
+			fsm:ScheduleTransition(10,"Failed", {"Timed out waiting for CharacterEntity/PlayerEntity" })
 		end,
 		OnHeartbeat = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -238,11 +222,8 @@ function CharacterSetupFSM:RegisterStates()
 				fsm.State = "InitControllers"
 			end
 		end,
-	}, { "InitControllers", "Failed" })
-	--[=[
-		@state InitControllers
-		@description Handles the `InitControllers` state for `CharacterSetupFSM`.
-	]=]
+	}, {"InitControllers","Failed" })
+
 
 	self:AddState("InitControllers", {
 		OnEnter = function(_, fsm)
@@ -264,11 +245,8 @@ function CharacterSetupFSM:RegisterStates()
 			})
 			fsm.State = "InitFSMs"
 		end,
-	}, { "InitFSMs", "Failed" })
-	--[=[
-		@state InitFSMs
-		@description Handles the `InitFSMs` state for `CharacterSetupFSM`.
-	]=]
+	}, {"InitFSMs","Failed" })
+
 
 	self:AddState("InitFSMs", {
 		OnEnter = function(_, fsm)
@@ -289,11 +267,8 @@ function CharacterSetupFSM:RegisterStates()
 			})
 			fsm.State = "BindingEvents"
 		end,
-	}, { "BindingEvents", "Failed" })
-	--[=[
-		@state BindingEvents
-		@description Handles the `BindingEvents` state for `CharacterSetupFSM`.
-	]=]
+	}, {"BindingEvents","Failed" })
+
 
 	self:AddState("BindingEvents", {
 		OnEnter = function(_, fsm)
@@ -304,11 +279,8 @@ function CharacterSetupFSM:RegisterStates()
 			})
 			fsm.State = "Active"
 		end,
-	}, { "Active", "Failed" })
-	--[=[
-		@state Active
-		@description Handles the `Active` state for `CharacterSetupFSM`.
-	]=]
+	}, {"Active","Failed" })
+
 
 	self:AddState("Active", {
 		OnEnter = function(_, fsm)
@@ -328,11 +300,8 @@ function CharacterSetupFSM:RegisterStates()
 				fsm.State = "TearingDown"
 			end
 		end,
-	}, { "TearingDown", "Failed" })
-	--[=[
-		@state TearingDown
-		@description Handles the `TearingDown` state for `CharacterSetupFSM`.
-	]=]
+	}, {"TearingDown","Failed" })
+
 
 	self:AddState("TearingDown", {
 		OnEnter = function(_, fsm)
@@ -363,11 +332,13 @@ function CharacterSetupFSM:RegisterStates()
 			})
 			fsm.State = "Completed"
 		end,
-	}, { "Completed" })
+	}, {"Completed" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `CharacterSetupFSM`.
-	]=]
+	@state Completed
+	@description Terminal success state entered after character controllers and child FSMs have been initialized and teardown-safe defaults restored. `OnEnter` records a final completion log for `CharacterEntityId`.
+		Transitions: none.
+		Writes: info log.
+]=]
 
 	self:AddState("Completed", {
 		OnEnter = function(_, fsm)
@@ -378,9 +349,11 @@ function CharacterSetupFSM:RegisterStates()
 		end,
 	}, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `CharacterSetupFSM`.
-	]=]
+	@state Failed
+	@description Terminal failure state for setup errors while waiting on entities, wiring controllers, or initializing child FSMs. `OnEnter` logs the reason, destroys managed connections, invokes `RestoreDefaults`, and reapplies Roblox default character behavior.
+		Transitions: none.
+		Writes: error log, restored defaults, destroyed connections.
+]=]
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm, reason)

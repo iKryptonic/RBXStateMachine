@@ -1,37 +1,37 @@
 --!strict
 --[=[
-    @Name DamageJob
-    @Author iKrypto
-    @Description Applies validated combat damage from an attacker to a victim, emits the replicated hit reaction payload, shows floating damage text, raises the damage event bus, and applies any passive on-hit status effects before ending in the terminal `Completed` state. Historical integrations must target `Completed`; the deprecated `Complete` spelling is intentionally not part of this FSM.
+	@Name DamageJob
+	@Author iKrypto
+	@Description Applies validated combat damage from an attacker to a victim, emits the replicated hit reaction payload, shows floating damage text, raises the damage event bus, and applies any passive on-hit status effects before ending in the terminal `Completed` state. Historical integrations must target `Completed`; the deprecated `Complete` spelling is intentionally not part of this FSM.
 
-    State flow diagram:
-    Validate → CheckHitNonce → ResolveVictim → ComputeDamage → ApplyDamage → EmitHitReact → EmitDamageText → FireEventBus → ApplyOnHitEffects → Completed
-             ↘ Failed
+	State flow diagram:
+	Validate → CheckHitNonce → ResolveVictim → ComputeDamage → ApplyDamage → EmitHitReact → EmitDamageText → FireEventBus → ApplyOnHitEffects → Completed
+				↘ Failed
 
-    Context fields:
-    - AttackName: string -- normalized attack name used in emitted events.
-    - _attackerEntity: any -- resolved attacker character entity.
-    - _attackerUserId: number -- user id used for nonce bucketing.
-    - _nonce: string -- per-hit dedupe token stored in the processed nonce cache.
-    - _victimEntity: any -- resolved victim character entity.
-    - _victimEntityId: string -- resolved victim entity id used for status effect application.
-    - _victimCharacter: Model -- victim character model.
-    - _victimHumanoid: Humanoid -- victim humanoid used for damage application.
-    - _victimRoot: BasePart? -- root part used for floating damage text placement.
-    - _isVictimBlocking: boolean -- whether damage should be reduced by block logic.
-    - _computedDamage: number -- final rounded damage applied to the victim.
+	Context fields:
+	- AttackName: string -- normalized attack name used in emitted events.
+	- _attackerEntity: any -- resolved attacker character entity.
+	- _attackerUserId: number -- user id used for nonce bucketing.
+	- _nonce: string -- per-hit dedupe token stored in the processed nonce cache.
+	- _victimEntity: any -- resolved victim character entity.
+	- _victimEntityId: string -- resolved victim entity id used for status effect application.
+	- _victimCharacter: Model -- victim character model.
+	- _victimHumanoid: Humanoid -- victim humanoid used for damage application.
+	- _victimRoot: BasePart? -- root part used for floating damage text placement.
+	- _isVictimBlocking: boolean -- whether damage should be reduced by block logic.
+	- _computedDamage: number -- final rounded damage applied to the victim.
 
-    Required params:
-    - AttackerCharEntityId: string -- attacker character entity id.
-    - VictimUserId: number -- victim player user id.
-    - AttackName: string? -- optional attack label; defaults to `BasicAttack`.
-    - BaseDamage: number? -- optional explicit base damage override.
+	Required params:
+	- AttackerCharEntityId: string -- attacker character entity id.
+	- VictimUserId: number -- victim player user id.
+	- AttackName: string? -- optional attack label; defaults to `BasicAttack`.
+	- BaseDamage: number? -- optional explicit base damage override.
 ]=]
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
-assert(Helpers, "Helpers folder not found")
+assert(Helpers,"Helpers folder not found")
 local Shared = ReplicatedStorage:WaitForChild("shared")
 local EquipHelpers = require(Shared:WaitForChild("EquipHelpers"))
 local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
@@ -53,7 +53,7 @@ local DamageJob = {
 		"Completed",
 		"Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Validate",
 }
 
@@ -62,8 +62,8 @@ local NONCE_EXPIRY = 3
 local MAX_NONCES_PER_ATTACKER = 64
 
 --[=[
-    @description Removes expired hit nonces from the process-wide cache so duplicate-hit suppression stays bounded.
-    @return nil -- Mutates `ProcessedNonces` in place and returns nothing.
+	@description Removes expired hit nonces from the process-wide cache so duplicate-hit suppression stays bounded.
+	@return nil -- Mutates `ProcessedNonces` in place and returns nothing.
 ]=]
 local function cleanExpiredNonces()
 	local now = os.clock()
@@ -80,9 +80,9 @@ local function cleanExpiredNonces()
 end
 
 --[=[
-    @description Returns the nonce bucket for one attacker and evicts the oldest nonce when the per-attacker cap has been reached.
-    @param attackerUserId number -- Numeric user id for the attacking character.
-    @return table -- Mutable nonce-to-expiry map for the attacker.
+	@description Returns the nonce bucket for one attacker and evicts the oldest nonce when the per-attacker cap has been reached.
+	@param attackerUserId number -- Numeric user id for the attacking character.
+	@return table -- Mutable nonce-to-expiry map for the attacker.
 ]=]
 local function boundNonceMap(attackerUserId: number)
 	local nonceMap = ProcessedNonces[attackerUserId]
@@ -96,7 +96,7 @@ local function boundNonceMap(attackerUserId: number)
 	local oldestNonce: string? = nil
 	local oldestExpiry = math.huge
 	for nonce, expiry in pairs(nonceMap) do
-		count += 1
+		count + = 1
 		if expiry < oldestExpiry then
 			oldestExpiry = expiry
 			oldestNonce = nonce
@@ -111,11 +111,11 @@ local function boundNonceMap(attackerUserId: number)
 end
 
 --[=[
-    @description Scans orchestrator entities for the victim character entity whose instance is a live humanoid model.
-    @param orchestrator any -- Orchestrator that exposes `GetEntities()`.
-    @param victimUserId number -- User id of the player being hit.
-    @return any? -- Matching victim entity when found.
-    @return string? -- Matching victim entity id when found.
+	@description Scans orchestrator entities for the victim character entity whose instance is a live humanoid model.
+	@param orchestrator any -- Orchestrator that exposes `GetEntities()`.
+	@param victimUserId number -- User id of the player being hit.
+	@return any? -- Matching victim entity when found.
+	@return string? -- Matching victim entity id when found.
 ]=]
 local function resolveVictimEntity(orchestrator: any, victimUserId: number): (any?, string?)
 	if type(orchestrator.GetEntities) ~= "function" then
@@ -136,9 +136,9 @@ local function resolveVictimEntity(orchestrator: any, victimUserId: number): (an
 end
 
 --[=[
-    @description Normalizes an entity's `ActiveStatusEffects` field to a safe array for downstream calculations.
-    @param entity any -- Entity that may contain status effect entries.
-    @return table -- Array of active status effect entries, or an empty table.
+	@description Normalizes an entity's `ActiveStatusEffects` field to a safe array for downstream calculations.
+	@param entity any -- Entity that may contain status effect entries.
+	@return table -- Array of active status effect entries, or an empty table.
 ]=]
 local function getActiveStatusEffects(entity: any): { any }
 	local activeStatusEffects = entity and entity.ActiveStatusEffects
@@ -149,13 +149,13 @@ local function getActiveStatusEffects(entity: any): { any }
 end
 
 --[=[
-    @description Multiplies outgoing damage by every active status effect modifier on the attacker, including stack counts.
-    @param orchestrator any -- Orchestrator used to resolve `StatusEffectDefs`.
-    @param entity any -- Attacker entity whose active effects are inspected.
-    @return number -- Final multiplicative damage bonus, defaulting to `1`.
+	@description Multiplies outgoing damage by every active status effect modifier on the attacker, including stack counts.
+	@param orchestrator any -- Orchestrator used to resolve `StatusEffectDefs`.
+	@param entity any -- Attacker entity whose active effects are inspected.
+	@return number -- Final multiplicative damage bonus, defaulting to `1`.
 ]=]
 local function getDamageMultiplier(orchestrator: any, entity: any): number
-	local defs = ModuleLoader.requireSharedModule(orchestrator, "StatusEffectDefs")
+	local defs = ModuleLoader.requireSharedModule(orchestrator,"StatusEffectDefs")
 	local multiplier = 1
 	for _, entry in ipairs(getActiveStatusEffects(entity)) do
 		if typeof(entry) ~= "table" then
@@ -166,7 +166,7 @@ local function getDamageMultiplier(orchestrator: any, entity: any): number
 		local stacks = math.max(tonumber(entry.Stacks) or 1, 1)
 		if effectMultiplier and effectMultiplier > 0 then
 			for _ = 1, stacks do
-				multiplier *= effectMultiplier
+				multiplier * = effectMultiplier
 			end
 		end
 	end
@@ -174,13 +174,13 @@ local function getDamageMultiplier(orchestrator: any, entity: any): number
 end
 
 --[=[
-    @description Accumulates additive incoming damage reduction from victim status effects and clamps the total to 90 percent.
-    @param orchestrator any -- Orchestrator used to resolve `StatusEffectDefs`.
-    @param entity any -- Victim entity whose active effects are inspected.
-    @return number -- Damage reduction ratio in the inclusive range `[0, 0.9]`.
+	@description Accumulates additive incoming damage reduction from victim status effects and clamps the total to 90 percent.
+	@param orchestrator any -- Orchestrator used to resolve `StatusEffectDefs`.
+	@param entity any -- Victim entity whose active effects are inspected.
+	@return number -- Damage reduction ratio in the inclusive range `[0, 0.9]`.
 ]=]
 local function getDamageReduction(orchestrator: any, entity: any): number
-	local defs = ModuleLoader.requireSharedModule(orchestrator, "StatusEffectDefs")
+	local defs = ModuleLoader.requireSharedModule(orchestrator,"StatusEffectDefs")
 	local reduction = 0
 	for _, entry in ipairs(getActiveStatusEffects(entity)) do
 		if typeof(entry) ~= "table" then
@@ -190,20 +190,20 @@ local function getDamageReduction(orchestrator: any, entity: any): number
 		local effectReduction = tonumber(def and def.DamageReduction)
 		local stacks = math.max(tonumber(entry.Stacks) or 1, 1)
 		if effectReduction and effectReduction > 0 then
-			reduction += effectReduction * stacks
+			reduction + = effectReduction * stacks
 		end
 	end
 	return math.clamp(reduction, 0, 0.9)
 end
 
 --[=[
-    @description Resolves the equipped weapon data for the attacker and asks `DamageCalculator` for its base damage, falling back to 10 when weapon metadata is unavailable.
-    @param orchestrator any -- Orchestrator used to resolve player entities and shared modules.
-    @param attackerEntity any -- Character entity that owns the attacking player entity id.
-    @return number -- Base damage value used before block and status-effect adjustments.
+	@description Resolves the equipped weapon data for the attacker and asks `DamageCalculator` for its base damage, falling back to 10 when weapon metadata is unavailable.
+	@param orchestrator any -- Orchestrator used to resolve player entities and shared modules.
+	@param attackerEntity any -- Character entity that owns the attacking player entity id.
+	@return number -- Base damage value used before block and status-effect adjustments.
 ]=]
 local function resolveWeaponBaseDamage(orchestrator: any, attackerEntity: any): number
-	local DamageCalculator = ModuleLoader.requireSharedModule(orchestrator, "DamageCalculator")
+	local DamageCalculator = ModuleLoader.requireSharedModule(orchestrator,"DamageCalculator")
 	local baseDamage = 10
 	local playerEntityId = attackerEntity and attackerEntity.PlayerEntityId
 	if typeof(playerEntityId) ~= "string" or playerEntityId == "" then
@@ -244,10 +244,10 @@ local function resolveWeaponBaseDamage(orchestrator: any, attackerEntity: any): 
 end
 
 --[=[
-    @description Spawns a transient floating billboard at the victim position and animates the rounded damage amount upward before cleanup.
-    @param position Vector3 -- World-space anchor position for the billboard.
-    @param damage number -- Final damage value to display.
-    @return nil -- Creates temporary instances and schedules their destruction.
+	@description Spawns a transient floating billboard at the victim position and animates the rounded damage amount upward before cleanup.
+	@param position Vector3 -- World-space anchor position for the billboard.
+	@param damage number -- Final damage value to display.
+	@return nil -- Creates temporary instances and schedules their destruction.
 ]=]
 local function showDamageText(position: Vector3, damage: number)
 	local lifetime = 1.5
@@ -299,17 +299,10 @@ local function showDamageText(position: Vector3, damage: number)
 		end
 	end)
 end
---[=[
-	@description Handles `RegisterStates` for `DamageJob`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DamageJob:RegisterStates()
---[=[
-	@state Validate
-	@description Handles the `Validate` state for `DamageJob`.
-]=]
+
 
 self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -344,18 +337,15 @@ self:AddState("Validate", {
 
 			local attackName = if typeof(fsm.AttackName) == "string" and fsm.AttackName ~= ""
 				then fsm.AttackName
-				else "BasicAttack"
+				else"BasicAttack"
 			fsm.Context.AttackName = attackName
 			fsm.Context._attackerEntity = attackerEntity
 			fsm.Context._attackerUserId = attackerUserId
 			fsm.Context._nonce = string.format("%d:%s:%.6f", attackerUserId, attackName, os.clock())
 			fsm.State = "CheckHitNonce"
 		end,
-	}, { "CheckHitNonce", "Failed" })
---[=[
-	@state CheckHitNonce
-	@description Handles the `CheckHitNonce` state for `DamageJob`.
-]=]
+	}, {"CheckHitNonce","Failed" })
+
 
 self:AddState("CheckHitNonce", {
 		OnEnter = function(_, fsm)
@@ -376,11 +366,8 @@ self:AddState("CheckHitNonce", {
 			nonceMap[nonce] = os.clock() + NONCE_EXPIRY
 			fsm.State = "ResolveVictim"
 		end,
-	}, { "ResolveVictim", "Failed" })
---[=[
-	@state ResolveVictim
-	@description Handles the `ResolveVictim` state for `DamageJob`.
-]=]
+	}, {"ResolveVictim","Failed" })
+
 
 self:AddState("ResolveVictim", {
 		OnEnter = function(_, fsm)
@@ -416,16 +403,13 @@ self:AddState("ResolveVictim", {
 			fsm.Context._isVictimBlocking = victimEntity.IsBlocking == true
 			fsm.State = "ComputeDamage"
 		end,
-	}, { "ComputeDamage", "Failed" })
---[=[
-	@state ComputeDamage
-	@description Handles the `ComputeDamage` state for `DamageJob`.
-]=]
+	}, {"ComputeDamage","Failed" })
+
 
 self:AddState("ComputeDamage", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
-			local DamageCalculator = ModuleLoader.requireSharedModule(orchestrator, "DamageCalculator")
+			local DamageCalculator = ModuleLoader.requireSharedModule(orchestrator,"DamageCalculator")
 			local attackerEntity = fsm.Context._attackerEntity
 			if not orchestrator or not attackerEntity then
 				fsm:Fail("Attacker context missing")
@@ -435,16 +419,13 @@ self:AddState("ComputeDamage", {
 			local explicitBaseDamage = tonumber(fsm.BaseDamage)
 			local baseDamage = explicitBaseDamage or resolveWeaponBaseDamage(orchestrator, attackerEntity)
 			local computedDamage = DamageCalculator.Compute(baseDamage, fsm.Context._isVictimBlocking == true)
-			computedDamage *= getDamageMultiplier(orchestrator, attackerEntity)
-			computedDamage *= (1 - getDamageReduction(orchestrator, fsm.Context._victimEntity))
+			computedDamage * = getDamageMultiplier(orchestrator, attackerEntity)
+			computedDamage * = (1 - getDamageReduction(orchestrator, fsm.Context._victimEntity))
 			fsm.Context._computedDamage = math.max(0, math.floor(computedDamage + 0.5))
 			fsm.State = "ApplyDamage"
 		end,
-	}, { "ApplyDamage", "Failed" })
---[=[
-	@state ApplyDamage
-	@description Handles the `ApplyDamage` state for `DamageJob`.
-]=]
+	}, {"ApplyDamage","Failed" })
+
 
 self:AddState("ApplyDamage", {
 		OnEnter = function(_, fsm)
@@ -465,15 +446,12 @@ self:AddState("ApplyDamage", {
 			end
 			fsm.State = "EmitHitReact"
 		end,
-	}, { "EmitHitReact", "Failed" })
---[=[
-	@state EmitHitReact
-	@description Handles the `EmitHitReact` state for `DamageJob`.
-]=]
+	}, {"EmitHitReact","Failed" })
+
 
 self:AddState("EmitHitReact", {
 		OnEnter = function(_, fsm)
-			local IntentSchema = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(), "IntentSchema")
+			local IntentSchema = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(),"IntentSchema")
 			local victimEntity = fsm.Context._victimEntity
 			local computedDamage = fsm.Context._computedDamage
 			if not victimEntity or typeof(computedDamage) ~= "number" then
@@ -495,11 +473,8 @@ self:AddState("EmitHitReact", {
 			})
 			fsm.State = "EmitDamageText"
 		end,
-	}, { "EmitDamageText", "Failed" })
---[=[
-	@state EmitDamageText
-	@description Handles the `EmitDamageText` state for `DamageJob`.
-]=]
+	}, {"EmitDamageText","Failed" })
+
 
 self:AddState("EmitDamageText", {
 		OnEnter = function(_, fsm)
@@ -510,11 +485,8 @@ self:AddState("EmitDamageText", {
 			end
 			fsm.State = "FireEventBus"
 		end,
-	}, { "FireEventBus", "Failed" })
---[=[
-	@state FireEventBus
-	@description Handles the `FireEventBus` state for `DamageJob`.
-]=]
+	}, {"FireEventBus","Failed" })
+
 
 self:AddState("FireEventBus", {
 		OnEnter = function(_, fsm)
@@ -547,11 +519,8 @@ self:AddState("FireEventBus", {
 			})
 			fsm.State = "ApplyOnHitEffects"
 		end,
-	}, { "ApplyOnHitEffects", "Failed" })
---[=[
-	@state ApplyOnHitEffects
-	@description Handles the `ApplyOnHitEffects` state for `DamageJob`.
-]=]
+	}, {"ApplyOnHitEffects","Failed" })
+
 
 self:AddState("ApplyOnHitEffects", {
 		OnEnter = function(_, fsm)
@@ -562,8 +531,8 @@ self:AddState("ApplyOnHitEffects", {
 				local playerEntityId = attackerEntity.PlayerEntityId
 				local playerEntity = if typeof(playerEntityId) == "string" then fsm:GetEntity(playerEntityId) else nil
 				if playerEntity then
-					local talentTreeDefs = ModuleLoader.requireSharedModule(orchestrator, "TalentTreeDefs")
-					local statusEffectHelper = ModuleLoader.requireSharedModule(orchestrator, "StatusEffectHelper")
+					local talentTreeDefs = ModuleLoader.requireSharedModule(orchestrator,"TalentTreeDefs")
+					local statusEffectHelper = ModuleLoader.requireSharedModule(orchestrator,"StatusEffectHelper")
 					local passiveEffects = talentTreeDefs.GetMergedPassiveEffects(playerEntity)
 					if typeof(passiveEffects.BuffOnHit) == "string" and passiveEffects.BuffOnHit ~= "" then
 						statusEffectHelper.Apply(orchestrator, victimEntityId, passiveEffects.BuffOnHit)
@@ -572,25 +541,25 @@ self:AddState("ApplyOnHitEffects", {
 			end
 			fsm.State = "Completed"
 		end,
-	}, { "Completed", "Failed" })
+	}, {"Completed","Failed" })
 --[=[
 	@state Completed
-	@description Handles the `Completed` terminal state for `DamageJob`.
+	@description Terminal success sink reached after damage is applied, hit-react replication is emitted, floating damage text is spawned, event buses fire, and passive on-hit effects are queued. `OnEnter` is a no-op.
+		Transitions: none.
+		Writes: none.
 ]=]
 
 self:AddState("Completed", function() end, {})
 --[=[
 	@state Failed
-	@description Handles the `Failed` terminal state for `DamageJob`.
+	@description Terminal failure sink for invalid attacker/victim context, duplicate hit nonces, or damage computation errors. `OnEnter` is a no-op and `OnCleanup` performs no additional rollback work.
+		Transitions: none.
+		Writes: none.
 ]=]
 
 self:AddState("Failed", function() end, {})
 end
---[=[
-	@description Implements `DamageJob.OnCleanup`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DamageJob:OnCleanup() end
 

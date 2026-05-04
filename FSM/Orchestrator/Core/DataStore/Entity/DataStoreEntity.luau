@@ -1,8 +1,5 @@
 --!strict
---[=[
-	@module DataStoreEntity
-	@description Defines the `DataStoreEntity` module and its exported API.
-]=]
+
 
 local DataStoreService = game:GetService("DataStoreService")
 
@@ -15,43 +12,25 @@ local DataStoreEntity = {
 		}
 	}
 }
---[=[
-	@description Returns the data produced by `DataStoreEntity.GetContext`.
-	@param params any -- `params` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreEntity:GetContext(params: any)
 	return {
 		Orchestrator = params.Context and params.Context.Orchestrator
 	}
 end
---[=[
-	@description Implements `DataStoreEntity.ApplyChanges`.
-	@param changes any -- `changes` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreEntity:ApplyChanges(changes)
 
 end
---[=[
-	@description Handles `Initialize` for `DataStoreEntity`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreEntity:Initialize()
 	self.ActiveRequests = 0
 	self.RateLimitBudget = 60 -- Placeholder/Visual
 end
---[=[
-	@description Returns the data produced by `DataStoreEntity.GetAsync`.
-	@param datastoreName string -- `datastoreName` input parameter.
-	@param key string -- `key` input parameter.
-	@param maxRetries number? -- `maxRetries` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreEntity:GetAsync(datastoreName: string, key: string, maxRetries: number?)
 	return self:_ExecuteRequest(function()
@@ -61,11 +40,6 @@ function DataStoreEntity:GetAsync(datastoreName: string, key: string, maxRetries
 end
 --[=[
 	@description Updates module state through `DataStoreEntity.SetAsync`.
-	@param datastoreName string -- `datastoreName` input parameter.
-	@param key string -- `key` input parameter.
-	@param value any -- `value` input parameter.
-	@param maxRetries number? -- `maxRetries` input parameter.
-	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function DataStoreEntity:SetAsync(datastoreName: string, key: string, value: any, maxRetries: number?)
@@ -74,14 +48,7 @@ function DataStoreEntity:SetAsync(datastoreName: string, key: string, value: any
 		return ds:SetAsync(key, value)
 	end, maxRetries)
 end
---[=[
-	@description Implements `DataStoreEntity.UpdateAsync`.
-	@param datastoreName string -- `datastoreName` input parameter.
-	@param key string -- `key` input parameter.
-	@param transform (any)->any -- `transform` input parameter.
-	@param maxRetries number? -- `maxRetries` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreEntity:UpdateAsync(datastoreName: string, key: string, transform: (any)->any, maxRetries: number?)
 	return self:_ExecuteRequest(function()
@@ -89,13 +56,7 @@ function DataStoreEntity:UpdateAsync(datastoreName: string, key: string, transfo
 		return ds:UpdateAsync(key, transform)
 	end, maxRetries)
 end
---[=[
-	@description Implements `DataStoreEntity.RemoveAsync`.
-	@param datastoreName string -- `datastoreName` input parameter.
-	@param key string -- `key` input parameter.
-	@param maxRetries number? -- `maxRetries` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreEntity:RemoveAsync(datastoreName: string, key: string, maxRetries: number?)
 	return self:_ExecuteRequest(function()
@@ -103,12 +64,7 @@ function DataStoreEntity:RemoveAsync(datastoreName: string, key: string, maxRetr
 		return ds:RemoveAsync(key)
 	end, maxRetries)
 end
---[=[
-	@description Implements `DataStoreEntity._ExecuteRequest`.
-	@param requestFn any -- `requestFn` input parameter.
-	@param maxRetries any -- `maxRetries` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function DataStoreEntity:_ExecuteRequest(requestFn, maxRetries)
 	local Orchestrator = self.Orchestrator

@@ -1,14 +1,11 @@
 --!strict
---[=[
-	@module InputFSM
-	@description Defines the `InputFSM` state machine module and its exported API.
-]=]
+
 
 local InputFSM = {
 	Name = "InputFSM",
 	className = "InputFSM",
-	validStates = { "Normal", "ComboMode", "HeldAttack", "Completed", "Failed" },
-	terminalStates = { "Completed", "Failed" },
+	validStates = {"Normal","ComboMode","HeldAttack","Completed","Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Normal",
 }
 
@@ -24,31 +21,21 @@ local function writeInputMode(fsm: any, mode: string)
 		charEntity.ActionOverlay = if mode == "Normal" then (charEntity.ActionOverlay or "None") else mode
 	end
 end
---[=[
-	@description Handles `RegisterStates` for `InputFSM`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function InputFSM:RegisterStates()
-	--[=[
-		@state Normal
-		@description Handles the `Normal` state for `InputFSM`.
-	]=]
+
 
 	self:AddState("Normal", {
 		OnEnter = function(_, _fsm)
 			-- Normal input mode — all bindings active
 		end,
-	}, { "ComboMode", "HeldAttack" })
-	--[=[
-		@state ComboMode
-		@description Handles the `ComboMode` state for `InputFSM`.
-	]=]
+	}, {"ComboMode","HeldAttack" })
+
 
 	self:AddState("ComboMode", {
 		OnEnter = function(_, fsm)
-			writeInputMode(fsm, "ComboMode")
+			writeInputMode(fsm,"ComboMode")
 			fsm.Context._comboBuffer = {}
 			fsm.Context._comboPointer = 1
 		end,
@@ -58,38 +45,35 @@ function InputFSM:RegisterStates()
 		end,
 		Timeout = KEYSTROKE_TIMEOUT,
 		OnTimeout = "Normal",
-	}, { "Normal" })
-	--[=[
-		@state HeldAttack
-		@description Handles the `HeldAttack` state for `InputFSM`.
-	]=]
+	}, {"Normal" })
+
 
 	self:AddState("HeldAttack", {
 		OnEnter = function(_, fsm)
-			writeInputMode(fsm, "HeldAttack")
+			writeInputMode(fsm,"HeldAttack")
 		end,
 		OnLeave = function(_, fsm)
-			writeInputMode(fsm, "None")
+			writeInputMode(fsm,"None")
 		end,
-	}, { "Normal" })
+	}, {"Normal" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `InputFSM`.
-	]=]
+	@state Completed
+	@description Terminal success sink reserved for explicit shutdown of the input-mode FSM. Runtime behavior normally stays inside `Normal`, `ComboMode`, and `HeldAttack`, so `OnEnter` is a no-op.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `InputFSM`.
-	]=]
+	@state Failed
+	@description Terminal failure sink reserved for future input-processing errors. The current implementation does not route here, and `OnEnter` performs no writes.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Failed", function() end, {})
 end
---[=[
-	@description Implements `InputFSM.EnterComboMode`.
-	@param fsm any -- `fsm` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
-]=]
+
 
 function InputFSM.EnterComboMode(fsm: any): boolean
 	if fsm.State == "ComboMode" then
@@ -99,11 +83,7 @@ function InputFSM.EnterComboMode(fsm: any): boolean
 	fsm.State = "ComboMode"
 	return true
 end
---[=[
-	@description Implements `InputFSM.EnterHeldAttack`.
-	@param fsm any -- `fsm` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
-]=]
+
 
 function InputFSM.EnterHeldAttack(fsm: any): boolean
 	if fsm.State ~= "Normal" then
@@ -112,31 +92,19 @@ function InputFSM.EnterHeldAttack(fsm: any): boolean
 	fsm.State = "HeldAttack"
 	return true
 end
---[=[
-	@description Implements `InputFSM.ReleaseHeldAttack`.
-	@param fsm any -- `fsm` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function InputFSM.ReleaseHeldAttack(fsm: any)
 	if fsm.State == "HeldAttack" then
 		fsm.State = "Normal"
 	end
 end
---[=[
-	@description Returns whether `InputFSM` is combo mode.
-	@param fsm any -- `fsm` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
-]=]
+
 
 function InputFSM.IsComboMode(fsm: any): boolean
 	return fsm.State == "ComboMode"
 end
---[=[
-	@description Returns whether `InputFSM` is held attack.
-	@param fsm any -- `fsm` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
-]=]
+
 
 function InputFSM.IsHeldAttack(fsm: any): boolean
 	return fsm.State == "HeldAttack"

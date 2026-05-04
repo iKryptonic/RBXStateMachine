@@ -13,11 +13,7 @@ local Registry = {
 }
 
 local Initialized = false
---[=[
-	@description Handles `Initialize` for `Registry`.
-	@param Util any -- `Util` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Registry.Initialize(Util)
 	if Initialized then return end
@@ -25,22 +21,17 @@ function Registry.Initialize(Util)
 	Registry.Logger = Util.Logger.new({ Name = "Registry" })
 
 	Registry.Logger:Log({ Level = "INFO", Message = "Registry initialized" })
-	
+
 	Registry.EntityRegistered = Util.Signal.new()
 	Registry.EntityUnregistered = Util.Signal.new()
 	Registry.StateMachineRegistered = Util.Signal.new()
 end
 
 local function ValidateRequest()
-	assert(Initialized, "Registry not initialized")
-	assert(type(Registry.Logger) == "table", "Logger not initialized")
+	assert(Initialized,"Registry not initialized")
+	assert(type(Registry.Logger) == "table","Logger not initialized")
 end
---[=[
-	@description Handles `RegisterEntity` for `Registry`.
-	@param id string -- `id` input parameter.
-	@param entity any -- `entity` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Registry.RegisterEntity(id: string, entity: any)
 	ValidateRequest()
@@ -48,11 +39,7 @@ function Registry.RegisterEntity(id: string, entity: any)
 	Registry.Logger:Log({ Level = "INFO", Message = "Entity registered: " .. id })
 	Registry.EntityRegistered:Fire(id, entity)
 end
---[=[
-	@description Implements `Registry.UnregisterEntity`.
-	@param id string -- `id` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Registry.UnregisterEntity(id: string)
 	ValidateRequest()
@@ -63,22 +50,13 @@ function Registry.UnregisterEntity(id: string)
 		Registry.EntityUnregistered:Fire(id, entity)
 	end
 end
---[=[
-	@description Returns the data produced by `Registry.GetEntity`.
-	@param id string -- `id` input parameter.
-	@return any? -- Return value produced by the implementation, if any.
-]=]
+
 
 function Registry.GetEntity(id: string): any?
 	ValidateRequest()
 	return Registry.Entities[id]
 end
---[=[
-	@description Handles `RegisterStateMachine` for `Registry`.
-	@param id string -- `id` input parameter.
-	@param stateMachine any -- `stateMachine` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Registry.RegisterStateMachine(id: string, stateMachine: any)
 	ValidateRequest()
@@ -86,22 +64,14 @@ function Registry.RegisterStateMachine(id: string, stateMachine: any)
 	Registry.Logger:Log({ Level = "INFO", Message = "State Machine registered: " .. id })
 	Registry.StateMachineRegistered:Fire(id, stateMachine)
 end
---[=[
-	@description Implements `Registry.UnregisterStateMachine`.
-	@param id string -- `id` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Registry.UnregisterStateMachine(id: string)
 	ValidateRequest()
 	Registry.StateMachines[id] = nil
 	Registry.Logger:Log({ Level = "INFO", Message = "State Machine unregistered: " .. id })
 end
---[=[
-	@description Returns the data produced by `Registry.GetStateMachine`.
-	@param id string -- `id` input parameter.
-	@return any? -- Return value produced by the implementation, if any.
-]=]
+
 
 function Registry.GetStateMachine(id: string): any?
 	ValidateRequest()
@@ -120,12 +90,7 @@ end
 	@writes Registry.EntityPools[className]
 ]=]
 local MAX_POOL_SIZE = 64
---[=[
-	@description Implements `Registry.PoolEntity`.
-	@param className string -- `className` input parameter.
-	@param entity any -- `entity` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Registry.PoolEntity(className: string, entity: any)
 	ValidateRequest()
@@ -138,11 +103,7 @@ function Registry.PoolEntity(className: string, entity: any)
 	table.insert(Registry.EntityPools[className], entity)
 	Registry.Logger:Log({ Level = "DEBUG", Message = "Entity pooled: " .. className })
 end
---[=[
-	@description Returns the data produced by `Registry.GetPooledEntity`.
-	@param className string -- `className` input parameter.
-	@return any? -- Return value produced by the implementation, if any.
-]=]
+
 
 function Registry.GetPooledEntity(className: string): any?
 	ValidateRequest()
@@ -154,31 +115,19 @@ function Registry.GetPooledEntity(className: string): any?
 	Registry.Logger:Log({ Level = "DEBUG", Message = "Entity not found in pool: " .. className })
 	return nil
 end
---[=[
-	@description Returns the data produced by `Registry.GetAllEntities`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Registry.GetAllEntities()
 	ValidateRequest()
 	return table.clone(Registry.Entities)
 end
---[=[
-	@description Returns the data produced by `Registry.GetAllStateMachines`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
 
-function Registry.GetAllStateMachines()	
+
+function Registry.GetAllStateMachines()
 	ValidateRequest()
 	return table.clone(Registry.StateMachines)
 end
---[=[
-	@description Implements `Registry.Destroy`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Registry.Destroy()
 	if Registry.EntityRegistered then Registry.EntityRegistered:Destroy() end

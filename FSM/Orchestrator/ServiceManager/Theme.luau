@@ -1,8 +1,5 @@
 --!strict
---[=[
-	@module Theme
-	@description Defines the `Theme` module and its exported API.
-]=]
+
 
 local Theme = {}
 
@@ -12,33 +9,33 @@ local Theme = {}
 
 Theme.Colors = {
 	-- Surfaces (deep-space glass layers)
-	RootBG          = Color3.fromRGB(8, 8, 14),
-	GlassPrimary    = Color3.fromRGB(14, 14, 22),
-	GlassSecondary  = Color3.fromRGB(20, 20, 30),
-	GlassTertiary   = Color3.fromRGB(26, 26, 38),
-	GlassOverlay    = Color3.fromRGB(32, 32, 46),
-	CardBG          = Color3.fromRGB(22, 22, 34),
+	RootBG = Color3.fromRGB(8, 8, 14),
+	GlassPrimary = Color3.fromRGB(14, 14, 22),
+	GlassSecondary = Color3.fromRGB(20, 20, 30),
+	GlassTertiary = Color3.fromRGB(26, 26, 38),
+	GlassOverlay = Color3.fromRGB(32, 32, 46),
+	CardBG = Color3.fromRGB(22, 22, 34),
 
 	-- Borders
-	BorderPrimary   = Color3.fromRGB(48, 48, 66),
-	BorderSubtle    = Color3.fromRGB(36, 36, 50),
-	BorderGlow      = Color3.fromRGB(56, 152, 255),
+	BorderPrimary = Color3.fromRGB(48, 48, 66),
+	BorderSubtle = Color3.fromRGB(36, 36, 50),
+	BorderGlow = Color3.fromRGB(56, 152, 255),
 
 	-- Semantic
-	Accent          = Color3.fromRGB(56, 152, 255),
-	AccentDim       = Color3.fromRGB(36, 100, 180),
-	Success         = Color3.fromRGB(60, 210, 120),
-	Warning         = Color3.fromRGB(245, 200, 70),
-	Danger          = Color3.fromRGB(240, 80, 80),
-	Purple          = Color3.fromRGB(155, 115, 255),
-	Cyan            = Color3.fromRGB(0, 210, 225),
-	Orange          = Color3.fromRGB(250, 170, 75),
+	Accent = Color3.fromRGB(56, 152, 255),
+	AccentDim = Color3.fromRGB(36, 100, 180),
+	Success = Color3.fromRGB(60, 210, 120),
+	Warning = Color3.fromRGB(245, 200, 70),
+	Danger = Color3.fromRGB(240, 80, 80),
+	Purple = Color3.fromRGB(155, 115, 255),
+	Cyan = Color3.fromRGB(0, 210, 225),
+	Orange = Color3.fromRGB(250, 170, 75),
 
 	-- Text
-	TextPrimary     = Color3.fromRGB(232, 234, 242),
-	TextSecondary   = Color3.fromRGB(138, 142, 160),
-	TextMuted       = Color3.fromRGB(82, 86, 104),
-	TextOnAccent    = Color3.fromRGB(255, 255, 255),
+	TextPrimary = Color3.fromRGB(232, 234, 242),
+	TextSecondary = Color3.fromRGB(138, 142, 160),
+	TextMuted = Color3.fromRGB(82, 86, 104),
+	TextOnAccent = Color3.fromRGB(255, 255, 255),
 }
 
 Theme.Radius = {
@@ -49,25 +46,25 @@ Theme.Radius = {
 }
 
 Theme.Transparency = {
-	Glass       = 0.06,
-	Overlay     = 0.35,
-	HoverLift   = 0.04,
-	SubPane     = 0.08,
+	Glass = 0.06,
+	Overlay = 0.35,
+	HoverLift = 0.04,
+	SubPane = 0.08,
 }
 
 Theme.Font = {
-	Primary   = Font.fromEnum(Enum.Font.GothamMedium),
+	Primary = Font.fromEnum(Enum.Font.GothamMedium),
 	Secondary = Font.fromEnum(Enum.Font.Gotham),
-	Mono      = Font.fromEnum(Enum.Font.RobotoMono),
-	Bold      = Font.fromEnum(Enum.Font.GothamBold),
+	Mono = Font.fromEnum(Enum.Font.RobotoMono),
+	Bold = Font.fromEnum(Enum.Font.GothamBold),
 }
 
 Theme.TextSize = {
-	Heading   = 16,
-	Body      = 13,
-	Caption   = 11,
-	Tiny      = 9,
-	Badge     = 10,
+	Heading = 16,
+	Body = 13,
+	Caption = 11,
+	Tiny = 9,
+	Badge = 10,
 }
 
 -- ══════════════════════════════════════════════════════════════
@@ -75,20 +72,20 @@ Theme.TextSize = {
 -- ══════════════════════════════════════════════════════════════
 
 Theme.ZIndex = {
-	Background     = 0,    -- LayerHost backdrop
-	LayerContent   = 5,    -- Default content
-	Row            = 10,   -- Interactive rows / hit overlays
-	RowHover       = 12,   -- Hover effects on rows
-	Header         = 20,   -- Headers / perf strips above content
-	Toolbar        = 25,   -- Toolbars / search bars
-	Sidebar        = 30,   -- Sidebar buttons
-	Breadcrumb     = 35,   -- Breadcrumb bar
-	StatusBar      = 38,   -- Status bar
-	TitleBar       = 40,   -- Title bar / window chrome
-	Autocomplete   = 60,   -- Console autocomplete popup
-	Tooltip        = 80,   -- Tooltip layer
-	Toast          = 100,  -- Insight toasts
-	Modal          = 200,  -- Modal overlays / dialogs
+	Background = 0, -- LayerHost backdrop
+	LayerContent = 5, -- Default content
+	Row = 10, -- Interactive rows / hit overlays
+	RowHover = 12, -- Hover effects on rows
+	Header = 20, -- Headers / perf strips above content
+	Toolbar = 25, -- Toolbars / search bars
+	Sidebar = 30, -- Sidebar buttons
+	Breadcrumb = 35, -- Breadcrumb bar
+	StatusBar = 38, -- Status bar
+	TitleBar = 40, -- Title bar / window chrome
+	Autocomplete = 60, -- Console autocomplete popup
+	Tooltip = 80, -- Tooltip layer
+	Toast = 100, -- Insight toasts
+	Modal = 200, -- Modal overlays / dialogs
 }
 
 -- ══════════════════════════════════════════════════════════════
@@ -96,9 +93,9 @@ Theme.ZIndex = {
 -- ══════════════════════════════════════════════════════════════
 
 Theme.Tween = {
-	Fast  = TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-	Med   = TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
-	Slow  = TweenInfo.new(0.45, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+	Fast = TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+	Med = TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+	Slow = TweenInfo.new(0.45, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
 	Bounce = TweenInfo.new(0.35, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
 	Expand = TweenInfo.new(0.32, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out),
 	Collapse = TweenInfo.new(0.22, Enum.EasingStyle.Exponential, Enum.EasingDirection.In),
@@ -110,42 +107,38 @@ Theme.Tween = {
 -- ══════════════════════════════════════════════════════════════
 
 Theme.SubsystemColors = {
-	TASKS     = Theme.Colors.Accent,
-	FSM       = Theme.Colors.Cyan,
-	ENTITY    = Theme.Colors.Success,
-	NETWORK   = Theme.Colors.Orange,
+	TASKS = Theme.Colors.Accent,
+	FSM = Theme.Colors.Cyan,
+	ENTITY = Theme.Colors.Success,
+	NETWORK = Theme.Colors.Orange,
 	DATASTORE = Theme.Colors.Purple,
-	INSIGHTS  = Theme.Colors.Warning,
-	CONSOLE   = Color3.fromRGB(180, 220, 255),
-	LOGS      = Color3.fromRGB(200, 160, 240),
+	INSIGHTS = Theme.Colors.Warning,
+	CONSOLE = Color3.fromRGB(180, 220, 255),
+	LOGS = Color3.fromRGB(200, 160, 240),
 }
 
 Theme.SubsystemIcons = {
-	TASKS     = "rbxassetid://7733715400", -- list icon
-	FSM       = "rbxassetid://7734053495", -- workflow icon
-	ENTITY    = "rbxassetid://7733717504", -- cube icon
-	NETWORK   = "rbxassetid://7733960981", -- globe icon
+	TASKS = "rbxassetid://7733715400", -- list icon
+	FSM = "rbxassetid://7734053495", -- workflow icon
+	ENTITY = "rbxassetid://7733717504", -- cube icon
+	NETWORK = "rbxassetid://7733960981", -- globe icon
 	DATASTORE = "rbxassetid://7734042830", -- database icon
-	INSIGHTS  = "rbxassetid://7743871164", -- lightbulb icon
-	CONSOLE   = "rbxassetid://7734053495", -- terminal icon
-	LOGS      = "rbxassetid://7733715400", -- log icon
+	INSIGHTS = "rbxassetid://7743871164", -- lightbulb icon
+	CONSOLE = "rbxassetid://7734053495", -- terminal icon
+	LOGS = "rbxassetid://7733715400", -- log icon
 }
 
 Theme.SubsystemNames = {
-	TASKS     = "Task Scheduler",
-	FSM       = "State Machines",
-	ENTITY    = "Entity Inspector",
-	NETWORK   = "Network Hub",
+	TASKS = "Task Scheduler",
+	FSM = "State Machines",
+	ENTITY = "Entity Inspector",
+	NETWORK = "Network Hub",
 	DATASTORE = "Data Store",
-	INSIGHTS  = "Insights",
-	CONSOLE   = "Console",
-	LOGS      = "Log Viewer",
+	INSIGHTS = "Insights",
+	CONSOLE = "Console",
+	LOGS = "Log Viewer",
 }
---[=[
-	@description Returns the data produced by `Theme.GetDepthBackground`.
-	@param depth number -- `depth` input parameter.
-	@return Color3 -- Return value produced by the implementation, if any.
-]=]
+
 
 function Theme.GetDepthBackground(depth: number): Color3
 	local base = Theme.Colors.GlassPrimary
@@ -156,21 +149,12 @@ function Theme.GetDepthBackground(depth: number): Color3
 		math.min(base.B + lift, 1)
 	)
 end
---[=[
-	@description Returns the data produced by `Theme.GetDepthTransparency`.
-	@param depth number -- `depth` input parameter.
-	@return number -- Return value produced by the implementation, if any.
-]=]
+
 
 function Theme.GetDepthTransparency(depth: number): number
 	return math.max(0, Theme.Transparency.Glass - depth * 0.01)
 end
---[=[
-	@description Implements `Theme.ApplyGlass`.
-	@param frame Frame -- `frame` input parameter.
-	@param depth number? -- `depth` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Theme.ApplyGlass(frame: Frame, depth: number?)
 	local d = depth or 0
@@ -194,11 +178,7 @@ function Theme.ApplyGlass(frame: Frame, depth: number?)
 		stroke.Parent = frame
 	end
 end
---[=[
-	@description Creates the result managed by `Theme.CreateLabel`.
-	@param props { Text: string?, Size: UDim2?, Position: UDim2?, AnchorPoint: Vector2?, Color: Color3?, FontSize: number?, FontFace: Font?, Alignment: Enum.TextXAlignment?, Parent: Instance?, } -- `props` input parameter.
-	@return TextLabel -- Return value produced by the implementation, if any.
-]=]
+
 
 function Theme.CreateLabel(props: {
 	Text: string?,
@@ -226,13 +206,7 @@ function Theme.CreateLabel(props: {
 	if props.Parent then label.Parent = props.Parent end
 	return label
 end
---[=[
-	@description Creates the result managed by `Theme.CreateBadge`.
-	@param text string -- `text` input parameter.
-	@param color Color3 -- `color` input parameter.
-	@param parent Instance? -- `parent` input parameter.
-	@return Frame -- Return value produced by the implementation, if any.
-]=]
+
 
 function Theme.CreateBadge(text: string, color: Color3, parent: Instance?): Frame
 	local badge = Instance.new("Frame")
@@ -265,11 +239,7 @@ function Theme.CreateBadge(text: string, color: Color3, parent: Instance?): Fram
 	if parent then badge.Parent = parent end
 	return badge
 end
---[=[
-	@description Creates the result managed by `Theme.CreateIconButton`.
-	@param props { Icon: string?, Label: string?, Size: UDim2?, Color: Color3?, Parent: Instance?, } -- `props` input parameter.
-	@return TextButton -- Return value produced by the implementation, if any.
-]=]
+
 
 function Theme.CreateIconButton(props: {
 	Icon: string?,
@@ -307,13 +277,7 @@ function Theme.CreateIconButton(props: {
 	if props.Parent then btn.Parent = props.Parent end
 	return btn
 end
---[=[
-	@description Returns the data produced by `Theme.GetOrCreateChild`.
-	@param parent Instance -- `parent` input parameter.
-	@param name string -- `name` input parameter.
-	@param factory () -> Instance -- `factory` input parameter.
-	@return (Instance, boolean) -- Return value produced by the implementation, if any.
-]=]
+
 
 function Theme.GetOrCreateChild(parent: Instance, name: string, factory: () -> Instance): (Instance, boolean)
 	local existing = parent:FindFirstChild(name)
@@ -325,12 +289,7 @@ function Theme.GetOrCreateChild(parent: Instance, name: string, factory: () -> I
 	created.Parent = parent
 	return created, true
 end
---[=[
-	@description Implements `Theme.ClearExcept`.
-	@param parent Instance -- `parent` input parameter.
-	@param keep { [string]: true } -- `keep` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Theme.ClearExcept(parent: Instance, keep: { [string]: true })
 	for _, child in ipairs(parent:GetChildren()) do
@@ -340,12 +299,7 @@ function Theme.ClearExcept(parent: Instance, keep: { [string]: true })
 		child:Destroy()
 	end
 end
---[=[
-	@description Implements `Theme.ApplyProps`.
-	@param inst Instance -- `inst` input parameter.
-	@param props { [string]: any } -- `props` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Theme.ApplyProps(inst: Instance, props: { [string]: any })
 	for k, v in pairs(props) do
@@ -366,54 +320,54 @@ end
 -- Arrows, Misc Symbols ranges that ship with the font).
 Theme.Glyph = {
 	-- Status / state
-	Active     = "●",  -- filled circle
-	Inactive   = "○",  -- empty circle
-	Warning    = "↑",  -- triangle (warning)
-	Error      = "✕",  -- multiplication X
-	Success    = "✓",  -- check
-	Failed     = "✕",
-	Stalled    = "·",  -- filled square (paused/blocked)
+	Active = "●", -- filled circle
+	Inactive = "○", -- empty circle
+	Warning = "↑", -- triangle (warning)
+	Error = "✕", -- multiplication X
+	Success = "✓", -- check
+	Failed = "✕",
+	Stalled = "·", -- filled square (paused/blocked)
 
 	-- Directional / arrows
-	Right      = "▶",  -- play / right
-	Left       = "◀",  -- back
-	Up         = "↑",
-	Down       = "↓",
-	Refresh    = "",  -- circular arrow (clockwise)
-	Reload     = "",  -- counter-clockwise (use plain text instead)
-	Back       = "‹",
-	Forward    = "›",
+	Right = "▶", -- play / right
+	Left = "◀", -- back
+	Up = "↑",
+	Down = "↓",
+	Refresh = "", -- circular arrow (clockwise)
+	Reload = "", -- counter-clockwise (use plain text instead)
+	Back = "‹",
+	Forward = "›",
 
 	-- UI affordances
-	Diamond    = "◆",
+	Diamond = "◆",
 	DiamondOut = "◇",
-	Hexagon    = "◇",  -- hex stub (Gotham has no hex)
-	Star       = "★",
-	StarOut    = "☆",
-	Bullet     = "•",
-	GripDot    = "·",
-	GripCorner = "//",  -- bottom-right grip indicator (often available)
-	Search     = "›",  -- not a real magnifying glass; substitute
-	Settings   = "≡",  -- hamburger / list
+	Hexagon = "◇", -- hex stub (Gotham has no hex)
+	Star = "★",
+	StarOut = "☆",
+	Bullet = "•",
+	GripDot = "·",
+	GripCorner = "//", -- bottom-right grip indicator (often available)
+	Search = "›", -- not a real magnifying glass; substitute
+	Settings = "≡", -- hamburger / list
 
 	-- Concept badges (ascii-friendly stand-ins for emoji)
-	Lightning  = "↯",  -- if missing, fall back to text below
-	Lock       = "▣",
-	Unlock     = "▢",
-	Persist    = "◆",  -- "persist" diamond
-	Replicate  = "↗",  -- north-east arrow ("sent over network")
-	Save       = "▽",
-	Trash      = "▽",
-	Clipboard  = "≡",
-	Scroll     = "≡",  -- transition history / list
-	Clock      = "○",  -- approximate
-	History    = "≡",
-	Database   = "▦",
-	Key        = "•",
-	Door       = "▥",
-	Pulse      = "◉",
-	Visualize  = "◆",
-	Metric     = "◆",
+	Lightning = "↯", -- if missing, fall back to text below
+	Lock = "▣",
+	Unlock = "▢",
+	Persist = "◆", -- "persist" diamond
+	Replicate = "↗", -- north-east arrow ("sent over network")
+	Save = "▽",
+	Trash = "▽",
+	Clipboard = "≡",
+	Scroll = "≡", -- transition history / list
+	Clock = "○", -- approximate
+	History = "≡",
+	Database = "▦",
+	Key = "•",
+	Door = "▥",
+	Pulse = "◉",
+	Visualize = "◆",
+	Metric = "◆",
 }
 
 -- ══════════════════════════════════════════════════════════════
@@ -423,16 +377,12 @@ Theme.Glyph = {
 export type RowStat = {
 	Text: string,
 	Color: Color3?,
-	Width: number?,         -- pixels; default 70
-	Mono: boolean?,         -- default true
+	Width: number?, -- pixels; default 70
+	Mono: boolean?, -- default true
 	Align: Enum.TextXAlignment?, -- default Right
-	FontSize: number?,      -- default Caption
+	FontSize: number?, -- default Caption
 }
---[=[
-	@description Creates the result managed by `Theme.CreateRow`.
-	@param props { Name: string, Size: UDim2?, StatusColor: Color3?, StatusPulse: boolean?, Title: string, TitleColor: Color3?, Subtitle: string?, Stats: { RowStat }?, BackgroundColor: Color3?, BackgroundTransparency: number?, LayoutOrder: number?, Parent: Instance?, OnClick: (() -> ())?, } -- `props` input parameter.
-	@return Frame -- Return value produced by the implementation, if any.
-]=]
+
 
 function Theme.CreateRow(props: {
 	Name: string,
@@ -580,11 +530,7 @@ function Theme.CreateRow(props: {
 
 	return row
 end
---[=[
-	@description Implements `Theme.SimulateRowClick`.
-	@param row Frame -- `row` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
-]=]
+
 
 function Theme.SimulateRowClick(row: Frame): boolean
 	if not Theme._clickHandlers then return false end

@@ -1,8 +1,5 @@
 --!strict
---[=[
-	@module InventoryItemFSM
-	@description Defines the `InventoryItemFSM` state machine module and its exported API.
-]=]
+
 
 local Debris = game:GetService("Debris")
 local HttpService = game:GetService("HttpService")
@@ -14,14 +11,14 @@ local InventoryItemFSM = {
 	Name = "InventoryItemFSM",
 	className = "InventoryItemFSM",
 	validStates = {
-		"Validate", "RouteBranch",
-		"CheckCapacity", "AddToInventory",
-		"FindItem", "RemoveFromInventory",
-		"CheckIfEquipped", "UnequipIfNeeded", "SpawnWorldItem",
-		"ResolveSource", "MoveItem",
-		"Commit", "Completed", "Failed",
+		"Validate","RouteBranch",
+		"CheckCapacity","AddToInventory",
+		"FindItem","RemoveFromInventory",
+		"CheckIfEquipped","UnequipIfNeeded","SpawnWorldItem",
+		"ResolveSource","MoveItem",
+		"Commit","Completed","Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Validate",
 }
 
@@ -179,7 +176,7 @@ local function beginUnequipJob(fsm: any, hand: string)
 	end))
 	fsm:Manage(childJob.Failed:Connect(function(reason)
 		if fsm.IsActive and fsm.State == "UnequipIfNeeded" then
-			local suffix = if reason and tostring(reason) ~= "" then ": " .. tostring(reason) else ""
+			local suffix = if reason and tostring(reason) ~= "" then": " .. tostring(reason) else""
 			fsm:Fail("UnEquipJob failed" .. suffix)
 		end
 	end))
@@ -191,17 +188,10 @@ local function beginUnequipJob(fsm: any, hand: string)
 
 	childJob:Start({ State = "ValidateRequest" })
 end
---[=[
-	@description Handles `RegisterStates` for `InventoryItemFSM`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function InventoryItemFSM:RegisterStates()
-	--[=[
-		@state Validate
-		@description Handles the `Validate` state for `InventoryItemFSM`.
-	]=]
+
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -258,11 +248,8 @@ function InventoryItemFSM:RegisterStates()
 
 			fsm.State = "RouteBranch"
 		end,
-	}, { "RouteBranch", "Failed" })
-	--[=[
-		@state RouteBranch
-		@description Handles the `RouteBranch` state for `InventoryItemFSM`.
-	]=]
+	}, {"RouteBranch","Failed" })
+
 
 	self:AddState("RouteBranch", {
 		OnEnter = function(_, fsm)
@@ -279,11 +266,8 @@ function InventoryItemFSM:RegisterStates()
 				fsm:Fail("Unknown operation: " .. tostring(op))
 			end
 		end,
-	}, { "CheckCapacity", "FindItem", "CheckIfEquipped", "ResolveSource", "Failed" })
-	--[=[
-		@state CheckCapacity
-		@description Handles the `CheckCapacity` state for `InventoryItemFSM`.
-	]=]
+	}, {"CheckCapacity","FindItem","CheckIfEquipped","ResolveSource","Failed" })
+
 
 	self:AddState("CheckCapacity", {
 		OnEnter = function(_, fsm)
@@ -303,11 +287,8 @@ function InventoryItemFSM:RegisterStates()
 			context._nextInventory = inventory
 			fsm.State = "AddToInventory"
 		end,
-	}, { "AddToInventory", "Failed" })
-	--[=[
-		@state AddToInventory
-		@description Handles the `AddToInventory` state for `InventoryItemFSM`.
-	]=]
+	}, {"AddToInventory","Failed" })
+
 
 	self:AddState("AddToInventory", {
 		OnEnter = function(_, fsm)
@@ -324,11 +305,8 @@ function InventoryItemFSM:RegisterStates()
 			context._nextInventory = nextInventory
 			fsm.State = "Commit"
 		end,
-	}, { "Commit", "Failed" })
-	--[=[
-		@state FindItem
-		@description Handles the `FindItem` state for `InventoryItemFSM`.
-	]=]
+	}, {"Commit","Failed" })
+
 
 	self:AddState("FindItem", {
 		OnEnter = function(_, fsm)
@@ -357,11 +335,8 @@ function InventoryItemFSM:RegisterStates()
 
 			fsm:Fail("Item not found in Inventory or BagContents")
 		end,
-	}, { "RemoveFromInventory", "Failed" })
-	--[=[
-		@state RemoveFromInventory
-		@description Handles the `RemoveFromInventory` state for `InventoryItemFSM`.
-	]=]
+	}, {"RemoveFromInventory","Failed" })
+
 
 	self:AddState("RemoveFromInventory", {
 		OnEnter = function(_, fsm)
@@ -395,11 +370,8 @@ function InventoryItemFSM:RegisterStates()
 				fsm:Fail("RemoveFromInventory only supports Remove and Drop operations")
 			end
 		end,
-	}, { "Commit", "SpawnWorldItem", "Failed" })
-	--[=[
-		@state CheckIfEquipped
-		@description Handles the `CheckIfEquipped` state for `InventoryItemFSM`.
-	]=]
+	}, {"Commit","SpawnWorldItem","Failed" })
+
 
 	self:AddState("CheckIfEquipped", {
 		OnEnter = function(_, fsm)
@@ -422,11 +394,8 @@ function InventoryItemFSM:RegisterStates()
 			context._equippedHand = equippedHand
 			fsm.State = "UnequipIfNeeded"
 		end,
-	}, { "UnequipIfNeeded", "Failed" })
-	--[=[
-		@state UnequipIfNeeded
-		@description Handles the `UnequipIfNeeded` state for `InventoryItemFSM`.
-	]=]
+	}, {"UnequipIfNeeded","Failed" })
+
 
 	self:AddState("UnequipIfNeeded", {
 		OnEnter = function(_, fsm)
@@ -444,11 +413,8 @@ function InventoryItemFSM:RegisterStates()
 
 			beginUnequipJob(fsm, hand)
 		end,
-	}, { "FindItem", "Failed" })
-	--[=[
-		@state SpawnWorldItem
-		@description Handles the `SpawnWorldItem` state for `InventoryItemFSM`.
-	]=]
+	}, {"FindItem","Failed" })
+
 
 	self:AddState("SpawnWorldItem", {
 		OnEnter = function(_, fsm)
@@ -496,11 +462,8 @@ function InventoryItemFSM:RegisterStates()
 			context._worldItem = worldItem
 			fsm.State = "Commit"
 		end,
-	}, { "Commit", "Failed" })
-	--[=[
-		@state ResolveSource
-		@description Handles the `ResolveSource` state for `InventoryItemFSM`.
-	]=]
+	}, {"Commit","Failed" })
+
 
 	self:AddState("ResolveSource", {
 		OnEnter = function(_, fsm)
@@ -532,11 +495,8 @@ function InventoryItemFSM:RegisterStates()
 			context._sourceIndex = sourceIndex
 			fsm.State = "MoveItem"
 		end,
-	}, { "MoveItem", "Failed" })
-	--[=[
-		@state MoveItem
-		@description Handles the `MoveItem` state for `InventoryItemFSM`.
-	]=]
+	}, {"MoveItem","Failed" })
+
 
 	self:AddState("MoveItem", {
 		OnEnter = function(_, fsm)
@@ -571,11 +531,8 @@ function InventoryItemFSM:RegisterStates()
 			playerEntity[destinationField] = destinationContainer
 			fsm.State = "Commit"
 		end,
-	}, { "Commit", "Failed" })
-	--[=[
-		@state Commit
-		@description Handles the `Commit` state for `InventoryItemFSM`.
-	]=]
+	}, {"Commit","Failed" })
+
 
 	self:AddState("Commit", {
 		OnEnter = function(_, fsm)
@@ -600,17 +557,21 @@ function InventoryItemFSM:RegisterStates()
 			end
 			fsm.State = "Completed"
 		end,
-	}, { "Completed", "Failed" })
+	}, {"Completed","Failed" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `InventoryItemFSM`.
-	]=]
+	@state Completed
+	@description Terminal success sink reached after the add/drop operation has updated player inventory state, replicated the entity, and written the audit log entry. `OnEnter` is a no-op.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `InventoryItemFSM`.
-	]=]
+	@state Failed
+	@description Terminal failure sink for invalid inventory requests, missing entities, or persistence errors during add/drop handling. `OnEnter` is a no-op.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Failed", function(_fsm) end, {})
 end

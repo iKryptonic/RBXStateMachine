@@ -1,47 +1,47 @@
 --!strict
 --[=[
-    @Name AttackJob
-    @Author iKrypto
-    @Description Validates attack prerequisites, acquires the character combat lock, resolves combo data from the equipped weapon, applies temporary movement constraints, plays the combo timeline by emitting intents and spawning `DamageJob` children, then rolls constraints back and releases the lock before ending in the terminal `Completed` state. Any failure stores `_failureReason` and routes through rollback. Historical integrations must target `Completed`; the deprecated `Complete` spelling is intentionally not used.
+	@Name AttackJob
+	@Author iKrypto
+	@Description Validates attack prerequisites, acquires the character combat lock, resolves combo data from the equipped weapon, applies temporary movement constraints, plays the combo timeline by emitting intents and spawning `DamageJob` children, then rolls constraints back and releases the lock before ending in the terminal `Completed` state. Any failure stores `_failureReason` and routes through rollback. Historical integrations must target `Completed`; the deprecated `Complete` spelling is intentionally not used.
 
-    State flow diagram:
-    Validate → AcquireCombatLock → ResolveAttackDef → ApplyMovementConstraints → EmitWindupIntent → PlayTimeline → EmitRecoveryIntent → RollbackConstraints → ReleaseCombatLock → Completed
-             ↘ RollbackConstraints → ReleaseCombatLock → Failed
+	State flow diagram:
+	Validate → AcquireCombatLock → ResolveAttackDef → ApplyMovementConstraints → EmitWindupIntent → PlayTimeline → EmitRecoveryIntent → RollbackConstraints → ReleaseCombatLock → Completed
+				↘ RollbackConstraints → ReleaseCombatLock → Failed
 
-    Context fields:
-    - _characterEntity: any -- resolved attacking character entity.
-    - _character: Model -- resolved attacker character model.
-    - _humanoid: Humanoid -- attacker humanoid used to detect death during the timeline.
-    - _root: BasePart -- attacker root used for victim scans.
-    - _playerEntity: any -- resolved player entity for weapon fallback data.
-    - _weaponId: string -- weapon id whose combo definitions drive the timeline.
-    - _comboSlot: number -- requested combo slot, clamped to at least 1.
-    - _itemData: any -- resolved weapon data module contents.
-    - _comboDef: any -- raw combo definition bucket for the selected slot.
-    - _selectedCombo: table -- concrete combo timeline used for playback.
-    - _comboPointer: number -- sequential pointer chosen for `Type == "Sequential"` combos.
-    - _comboTotalFrames: number -- total frame count that determines when recovery starts.
-    - _attackName: string -- generated attack label propagated into `DamageJob` and event consumers.
-    - _priorConstraints: table -- snapshot of movement fields restored during rollback.
-    - _constraintsApplied: boolean -- whether movement constraints were successfully pushed.
-    - _combatLockApplied: boolean -- whether the `CombatLock` entity field was committed.
-    - _entityLockHeld: boolean -- whether `AcquireLock(fsm.Id)` succeeded and still needs release.
-    - _timelineElapsed: number -- accumulated timeline seconds.
-    - _timelineFrame: number -- current rounded timeline frame.
-    - _timelineFired: table -- per-entry fired markers so each timeline row runs once.
-    - _hitDebounces: table -- victim debounce expiries for repeated damage frames.
-    - _failureReason: string? -- stored reason that determines the `Failed` terminal path after cleanup.
+	Context fields:
+	- _characterEntity: any -- resolved attacking character entity.
+	- _character: Model -- resolved attacker character model.
+	- _humanoid: Humanoid -- attacker humanoid used to detect death during the timeline.
+	- _root: BasePart -- attacker root used for victim scans.
+	- _playerEntity: any -- resolved player entity for weapon fallback data.
+	- _weaponId: string -- weapon id whose combo definitions drive the timeline.
+	- _comboSlot: number -- requested combo slot, clamped to at least 1.
+	- _itemData: any -- resolved weapon data module contents.
+	- _comboDef: any -- raw combo definition bucket for the selected slot.
+	- _selectedCombo: table -- concrete combo timeline used for playback.
+	- _comboPointer: number -- sequential pointer chosen for `Type == "Sequential"` combos.
+	- _comboTotalFrames: number -- total frame count that determines when recovery starts.
+	- _attackName: string -- generated attack label propagated into `DamageJob` and event consumers.
+	- _priorConstraints: table -- snapshot of movement fields restored during rollback.
+	- _constraintsApplied: boolean -- whether movement constraints were successfully pushed.
+	- _combatLockApplied: boolean -- whether the `CombatLock` entity field was committed.
+	- _entityLockHeld: boolean -- whether `AcquireLock(fsm.Id)` succeeded and still needs release.
+	- _timelineElapsed: number -- accumulated timeline seconds.
+	- _timelineFrame: number -- current rounded timeline frame.
+	- _timelineFired: table -- per-entry fired markers so each timeline row runs once.
+	- _hitDebounces: table -- victim debounce expiries for repeated damage frames.
+	- _failureReason: string? -- stored reason that determines the `Failed` terminal path after cleanup.
 
-    Required params:
-    - CharacterEntityId: string -- attacking character entity id.
-    - PlayerEntityId: string? -- optional explicit player entity id; falls back to the character entity link.
-    - ComboSlot: number? -- optional combo slot index; defaults to 1.
+	Required params:
+	- CharacterEntityId: string -- attacking character entity id.
+	- PlayerEntityId: string? -- optional explicit player entity id; falls back to the character entity link.
+	- ComboSlot: number? -- optional combo slot index; defaults to 1.
 ]=]
 
 local HttpService = game:GetService("HttpService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
-assert(Helpers, "Helpers folder not found")
+assert(Helpers,"Helpers folder not found")
 local Shared = ReplicatedStorage:WaitForChild("shared")
 local EquipHelpers = require(Shared:WaitForChild("EquipHelpers"))
 local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
@@ -64,7 +64,7 @@ local AttackJob = {
 		"Completed",
 		"Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Validate",
 }
 
@@ -76,10 +76,10 @@ local DEFAULT_CONSTRAINTS = {
 }
 
 --[=[
-    @description Stores a failure reason and routes the FSM either into rollback or directly into the terminal failure state if cleanup is already underway.
-    @param fsm any -- Active attack FSM instance.
-    @param reason string -- Human-readable failure reason persisted into context.
-    @return nil -- Mutates `fsm.Context._failureReason` and `fsm.State`.
+	@description Stores a failure reason and routes the FSM either into rollback or directly into the terminal failure state if cleanup is already underway.
+	@param fsm any -- Active attack FSM instance.
+	@param reason string -- Human-readable failure reason persisted into context.
+	@return nil -- Mutates `fsm.Context._failureReason` and `fsm.State`.
 ]=]
 local function transitionToFailure(fsm: any, reason: string)
 	fsm.Context._failureReason = reason
@@ -91,10 +91,10 @@ local function transitionToFailure(fsm: any, reason: string)
 end
 
 --[=[
-    @description Returns the configured scalar value, picks a random entry from non-empty arrays, or falls back to the supplied default.
-    @param value any -- Value or value list to normalize.
-    @param defaultValue any -- Fallback returned when the incoming value is nil or an empty array.
-    @return any -- Selected scalar value ready for timeline use.
+	@description Returns the configured scalar value, picks a random entry from non-empty arrays, or falls back to the supplied default.
+	@param value any -- Value or value list to normalize.
+	@param defaultValue any -- Fallback returned when the incoming value is nil or an empty array.
+	@return any -- Selected scalar value ready for timeline use.
 ]=]
 local function chooseValue(value: any, defaultValue: any): any
 	if typeof(value) == "table" then
@@ -111,13 +111,13 @@ local function chooseValue(value: any, defaultValue: any): any
 end
 
 --[=[
-    @description Builds and appends an optional intent definition when a combo stage declares a valid `Kind` and payload.
-    @param orchestrator any -- Orchestrator passed into `IntentHelpers.appendIntent`.
-    @param characterEntity any -- Character entity receiving the intent.
-    @param intentDef any -- Optional combo intent definition table.
-    @param sourceCharId string -- Source and target character id for the emitted intent.
-    @param lockId string? -- Optional lock id associated with the attack timeline.
-    @return nil -- Emits an intent as a side effect when the definition is valid.
+	@description Builds and appends an optional intent definition when a combo stage declares a valid `Kind` and payload.
+	@param orchestrator any -- Orchestrator passed into `IntentHelpers.appendIntent`.
+	@param characterEntity any -- Character entity receiving the intent.
+	@param intentDef any -- Optional combo intent definition table.
+	@param sourceCharId string -- Source and target character id for the emitted intent.
+	@param lockId string? -- Optional lock id associated with the attack timeline.
+	@return nil -- Emits an intent as a side effect when the definition is valid.
 ]=]
 local function appendOptionalIntent(
 	orchestrator: any,
@@ -142,9 +142,9 @@ local function appendOptionalIntent(
 end
 
 --[=[
-    @description Finds a weapon asset under `ReplicatedStorage.Assets`, resolves its data module, and safely requires the item metadata.
-    @param weaponId string -- Weapon asset name or id looked up in the assets tree.
-    @return any? -- Required item data table, or nil when the asset metadata cannot be resolved.
+	@description Finds a weapon asset under `ReplicatedStorage.Assets`, resolves its data module, and safely requires the item metadata.
+	@param weaponId string -- Weapon asset name or id looked up in the assets tree.
+	@return any? -- Required item data table, or nil when the asset metadata cannot be resolved.
 ]=]
 local function getItemData(weaponId: string): any?
 	local assets = ReplicatedStorage:FindFirstChild("Assets")
@@ -170,13 +170,13 @@ local function getItemData(weaponId: string): any?
 end
 
 --[=[
-    @description Advances and persists the per-weapon sequential combo pointer, resetting it after one second of inactivity.
-    @param characterEntity any -- Character entity storing combo pointer context.
-    @param comboSlot number -- Combo bucket index being resolved.
-    @param weaponId string -- Weapon id used to namespace pointer state.
-    @param comboDef any -- Sequential combo definition array.
-    @return any? -- Selected combo timeline entry.
-    @return number? -- One-based pointer into the sequential combo definition.
+	@description Advances and persists the per-weapon sequential combo pointer, resetting it after one second of inactivity.
+	@param characterEntity any -- Character entity storing combo pointer context.
+	@param comboSlot number -- Combo bucket index being resolved.
+	@param weaponId string -- Weapon id used to namespace pointer state.
+	@param comboDef any -- Sequential combo definition array.
+	@return any? -- Selected combo timeline entry.
+	@return number? -- One-based pointer into the sequential combo definition.
 ]=]
 local function getSequentialCombo(
 	characterEntity: any,
@@ -220,10 +220,10 @@ local function getSequentialCombo(
 end
 
 --[=[
-    @description Writes a debug log entry for timeline processing diagnostics.
-    @param fsm any -- Active attack FSM instance.
-    @param message string -- Diagnostic message to log.
-    @return nil -- Emits a log side effect only.
+	@description Writes a debug log entry for timeline processing diagnostics.
+	@param fsm any -- Active attack FSM instance.
+	@param message string -- Diagnostic message to log.
+	@return nil -- Emits a log side effect only.
 ]=]
 local function logTimelineStep(fsm: any, message: string)
 	fsm:Log({
@@ -233,9 +233,9 @@ local function logTimelineStep(fsm: any, message: string)
 end
 
 --[=[
-    @description Resolves the total timeline duration in frames, preferring an explicit `t` field and otherwise scanning the largest keyed frame value.
-    @param combo any -- Selected combo table or timeline array.
-    @return number -- Total frame count used to determine timeline completion.
+	@description Resolves the total timeline duration in frames, preferring an explicit `t` field and otherwise scanning the largest keyed frame value.
+	@param combo any -- Selected combo table or timeline array.
+	@return number -- Total frame count used to determine timeline completion.
 ]=]
 local function resolveTimelineLength(combo: any): number
 	local explicit = combo.t
@@ -254,23 +254,23 @@ local function resolveTimelineLength(combo: any): number
 end
 
 --[=[
-    @description Creates a child `DamageJob` for one victim hit during the combo timeline after validating the victim identifiers.
-    @param orchestrator any -- Orchestrator passed into combat helper job creation.
-    @param fsm any -- Parent attack FSM whose ids and attack name seed the child job.
-    @param victimEntity any -- Victim entity selected by the forward scan.
-    @param frameNumber number -- Timeline frame that triggered the hit.
-    @return boolean -- True when a `DamageJob` was created, otherwise false when victim identity was invalid.
+	@description Creates a child `DamageJob` for one victim hit during the combo timeline after validating the victim identifiers.
+	@param orchestrator any -- Orchestrator passed into combat helper job creation.
+	@param fsm any -- Parent attack FSM whose ids and attack name seed the child job.
+	@param victimEntity any -- Victim entity selected by the forward scan.
+	@param frameNumber number -- Timeline frame that triggered the hit.
+	@return boolean -- True when a `DamageJob` was created, otherwise false when victim identity was invalid.
 ]=]
 local function applyDamageToVictim(orchestrator: any, fsm: any, victimEntity: any, frameNumber: number): boolean
 	local victimId = if typeof(victimEntity.EntityId) == "string" then victimEntity.EntityId else nil
 	if typeof(victimId) ~= "string" or victimId == "" then
-		logTimelineStep(fsm, "Skipping damage victim without entity id")
+		logTimelineStep(fsm,"Skipping damage victim without entity id")
 		return false
 	end
 
 	local victimUserId = victimEntity.UserId
 	if typeof(victimUserId) ~= "number" then
-		logTimelineStep(fsm, "Skipping damage victim without numeric user id: " .. victimId)
+		logTimelineStep(fsm,"Skipping damage victim without numeric user id: " .. victimId)
 		return false
 	end
 
@@ -290,21 +290,21 @@ local function applyDamageToVictim(orchestrator: any, fsm: any, victimEntity: an
 end
 
 --[=[
-    @description Emits the optional hit-confirmation sound intent associated with a damage keyframe.
-    @param characterEntity any -- Character entity receiving the sound intent.
-    @param entry table -- Raw combo timeline entry that may contain sound id, volume, and pitch values.
-    @param fsm any -- Parent attack FSM used for ids and debug logging.
-    @return nil -- Emits an intent side effect when a sound is configured.
+	@description Emits the optional hit-confirmation sound intent associated with a damage keyframe.
+	@param characterEntity any -- Character entity receiving the sound intent.
+	@param entry table -- Raw combo timeline entry that may contain sound id, volume, and pitch values.
+	@param fsm any -- Parent attack FSM used for ids and debug logging.
+	@return nil -- Emits an intent side effect when a sound is configured.
 ]=]
 local function playHitSound(characterEntity: any, entry: { any }, fsm: any)
 	local hitSoundId = chooseValue(entry[3], nil)
 	if hitSoundId == nil then
-		logTimelineStep(fsm, "Skipping hit sound: no sound configured")
+		logTimelineStep(fsm,"Skipping hit sound: no sound configured")
 		return
 	end
 
-	logTimelineStep(fsm, "Emitting hit sound " .. tostring(hitSoundId))
-	IntentHelpers.appendIntent(fsm:GetOrchestrator(), characterEntity, "Sound", {
+	logTimelineStep(fsm,"Emitting hit sound " .. tostring(hitSoundId))
+	IntentHelpers.appendIntent(fsm:GetOrchestrator(), characterEntity,"Sound", {
 		SoundId = tostring(hitSoundId),
 		Volume = tonumber(chooseValue(entry[4], 0.5)) or 0.5,
 		Pitch = tonumber(chooseValue(entry[5], 1)) or 1,
@@ -312,11 +312,11 @@ local function playHitSound(characterEntity: any, entry: { any }, fsm: any)
 end
 
 --[=[
-    @description Scans forward for victims at a damage keyframe, respects per-victim debounce windows, spawns child damage jobs, and optionally plays the hit sound when at least one victim is struck.
-    @param fsm any -- Active attack FSM with cached attacker context.
-    @param entry table -- Raw timeline entry describing damage radius and debounce configuration.
-    @param frameNumber number -- Timeline frame currently being processed.
-    @return nil -- Mutates hit debounce context and creates side effects through combat helpers.
+	@description Scans forward for victims at a damage keyframe, respects per-victim debounce windows, spawns child damage jobs, and optionally plays the hit sound when at least one victim is struck.
+	@param fsm any -- Active attack FSM with cached attacker context.
+	@param entry table -- Raw timeline entry describing damage radius and debounce configuration.
+	@param frameNumber number -- Timeline frame currently being processed.
+	@return nil -- Mutates hit debounce context and creates side effects through combat helpers.
 ]=]
 local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: number)
 	local orchestrator = fsm:GetOrchestrator()
@@ -355,7 +355,7 @@ local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: numb
 			continue
 		end
 		if debounceHit and typeof(hitDebounces[victimId]) == "number" and now < hitDebounces[victimId] then
-			logTimelineStep(fsm, "Skipping debounced victim " .. victimId)
+			logTimelineStep(fsm,"Skipping debounced victim " .. victimId)
 			continue
 		end
 
@@ -373,10 +373,10 @@ local function processDamageKeyframe(fsm: any, entry: { any }, frameNumber: numb
 end
 
 --[=[
-    @description Dispatches a single timeline row into the correct behavior: damage processing, sound intent, effect intent, or animation intent emission.
-    @param fsm any -- Active attack FSM.
-    @param entry table -- Raw combo timeline row.
-    @return nil -- Emits intents or child jobs as timeline side effects.
+	@description Dispatches a single timeline row into the correct behavior: damage processing, sound intent, effect intent, or animation intent emission.
+	@param fsm any -- Active attack FSM.
+	@param entry table -- Raw combo timeline row.
+	@return nil -- Emits intents or child jobs as timeline side effects.
 ]=]
 local function processTimelineEntry(fsm: any, entry: { any })
 	local characterEntity = fsm.Context._characterEntity
@@ -396,7 +396,7 @@ local function processTimelineEntry(fsm: any, entry: { any })
 	elseif tag == "Sound" then
 		local soundId = chooseValue(entry[3], nil)
 		if soundId ~= nil then
-			IntentHelpers.appendIntent(orchestrator, characterEntity, "Sound", {
+			IntentHelpers.appendIntent(orchestrator, characterEntity,"Sound", {
 				SoundId = tostring(soundId),
 				Volume = tonumber(chooseValue(entry[4], 0.5)) or 0.5,
 				Pitch = tonumber(chooseValue(entry[5], 1)) or 1,
@@ -405,63 +405,56 @@ local function processTimelineEntry(fsm: any, entry: { any })
 	elseif tag == "Effect" then
 		local effectName = chooseValue(entry[3], nil)
 		if typeof(effectName) == "string" and effectName ~= "" then
-			IntentHelpers.appendIntent(orchestrator, characterEntity, "Effect", {
+			IntentHelpers.appendIntent(orchestrator, characterEntity,"Effect", {
 				Name = effectName,
 			}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 		end
 	else
-		IntentHelpers.appendIntent(orchestrator, characterEntity, "Animation", {
+		IntentHelpers.appendIntent(orchestrator, characterEntity,"Animation", {
 			Name = tag,
 			Speed = tonumber(chooseValue(entry[3], 1)) or 1,
 			FadeTime = 0.1,
 		}, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 	end
 end
---[=[
-	@description Handles `RegisterStates` for `AttackJob`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AttackJob:RegisterStates()
---[=[
-	@state Validate
-	@description Handles the `Validate` state for `AttackJob`.
-]=]
+
 
 self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
-				transitionToFailure(fsm, "Orchestrator unavailable")
+				transitionToFailure(fsm,"Orchestrator unavailable")
 				return
 			end
 
 			if typeof(fsm.CharacterEntityId) ~= "string" or fsm.CharacterEntityId == "" then
-				transitionToFailure(fsm, "CharacterEntityId is required")
+				transitionToFailure(fsm,"CharacterEntityId is required")
 				return
 			end
 
 			local characterEntity = fsm:GetEntity(fsm.CharacterEntityId)
 			if not characterEntity then
-				transitionToFailure(fsm, "Character entity not found")
+				transitionToFailure(fsm,"Character entity not found")
 				return
 			end
 
 			local character = characterEntity.Instance
 			if not character or not character:IsA("Model") then
-				transitionToFailure(fsm, "Character model not found")
+				transitionToFailure(fsm,"Character model not found")
 				return
 			end
 
 			local humanoid, root = EntityHelpers.getHumanoidAndRoot(character)
 			if not humanoid or humanoid.Health <= 0 or not root then
-				transitionToFailure(fsm, "Character cannot attack without a living humanoid root")
+				transitionToFailure(fsm,"Character cannot attack without a living humanoid root")
 				return
 			end
 
 			if characterEntity.IsStunned == true or characterEntity.IsKnocked == true then
-				transitionToFailure(fsm, "Character is crowd-controlled")
+				transitionToFailure(fsm,"Character is crowd-controlled")
 				return
 			end
 
@@ -469,13 +462,13 @@ self:AddState("Validate", {
 				then fsm.PlayerEntityId
 				else characterEntity.PlayerEntityId
 			if typeof(playerEntityId) ~= "string" or playerEntityId == "" then
-				transitionToFailure(fsm, "PlayerEntityId is required")
+				transitionToFailure(fsm,"PlayerEntityId is required")
 				return
 			end
 
 			local playerEntity = fsm:GetEntity(playerEntityId)
 			if not playerEntity then
-				transitionToFailure(fsm, "Player entity not found")
+				transitionToFailure(fsm,"Player entity not found")
 				return
 			end
 
@@ -488,7 +481,7 @@ self:AddState("Validate", {
 				weaponId = playerEntity.WeaponEqp
 			end
 			if typeof(weaponId) ~= "string" or weaponId == "" then
-				transitionToFailure(fsm, "No equipped weapon found")
+				transitionToFailure(fsm,"No equipped weapon found")
 				return
 			end
 
@@ -501,22 +494,19 @@ self:AddState("Validate", {
 			fsm.Context._comboSlot = math.max(1, tonumber(fsm.ComboSlot) or 1)
 			fsm.State = "AcquireCombatLock"
 		end,
-	}, { "AcquireCombatLock", "RollbackConstraints" })
---[=[
-	@state AcquireCombatLock
-	@description Handles the `AcquireCombatLock` state for `AttackJob`.
-]=]
+	}, {"AcquireCombatLock","RollbackConstraints" })
+
 
 self:AddState("AcquireCombatLock", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if not characterEntity then
-				transitionToFailure(fsm, "Character entity missing during combat lock")
+				transitionToFailure(fsm,"Character entity missing during combat lock")
 				return
 			end
 
 			if not characterEntity:AcquireLock(fsm.Id) then
-				transitionToFailure(fsm, "Character is already performing another combat action")
+				transitionToFailure(fsm,"Character is already performing another combat action")
 				return
 			end
 			fsm.Context._entityLockHeld = true
@@ -525,18 +515,15 @@ self:AddState("AcquireCombatLock", {
 			if not characterEntity:UpdateEntity(fsm.Id) then
 				characterEntity:ReleaseLock(fsm.Id)
 				fsm.Context._entityLockHeld = false
-				transitionToFailure(fsm, "Failed to apply combat lock")
+				transitionToFailure(fsm,"Failed to apply combat lock")
 				return
 			end
 
 			fsm.Context._combatLockApplied = true
 			fsm.State = "ResolveAttackDef"
 		end,
-	}, { "ResolveAttackDef", "RollbackConstraints" })
---[=[
-	@state ResolveAttackDef
-	@description Handles the `ResolveAttackDef` state for `AttackJob`.
-]=]
+	}, {"ResolveAttackDef","RollbackConstraints" })
+
 
 self:AddState("ResolveAttackDef", {
 		OnEnter = function(_, fsm)
@@ -544,13 +531,13 @@ self:AddState("ResolveAttackDef", {
 			local weaponId = fsm.Context._weaponId
 			local comboSlot = fsm.Context._comboSlot
 			if not characterEntity or typeof(weaponId) ~= "string" or typeof(comboSlot) ~= "number" then
-				transitionToFailure(fsm, "Attack definition context missing")
+				transitionToFailure(fsm,"Attack definition context missing")
 				return
 			end
 
 			local itemData = getItemData(weaponId)
 			if not itemData then
-				transitionToFailure(fsm, "Weapon AssetData not found for " .. weaponId)
+				transitionToFailure(fsm,"Weapon AssetData not found for " .. weaponId)
 				return
 			end
 
@@ -567,7 +554,7 @@ self:AddState("ResolveAttackDef", {
 				local resolvedCombo, resolvedPointer =
 					getSequentialCombo(characterEntity, comboSlot, weaponId, comboDef)
 				if typeof(resolvedCombo) ~= "table" or typeof(resolvedPointer) ~= "number" then
-					transitionToFailure(fsm, "Sequential combo could not be resolved")
+					transitionToFailure(fsm,"Sequential combo could not be resolved")
 					return
 				end
 				selectedCombo = resolvedCombo
@@ -576,7 +563,7 @@ self:AddState("ResolveAttackDef", {
 
 			local totalFrames = resolveTimelineLength(selectedCombo)
 			if totalFrames <= 0 then
-				transitionToFailure(fsm, "Resolved combo does not define a valid timeline")
+				transitionToFailure(fsm,"Resolved combo does not define a valid timeline")
 				return
 			end
 
@@ -589,17 +576,14 @@ self:AddState("ResolveAttackDef", {
 			fsm.Context._attackName = attackName
 			fsm.State = "ApplyMovementConstraints"
 		end,
-	}, { "ApplyMovementConstraints", "RollbackConstraints" })
---[=[
-	@state ApplyMovementConstraints
-	@description Handles the `ApplyMovementConstraints` state for `AttackJob`.
-]=]
+	}, {"ApplyMovementConstraints","RollbackConstraints" })
+
 
 self:AddState("ApplyMovementConstraints", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if not characterEntity then
-				transitionToFailure(fsm, "Character entity missing during movement constraint application")
+				transitionToFailure(fsm,"Character entity missing during movement constraint application")
 				return
 			end
 
@@ -626,18 +610,15 @@ self:AddState("ApplyMovementConstraints", {
 				then movementPatch.MouseLocked
 				else DEFAULT_CONSTRAINTS.MouseLocked
 			if not characterEntity:UpdateEntity(fsm.Id) then
-				transitionToFailure(fsm, "Failed to apply movement constraints")
+				transitionToFailure(fsm,"Failed to apply movement constraints")
 				return
 			end
 
 			fsm.Context._constraintsApplied = true
 			fsm.State = "EmitWindupIntent"
 		end,
-	}, { "EmitWindupIntent", "RollbackConstraints" })
---[=[
-	@state EmitWindupIntent
-	@description Handles the `EmitWindupIntent` state for `AttackJob`.
-]=]
+	}, {"EmitWindupIntent","RollbackConstraints" })
+
 
 self:AddState("EmitWindupIntent", {
 		OnEnter = function(_, fsm)
@@ -654,11 +635,8 @@ self:AddState("EmitWindupIntent", {
 			end
 			fsm.State = "PlayTimeline"
 		end,
-	}, { "PlayTimeline", "RollbackConstraints" })
---[=[
-	@state PlayTimeline
-	@description Handles the `PlayTimeline` state for `AttackJob`.
-]=]
+	}, {"PlayTimeline","RollbackConstraints" })
+
 
 self:AddState("PlayTimeline", {
 		OnEnter = function(_, fsm)
@@ -671,11 +649,11 @@ self:AddState("PlayTimeline", {
 			local humanoid = fsm.Context._humanoid
 			local combo = fsm.Context._selectedCombo
 			if not humanoid or humanoid.Health <= 0 then
-				transitionToFailure(fsm, "Attacker died during attack timeline")
+				transitionToFailure(fsm,"Attacker died during attack timeline")
 				return
 			end
 			if typeof(combo) ~= "table" then
-				transitionToFailure(fsm, "Attack timeline missing")
+				transitionToFailure(fsm,"Attack timeline missing")
 				return
 			end
 
@@ -712,11 +690,8 @@ self:AddState("PlayTimeline", {
 				fsm.State = "EmitRecoveryIntent"
 			end
 		end,
-	}, { "EmitRecoveryIntent", "RollbackConstraints" })
---[=[
-	@state EmitRecoveryIntent
-	@description Handles the `EmitRecoveryIntent` state for `AttackJob`.
-]=]
+	}, {"EmitRecoveryIntent","RollbackConstraints" })
+
 
 self:AddState("EmitRecoveryIntent", {
 		OnEnter = function(_, fsm)
@@ -733,11 +708,8 @@ self:AddState("EmitRecoveryIntent", {
 			end
 			fsm.State = "RollbackConstraints"
 		end,
-	}, { "RollbackConstraints" })
---[=[
-	@state RollbackConstraints
-	@description Handles the `RollbackConstraints` state for `AttackJob`.
-]=]
+	}, {"RollbackConstraints" })
+
 
 self:AddState("RollbackConstraints", {
 		OnEnter = function(_, fsm)
@@ -754,11 +726,8 @@ self:AddState("RollbackConstraints", {
 			end
 			fsm.State = "ReleaseCombatLock"
 		end,
-	}, { "ReleaseCombatLock" })
---[=[
-	@state ReleaseCombatLock
-	@description Handles the `ReleaseCombatLock` state for `AttackJob`.
-]=]
+	}, {"ReleaseCombatLock" })
+
 
 self:AddState("ReleaseCombatLock", {
 		OnEnter = function(_, fsm)
@@ -780,16 +749,20 @@ self:AddState("ReleaseCombatLock", {
 				fsm.State = "Completed"
 			end
 		end,
-	}, { "Completed", "Failed" })
+	}, {"Completed","Failed" })
 --[=[
 	@state Completed
-	@description Handles the `Completed` terminal state for `AttackJob`.
+	@description Terminal success sink reached after `ReleaseCombatLock` clears `CombatLock` and releases the entity lock at the end of the attack timeline. `OnEnter` is a no-op because cleanup already happened before entry.
+		Transitions: none.
+		Writes: none.
 ]=]
 
 self:AddState("Completed", function() end, {})
 --[=[
 	@state Failed
-	@description Handles the `Failed` terminal state for `AttackJob`.
+	@description Terminal failure sink entered when validation, timeline processing, or rollback stores `_failureReason` and routes through `ReleaseCombatLock`. `OnEnter` logs that cached failure reason when it is present.
+		Transitions: none.
+		Writes: error log.
 ]=]
 
 self:AddState("Failed", function(fsm)
@@ -801,11 +774,7 @@ self:AddState("Failed", function(fsm)
 		end
 	end, {})
 end
---[=[
-	@description Implements `AttackJob.OnCleanup`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function AttackJob:OnCleanup() end
 

@@ -1,8 +1,5 @@
 --!strict
---[=[
-	@module RetryBehavior
-	@description Defines the `RetryBehavior` module and its exported API.
-]=]
+
 
 local BehaviorTree
 do
@@ -19,11 +16,7 @@ do
 end
 
 local RetryBehavior = {}
---[=[
-	@description Creates the result managed by `RetryBehavior.Create`.
-	@param Orchestrator any -- `Orchestrator` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function RetryBehavior.Create(Orchestrator)
 	local BT = BehaviorTree
@@ -31,7 +24,7 @@ function RetryBehavior.Create(Orchestrator)
 	-- Action: Attempt the DataStore Call
 	local function AttemptCall(context)
 		if not context.RequestFunction then return BT.BehaviorTreeStatus.Failure end
-		
+
 		local success, result = pcall(context.RequestFunction)
 		if success then
 			context.Result = result
@@ -83,7 +76,7 @@ function RetryBehavior.Create(Orchestrator)
 	-- 2. If Fail -> Check Retry.
 	-- 3. If Can Retry -> Schedule Retry.
 	-- 4. If Cannot Retry -> Fail Permanently.
-	
+
 	local Tree = BT.Selector({
 		BT.Sequence({
 			AttemptCall,

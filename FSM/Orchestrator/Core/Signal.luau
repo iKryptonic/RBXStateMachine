@@ -1,16 +1,9 @@
 --!strict
---[=[
-	@module Signal
-	@description Defines the `Signal` module and its exported API.
-]=]
+
 
 local Signal = {}
 Signal.__index = Signal
---[=[
-	@description Implements `Signal.new`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Signal.new(): any
 	local self = setmetatable({
@@ -18,11 +11,7 @@ function Signal.new(): any
 	}, Signal)
 	return (self :: any)
 end
---[=[
-	@description Implements `Signal.Connect`.
-	@param handler (...any) -> () -- `handler` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Signal:Connect(handler: (...any) -> ()): any
 	local connection = {
@@ -41,13 +30,9 @@ function Signal:Connect(handler: (...any) -> ()): any
 		end,
 	}
 	table.insert(self._handlers, connection)
-	return (connection :: any)	
+	return (connection :: any)
 end
---[=[
-	@description Implements `Signal.Once`.
-	@param handler (...any) -> () -- `handler` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Signal:Once(handler: (...any) -> ())
 	local connection
@@ -58,9 +43,9 @@ function Signal:Once(handler: (...any) -> ())
 	return connection
 end
 --[=[
-	@description Implements `Signal.Fire`.
-	@param ... any -- `...` input parameter.
-	@return any -- Return value produced by the implementation, if any.
+	@description Dispatches an event to every currently connected handler. The handler list is snapshotted before iteration so listeners may disconnect themselves or destroy the signal during this emission without skipping other callbacks. Each handler is resumed asynchronously with `task.spawn`.
+	@param ... any -- Payload values forwarded to every active connection for this fire.
+	@reads self._handlers
 ]=]
 
 function Signal:Fire(...: any)
@@ -74,11 +59,7 @@ function Signal:Fire(...: any)
 		end
 	end
 end
---[=[
-	@description Implements `Signal.Wait`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return ...any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Signal:Wait(): ...any
 	local thread = coroutine.running()
@@ -87,11 +68,7 @@ function Signal:Wait(): ...any
 	end)
 	return coroutine.yield()
 end
---[=[
-	@description Implements `Signal.Destroy`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function Signal:Destroy()
 	for _, conn in ipairs(self._handlers) do

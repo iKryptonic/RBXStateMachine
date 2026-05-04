@@ -1,13 +1,10 @@
 --!strict
---[=[
-	@module CastFSM
-	@description Defines the `CastFSM` state machine module and its exported API.
-]=]
+
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
-assert(Helpers, "Helpers folder not found")
+assert(Helpers,"Helpers folder not found")
 local Shared = ReplicatedStorage:WaitForChild("shared")
 local EquipHelpers = require(Shared:WaitForChild("EquipHelpers"))
 local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
@@ -44,7 +41,7 @@ local CastFSM = {
 		"Completed",
 		"Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Idle",
 }
 
@@ -54,15 +51,15 @@ local DEFAULT_PROJECTILE_LIFETIME = 3
 local DEFAULT_DASH_DURATION = 0.2
 
 local function getAbilityDefs(orchestrator: any)
-	return ModuleLoader.requireSharedModule(orchestrator, "AbilityDefs")
+	return ModuleLoader.requireSharedModule(orchestrator,"AbilityDefs")
 end
 
 local function getTalentTreeDefs(orchestrator: any)
-	return ModuleLoader.requireSharedModule(orchestrator, "TalentTreeDefs")
+	return ModuleLoader.requireSharedModule(orchestrator,"TalentTreeDefs")
 end
 
 local function getStatusEffectDefs(orchestrator: any)
-	return ModuleLoader.requireSharedModule(orchestrator, "StatusEffectDefs")
+	return ModuleLoader.requireSharedModule(orchestrator,"StatusEffectDefs")
 end
 
 local function getItemData(itemId: string?): any?
@@ -151,11 +148,11 @@ local function areAbilitiesBlocked(orchestrator: any, charEntity: any): (boolean
 		local def = defs.Get(entry.EffectId)
 		if def then
 			if def.BlockAbilities then
-				return true, tostring(def.Name or entry.EffectId) .. " prevents ability usage"
+				return true, tostring(def.Name or entry.EffectId) .." prevents ability usage"
 			end
 			local flags = def.ApplyFlags
 			if typeof(flags) == "table" and flags.IsStunned == true then
-				return true, tostring(def.Name or entry.EffectId) .. " prevents ability usage"
+				return true, tostring(def.Name or entry.EffectId) .." prevents ability usage"
 			end
 		end
 	end
@@ -171,7 +168,7 @@ local function resolveCastDef(fsm: any, orchestrator: any): any?
 
 	local abilityDefs = getAbilityDefs(orchestrator)
 	local rawDef = fsm.Context._abilityDef
-	local sourceType = if rawDef and typeof(rawDef.SourceType) == "string" then rawDef.SourceType else "Ability"
+	local sourceType = if rawDef and typeof(rawDef.SourceType) == "string" then rawDef.SourceType else"Ability"
 	if not rawDef and typeof(fsm.AbilityId) == "string" and fsm.AbilityId ~= "" then
 		rawDef = abilityDefs.GetAbility(fsm.AbilityId)
 	elseif not rawDef and typeof(fsm.ConsumableId) == "string" and fsm.ConsumableId ~= "" then
@@ -218,7 +215,7 @@ end
 
 local function applyHealthChange(charEntity: any, humanoid: Humanoid, amount: number, lockId: string?)
 	local maxHealth = tonumber(charEntity.MaxHealth) or humanoid.MaxHealth
-	local nextHealth = ResourceHelpers.restoreResource(charEntity, "Health", amount, "MaxHealth")
+	local nextHealth = ResourceHelpers.restoreResource(charEntity,"Health", amount,"MaxHealth")
 	humanoid.Health = math.clamp(nextHealth, 0, humanoid.MaxHealth)
 	charEntity:UpdateEntity(lockId)
 end
@@ -292,9 +289,9 @@ local function consumeOneInContainer(container: any, itemId: string): (boolean, 
 		if typeof(value) == "table" and (value.Id == itemId or value.ItemId == itemId) then
 			local itemClone = table.clone(value)
 			local countField = if itemClone.Count ~= nil
-				then "Count"
-				elseif itemClone.Quantity ~= nil then "Quantity"
-				elseif itemClone.Amount ~= nil then "Amount"
+				then"Count"
+				elseif itemClone.Quantity ~= nil then"Quantity"
+				elseif itemClone.Amount ~= nil then"Amount"
 				else nil
 			if countField then
 				local nextCount = (tonumber(itemClone[countField]) or 1) - 1
@@ -331,9 +328,9 @@ local function consumeOneInContainer(container: any, itemId: string): (boolean, 
 		if typeof(value) == "table" and (value.Id == itemId or value.ItemId == itemId) then
 			local itemClone = table.clone(value)
 			local countField = if itemClone.Count ~= nil
-				then "Count"
-				elseif itemClone.Quantity ~= nil then "Quantity"
-				elseif itemClone.Amount ~= nil then "Amount"
+				then"Count"
+				elseif itemClone.Quantity ~= nil then"Quantity"
+				elseif itemClone.Amount ~= nil then"Amount"
 				else nil
 			if countField then
 				local nextCount = (tonumber(itemClone[countField]) or 1) - 1
@@ -486,23 +483,13 @@ local function resolveExecuteContext(fsm: any)
 		AttackName = getCastAttackName(castDef),
 	}
 end
---[=[
-	@description Handles `RegisterStates` for `CastFSM`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function CastFSM:RegisterStates()
-	--[=[
-		@state Idle
-		@description Handles the `Idle` state for `CastFSM`.
-	]=]
 
-	self:AddState("Idle", function() end, { "ValidateAbility" })
-	--[=[
-		@state ValidateAbility
-		@description Handles the `ValidateAbility` state for `CastFSM`.
-	]=]
+
+	self:AddState("Idle", function() end, {"ValidateAbility" })
+
 
 	self:AddState("ValidateAbility", {
 		OnEnter = function(_, fsm)
@@ -603,11 +590,8 @@ function CastFSM:RegisterStates()
 			fsm.Context._slotIndex = tonumber(fsm.SlotIndex)
 			fsm.State = "ValidateResources"
 		end,
-	}, { "ValidateResources", "Failed" })
-	--[=[
-		@state ValidateResources
-		@description Handles the `ValidateResources` state for `CastFSM`.
-	]=]
+	}, {"ValidateResources","Failed" })
+
 
 	self:AddState("ValidateResources", {
 		OnEnter = function(_, fsm)
@@ -627,11 +611,8 @@ function CastFSM:RegisterStates()
 			end
 			fsm.State = "AcquireLock"
 		end,
-	}, { "AcquireLock", "Failed" })
-	--[=[
-		@state AcquireLock
-		@description Handles the `AcquireLock` state for `CastFSM`.
-	]=]
+	}, {"AcquireLock","Failed" })
+
 
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
@@ -643,11 +624,8 @@ function CastFSM:RegisterStates()
 			fsm.Context._lockHeld = true
 			fsm.State = "DeductResources"
 		end,
-	}, { "DeductResources", "Failed" })
-	--[=[
-		@state DeductResources
-		@description Handles the `DeductResources` state for `CastFSM`.
-	]=]
+	}, {"DeductResources","Failed" })
+
 
 	self:AddState("DeductResources", {
 		OnEnter = function(_, fsm)
@@ -671,11 +649,8 @@ function CastFSM:RegisterStates()
 			charEntity:UpdateEntity(fsm.Id)
 			fsm.State = "EmitCastAnimation"
 		end,
-	}, { "EmitCastAnimation", "ReleaseLock" })
-	--[=[
-		@state EmitCastAnimation
-		@description Handles the `EmitCastAnimation` state for `CastFSM`.
-	]=]
+	}, {"EmitCastAnimation","ReleaseLock" })
+
 
 	self:AddState("EmitCastAnimation", {
 		OnEnter = function(_, fsm)
@@ -695,7 +670,7 @@ function CastFSM:RegisterStates()
 			charEntity:UpdateEntity(fsm.Id)
 
 			if typeof(castDef.Animation) == "string" and castDef.Animation ~= "" then
-				IntentHelpers.appendIntent(fsm:GetOrchestrator(), charEntity, "Animation", {
+				IntentHelpers.appendIntent(fsm:GetOrchestrator(), charEntity,"Animation", {
 					Name = castDef.Animation,
 					Speed = 1,
 					FadeTime = 0.1,
@@ -703,11 +678,8 @@ function CastFSM:RegisterStates()
 			end
 			fsm.State = "WaitCastDuration"
 		end,
-	}, { "WaitCastDuration", "ReleaseLock" })
-	--[=[
-		@state WaitCastDuration
-		@description Handles the `WaitCastDuration` state for `CastFSM`.
-	]=]
+	}, {"WaitCastDuration","ReleaseLock" })
+
 
 	self:AddState("WaitCastDuration", {
 		OnEnter = function(_, fsm)
@@ -719,16 +691,13 @@ function CastFSM:RegisterStates()
 			end
 			local castTime = tonumber(castDef.CastTime) or 0
 			if castTime > 0 then
-				fsm:ScheduleTransition(castTime, "ValidateNotInterrupted")
+				fsm:ScheduleTransition(castTime,"ValidateNotInterrupted")
 			else
 				fsm.State = "ValidateNotInterrupted"
 			end
 		end,
-	}, { "ValidateNotInterrupted", "ReleaseLock" })
-	--[=[
-		@state ValidateNotInterrupted
-		@description Handles the `ValidateNotInterrupted` state for `CastFSM`.
-	]=]
+	}, {"ValidateNotInterrupted","ReleaseLock" })
+
 
 	self:AddState("ValidateNotInterrupted", {
 		OnEnter = function(_, fsm)
@@ -747,11 +716,8 @@ function CastFSM:RegisterStates()
 			end
 			fsm.State = "Execute"
 		end,
-	}, { "Execute", "ReleaseLock" })
-	--[=[
-		@state Execute
-		@description Handles the `Execute` state for `CastFSM`.
-	]=]
+	}, {"Execute","ReleaseLock" })
+
 
 	self:AddState("Execute", {
 		OnEnter = function(_, fsm)
@@ -777,10 +743,7 @@ function CastFSM:RegisterStates()
 		"ExecuteTargetedAoE",
 		"ReleaseLock",
 	})
-	--[=[
-		@state ExecuteMeleeSingle
-		@description Handles the `ExecuteMeleeSingle` state for `CastFSM`.
-	]=]
+
 
 	self:AddState("ExecuteMeleeSingle", {
 		OnEnter = function(_, fsm)
@@ -807,11 +770,8 @@ function CastFSM:RegisterStates()
 			end
 			fsm.State = "EmitFinishAnimation"
 		end,
-	}, { "EmitFinishAnimation", "ReleaseLock" })
-	--[=[
-		@state ExecuteMeleeAoE
-		@description Handles the `ExecuteMeleeAoE` state for `CastFSM`.
-	]=]
+	}, {"EmitFinishAnimation","ReleaseLock" })
+
 
 	self:AddState("ExecuteMeleeAoE", {
 		OnEnter = function(_, fsm)
@@ -834,11 +794,8 @@ function CastFSM:RegisterStates()
 			end
 			fsm.State = "EmitFinishAnimation"
 		end,
-	}, { "EmitFinishAnimation", "ReleaseLock" })
-	--[=[
-		@state ExecuteProjectile
-		@description Handles the `ExecuteProjectile` state for `CastFSM`.
-	]=]
+	}, {"EmitFinishAnimation","ReleaseLock" })
+
 
 	self:AddState("ExecuteProjectile", {
 		OnEnter = function(_, fsm)
@@ -856,11 +813,8 @@ function CastFSM:RegisterStates()
 			)
 			fsm.State = "EmitFinishAnimation"
 		end,
-	}, { "EmitFinishAnimation", "ReleaseLock" })
-	--[=[
-		@state ExecuteSelfHeal
-		@description Handles the `ExecuteSelfHeal` state for `CastFSM`.
-	]=]
+	}, {"EmitFinishAnimation","ReleaseLock" })
+
 
 	self:AddState("ExecuteSelfHeal", {
 		OnEnter = function(_, fsm)
@@ -877,11 +831,8 @@ function CastFSM:RegisterStates()
 			)
 			fsm.State = "EmitFinishAnimation"
 		end,
-	}, { "EmitFinishAnimation", "ReleaseLock" })
-	--[=[
-		@state ExecuteInstantHeal
-		@description Handles the `ExecuteInstantHeal` state for `CastFSM`.
-	]=]
+	}, {"EmitFinishAnimation","ReleaseLock" })
+
 
 	self:AddState("ExecuteInstantHeal", {
 		OnEnter = function(_, fsm)
@@ -898,11 +849,8 @@ function CastFSM:RegisterStates()
 			)
 			fsm.State = "EmitFinishAnimation"
 		end,
-	}, { "EmitFinishAnimation", "ReleaseLock" })
-	--[=[
-		@state ExecuteInstantStamina
-		@description Handles the `ExecuteInstantStamina` state for `CastFSM`.
-	]=]
+	}, {"EmitFinishAnimation","ReleaseLock" })
+
 
 	self:AddState("ExecuteInstantStamina", {
 		OnEnter = function(_, fsm)
@@ -920,11 +868,8 @@ function CastFSM:RegisterStates()
 			)
 			fsm.State = "EmitFinishAnimation"
 		end,
-	}, { "EmitFinishAnimation", "ReleaseLock" })
-	--[=[
-		@state ExecuteInstantMana
-		@description Handles the `ExecuteInstantMana` state for `CastFSM`.
-	]=]
+	}, {"EmitFinishAnimation","ReleaseLock" })
+
 
 	self:AddState("ExecuteInstantMana", {
 		OnEnter = function(_, fsm)
@@ -942,11 +887,8 @@ function CastFSM:RegisterStates()
 			)
 			fsm.State = "EmitFinishAnimation"
 		end,
-	}, { "EmitFinishAnimation", "ReleaseLock" })
-	--[=[
-		@state ExecuteDash
-		@description Handles the `ExecuteDash` state for `CastFSM`.
-	]=]
+	}, {"EmitFinishAnimation","ReleaseLock" })
+
 
 	self:AddState("ExecuteDash", {
 		OnEnter = function(_, fsm)
@@ -984,11 +926,8 @@ function CastFSM:RegisterStates()
 			end
 			fsm.State = "EmitFinishAnimation"
 		end,
-	}, { "EmitFinishAnimation", "ReleaseLock" })
-	--[=[
-		@state ExecuteTargetedAoE
-		@description Handles the `ExecuteTargetedAoE` state for `CastFSM`.
-	]=]
+	}, {"EmitFinishAnimation","ReleaseLock" })
+
 
 	self:AddState("ExecuteTargetedAoE", {
 		OnEnter = function(_, fsm)
@@ -1016,11 +955,8 @@ function CastFSM:RegisterStates()
 			end
 			fsm.State = "EmitFinishAnimation"
 		end,
-	}, { "EmitFinishAnimation", "ReleaseLock" })
-	--[=[
-		@state EmitFinishAnimation
-		@description Handles the `EmitFinishAnimation` state for `CastFSM`.
-	]=]
+	}, {"EmitFinishAnimation","ReleaseLock" })
+
 
 	self:AddState("EmitFinishAnimation", {
 		OnEnter = function(_, fsm)
@@ -1032,7 +968,7 @@ function CastFSM:RegisterStates()
 				return
 			end
 			if typeof(castDef.FinishAnimation) == "string" and castDef.FinishAnimation ~= "" then
-				IntentHelpers.appendIntent(fsm:GetOrchestrator(), charEntity, "Animation", {
+				IntentHelpers.appendIntent(fsm:GetOrchestrator(), charEntity,"Animation", {
 					Name = castDef.FinishAnimation,
 					Speed = 1,
 					FadeTime = 0.1,
@@ -1040,11 +976,8 @@ function CastFSM:RegisterStates()
 			end
 			fsm.State = "SetCooldown"
 		end,
-	}, { "SetCooldown", "ReleaseLock" })
-	--[=[
-		@state SetCooldown
-		@description Handles the `SetCooldown` state for `CastFSM`.
-	]=]
+	}, {"SetCooldown","ReleaseLock" })
+
 
 	self:AddState("SetCooldown", {
 		OnEnter = function(_, fsm)
@@ -1068,11 +1001,8 @@ function CastFSM:RegisterStates()
 			charEntity:UpdateEntity(fsm.Id)
 			fsm.State = "ReleaseLock"
 		end,
-	}, { "ReleaseLock" })
-	--[=[
-		@state ReleaseLock
-		@description Handles the `ReleaseLock` state for `CastFSM`.
-	]=]
+	}, {"ReleaseLock" })
+
 
 	self:AddState("ReleaseLock", {
 		OnEnter = function(_, fsm)
@@ -1100,38 +1030,32 @@ function CastFSM:RegisterStates()
 			end
 			fsm.State = "Completed"
 		end,
-	}, { "Completed", "Failed" })
+	}, {"Completed","Failed" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `CastFSM`.
-	]=]
+	@state Completed
+	@description Terminal success sink reached after `ReleaseLock` restores movement, clears `ActiveCastId`, updates the entity, and releases the cast lock. `OnEnter` is a no-op because release cleanup is already complete.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `CastFSM`.
-	]=]
+	@state Failed
+	@description Terminal failure sink entered when cast validation or release cleanup calls `Fail`, including deferred `_releaseReason` errors. `OnEnter` is a no-op; `OnCleanup` still restores movement, clears `ActiveCastId`, and releases any held lock.
+		Transitions: none.
+		Writes: none in-state; cleanup writes may still run.
+]=]
 
 	self:AddState("Failed", function() end, {})
 end
---[=[
-	@description Handles `RequestCast` for `CastFSM`.
-	@param fsm any -- `fsm` input parameter.
-	@param abilityDef any -- `abilityDef` input parameter.
-	@param charEntityId string -- `charEntityId` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function CastFSM.RequestCast(fsm: any, abilityDef: any, charEntityId: string)
 	fsm.Context._abilityDef = abilityDef
 	fsm.Context.CharacterEntityId = charEntityId
 	fsm.State = "ValidateAbility"
 end
---[=[
-	@description Implements `CastFSM.OnCleanup`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function CastFSM:OnCleanup()
 	local charEntity = self.Context._charEntity

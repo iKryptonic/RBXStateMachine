@@ -1,14 +1,11 @@
 --!strict
---[=[
-	@module PlayerTeardownFSM
-	@description Defines the `PlayerTeardownFSM` state machine module and its exported API.
-]=]
+
 
 local PlayerTeardownFSM = {
 	Name = "PlayerTeardownFSM",
 	className = "PlayerTeardownFSM",
-	validStates = { "CancelSMs", "FlushEntities", "DeleteEntities", "Completed", "Failed" },
-	terminalStates = { "Completed", "Failed" },
+	validStates = {"CancelSMs","FlushEntities","DeleteEntities","Completed","Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "CancelSMs",
 }
 
@@ -54,26 +51,26 @@ local function stateMachineMatchesPlayer(fsm: any, candidateId: string, stateMac
 	local playerEntityId = fsm.PlayerEntityId
 	local charEntityId = fsm.CharacterEntityId
 
-	if getStateMachineField(stateMachine, "Player") == player then
+	if getStateMachineField(stateMachine,"Player") == player then
 		return true
 	end
-	if getStateMachineField(stateMachine, "UserId") == userId then
+	if getStateMachineField(stateMachine,"UserId") == userId then
 		return true
 	end
-	if getStateMachineField(stateMachine, "PlayerEntityId") == playerEntityId then
+	if getStateMachineField(stateMachine,"PlayerEntityId") == playerEntityId then
 		return true
 	end
-	if getStateMachineField(stateMachine, "CharacterEntityId") == charEntityId then
+	if getStateMachineField(stateMachine,"CharacterEntityId") == charEntityId then
 		return true
 	end
-	if getStateMachineField(stateMachine, "AttackerCharEntityId") == charEntityId then
+	if getStateMachineField(stateMachine,"AttackerCharEntityId") == charEntityId then
 		return true
 	end
-	if getStateMachineField(stateMachine, "VictimUserId") == userId then
+	if getStateMachineField(stateMachine,"VictimUserId") == userId then
 		return true
 	end
 
-	local stateMachineId = getStateMachineField(stateMachine, "StateMachineId")
+	local stateMachineId = getStateMachineField(stateMachine,"StateMachineId")
 	if type(stateMachineId) == "string" then
 		if
 			string.find(stateMachineId, playerEntityId, 1, true) or string.find(stateMachineId, charEntityId, 1, true)
@@ -114,17 +111,10 @@ local function flushPersistentEntity(orchestrator: any, entity: any)
 
 	return false
 end
---[=[
-	@description Handles `RegisterStates` for `PlayerTeardownFSM`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function PlayerTeardownFSM:RegisterStates()
-	--[=[
-		@state CancelSMs
-		@description Handles the `CancelSMs` state for `PlayerTeardownFSM`.
-	]=]
+
 
 	self:AddState("CancelSMs", {
 		OnEnter = function(_, fsm)
@@ -142,7 +132,7 @@ function PlayerTeardownFSM:RegisterStates()
 						end
 					end)
 					if ok then
-						cancelled += 1
+						cancelled + = 1
 						table.insert(cancelledIds, stateMachineId)
 					end
 				end
@@ -160,11 +150,8 @@ function PlayerTeardownFSM:RegisterStates()
 			})
 			fsm.State = "FlushEntities"
 		end,
-	}, { "FlushEntities", "Failed" })
-	--[=[
-		@state FlushEntities
-		@description Handles the `FlushEntities` state for `PlayerTeardownFSM`.
-	]=]
+	}, {"FlushEntities","Failed" })
+
 
 	self:AddState("FlushEntities", {
 		OnEnter = function(_, fsm)
@@ -176,7 +163,7 @@ function PlayerTeardownFSM:RegisterStates()
 				if typeof(entityId) == "string" and entityId ~= "" then
 					local entity = orchestrator.GetEntity(entityId)
 					if flushPersistentEntity(orchestrator, entity) then
-						flushedCount += 1
+						flushedCount + = 1
 					end
 				end
 			end
@@ -191,11 +178,8 @@ function PlayerTeardownFSM:RegisterStates()
 			})
 			fsm.State = "DeleteEntities"
 		end,
-	}, { "DeleteEntities", "Failed" })
-	--[=[
-		@state DeleteEntities
-		@description Handles the `DeleteEntities` state for `PlayerTeardownFSM`.
-	]=]
+	}, {"DeleteEntities","Failed" })
+
 
 	self:AddState("DeleteEntities", {
 		OnEnter = function(_, fsm)
@@ -222,11 +206,13 @@ function PlayerTeardownFSM:RegisterStates()
 			})
 			fsm.State = "Completed"
 		end,
-	}, { "Completed", "Failed" })
+	}, {"Completed","Failed" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `PlayerTeardownFSM`.
-	]=]
+	@state Completed
+	@description Terminal success state entered after state machines are cancelled, matching entities are deleted, and teardown logging can be finalized. `OnEnter` writes the final info log for `UserId`.
+		Transitions: none.
+		Writes: info log.
+]=]
 
 	self:AddState("Completed", {
 		OnEnter = function(_, fsm)
@@ -237,9 +223,11 @@ function PlayerTeardownFSM:RegisterStates()
 		end,
 	}, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `PlayerTeardownFSM`.
-	]=]
+	@state Failed
+	@description Terminal failure state for teardown errors while cancelling machines or deleting entities. `OnEnter` logs the failure reason for `UserId` and performs no additional rollback.
+		Transitions: none.
+		Writes: error log.
+]=]
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm, reason)

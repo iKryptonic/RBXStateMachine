@@ -1,12 +1,9 @@
 --!strict
---[=[
-	@module LoadPlayerJob
-	@description Defines the `LoadPlayerJob` state machine module and its exported API.
-]=]
+
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
-assert(Helpers, "Helpers folder not found")
+assert(Helpers,"Helpers folder not found")
 local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
 local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
 -- @Name LoadPlayerJob
@@ -32,17 +29,17 @@ local LoadPlayerJob = {
 		"Completed",
 		"Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Start",
 }
 
 local DEFAULT_INVENTORY = {
-	"1", "2", "3", "4", "5", "6", "7", "8",
-	"Artura", "ArturaUnleash",
-	"Gale", "GaleUnleash",
-	"Kama", "KamaUnleash",
-	"Shade", "ShadeUnleash",
-	"Zephyr", "ZephyrUnleash",
+	"1","2","3","4","5","6","7","8",
+	"Artura","ArturaUnleash",
+	"Gale","GaleUnleash",
+	"Kama","KamaUnleash",
+	"Shade","ShadeUnleash",
+	"Zephyr","ZephyrUnleash",
 }
 
 local COMMAND_COOLDOWN = 0.4 -- 400ms between commands per player
@@ -66,7 +63,7 @@ local function registerEntityCommand(
 )
 	local registerCallback = (orchestrator :: any).RegisterEntityCommandCallback
 		or (orchestrator :: any).RegisterCommandHandler
-	assert(type(registerCallback) == "function", "Orchestrator command registration API is unavailable")
+	assert(type(registerCallback) == "function","Orchestrator command registration API is unavailable")
 	registerCallback(entityId, command, handler)
 end
 
@@ -156,14 +153,14 @@ local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player:
 		dirty = true
 	end
 
-	local talentTreeDefs = ModuleLoader.requireSharedModule(orchestrator, "TalentTreeDefs")
+	local talentTreeDefs = ModuleLoader.requireSharedModule(orchestrator,"TalentTreeDefs")
 	local remainingSkillPoints = talentTreeDefs.GetRemainingSkillPoints(playerEntity)
 	if type(playerEntity.SkillPoints) ~= "number" or playerEntity.SkillPoints ~= remainingSkillPoints then
 		playerEntity.SkillPoints = remainingSkillPoints
 		dirty = true
 	end
 
-	for _, statName in ipairs({ "StatPoints", "Strength", "Agility", "Vitality", "Endurance", "Intelligence", "Luck" }) do
+	for _, statName in ipairs({"StatPoints","Strength","Agility","Vitality","Endurance","Intelligence","Luck" }) do
 		if type(playerEntity[statName]) ~= "number" then
 			playerEntity[statName] = 0
 			dirty = true
@@ -175,7 +172,7 @@ local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player:
 		dirty = true
 	else
 		local nextBindings = table.clone(playerEntity.AbilityBindings)
-		for _, key in ipairs({ "Q", "E", "R", "F" }) do
+		for _, key in ipairs({"Q","E","R","F" }) do
 			if typeof(nextBindings[key]) ~= "string" then
 				nextBindings[key] = ""
 				dirty = true
@@ -185,7 +182,7 @@ local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player:
 	end
 
 	if typeof(playerEntity.QuickItemSlots) ~= "table" then
-		playerEntity.QuickItemSlots = { "", "", "", "" }
+		playerEntity.QuickItemSlots = {"","","","" }
 		dirty = true
 	else
 		local nextQuickSlots = table.clone(playerEntity.QuickItemSlots)
@@ -326,8 +323,8 @@ local function applyDerivedCharacterStats(orchestrator: any, playerEntity: any, 
 		return false
 	end
 
-	local talentTreeDefs = ModuleLoader.getSharedModule(orchestrator, "TalentTreeDefs")
-	local statDefs = ModuleLoader.getSharedModule(orchestrator, "StatDefs")
+	local talentTreeDefs = ModuleLoader.getSharedModule(orchestrator,"TalentTreeDefs")
+	local statDefs = ModuleLoader.getSharedModule(orchestrator,"StatDefs")
 	local passiveEffects = if talentTreeDefs and type(talentTreeDefs.GetMergedPassiveEffects) == "function"
 		then talentTreeDefs.GetMergedPassiveEffects(playerEntity)
 		else {}
@@ -382,17 +379,10 @@ local function getCommandRegistrationContext(fsm: any)
 
 	return orchestrator, charEntityId, playerEntityId, ownerUserId, isAuthorized
 end
---[=[
-	@description Handles `RegisterStates` for `LoadPlayerJob`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function LoadPlayerJob:RegisterStates()
-	--[=[
-		@state Start
-		@description Handles the `Start` state for `LoadPlayerJob`.
-	]=]
+
 
 	self:AddState("Start", {
 		OnEnter = function(_, fsm)
@@ -404,11 +394,8 @@ function LoadPlayerJob:RegisterStates()
 			fsm:Log({ Level = "INFO", Message = "LoadPlayerJob starting for " .. tostring(userId) })
 			fsm.State = "ValidatePlayer"
 		end,
-	}, { "ValidatePlayer", "Failed" })
-	--[=[
-		@state ValidatePlayer
-		@description Handles the `ValidatePlayer` state for `LoadPlayerJob`.
-	]=]
+	}, {"ValidatePlayer","Failed" })
+
 
 	self:AddState("ValidatePlayer", {
 		OnEnter = function(_, fsm)
@@ -426,11 +413,8 @@ function LoadPlayerJob:RegisterStates()
 			fsm.Context.UserId = player.UserId
 			fsm.State = "CreatePlayerEntity"
 		end,
-	}, { "CreatePlayerEntity", "Failed" })
-	--[=[
-		@state CreatePlayerEntity
-		@description Handles the `CreatePlayerEntity` state for `LoadPlayerJob`.
-	]=]
+	}, {"CreatePlayerEntity","Failed" })
+
 
 	self:AddState("CreatePlayerEntity", {
 		OnEnter = function(_, fsm)
@@ -463,21 +447,15 @@ function LoadPlayerJob:RegisterStates()
 			fsm.Context.PlayerEntityId = entityId
 			fsm.State = "LoadData"
 		end,
-	}, { "LoadData", "Failed" })
-	--[=[
-		@state LoadData
-		@description Handles the `LoadData` state for `LoadPlayerJob`.
-	]=]
+	}, {"LoadData","Failed" })
+
 
 	self:AddState("LoadData", {
 		OnEnter = function(_, fsm)
 			fsm.State = "AwaitCharacter"
 		end,
-	}, { "AwaitCharacter", "Failed" })
-	--[=[
-		@state AwaitCharacter
-		@description Handles the `AwaitCharacter` state for `LoadPlayerJob`.
-	]=]
+	}, {"AwaitCharacter","Failed" })
+
 
 	self:AddState("AwaitCharacter", {
 		OnEnter = function(_, fsm)
@@ -508,11 +486,8 @@ function LoadPlayerJob:RegisterStates()
 				fsm:Fail("Character did not spawn within 30s")
 			end
 		end,
-	}, { "CreateCharacterEntity", "Failed" })
-	--[=[
-		@state CreateCharacterEntity
-		@description Handles the `CreateCharacterEntity` state for `LoadPlayerJob`.
-	]=]
+	}, {"CreateCharacterEntity","Failed" })
+
 
 	self:AddState("CreateCharacterEntity", {
 		OnEnter = function(_, fsm)
@@ -551,7 +526,7 @@ function LoadPlayerJob:RegisterStates()
 			local playerEntity = orchestrator.GetEntity(playerEntityId)
 			if playerEntity then
 				local passiveEffects =
-					ModuleLoader.requireSharedModule(orchestrator, "TalentTreeDefs").GetMergedPassiveEffects(playerEntity)
+					ModuleLoader.requireSharedModule(orchestrator,"TalentTreeDefs").GetMergedPassiveEffects(playerEntity)
 				local appliedDerivedBonuses = false
 				for stat, bonus in pairs(passiveEffects) do
 					if stat ~= "MaxHealth" and stat ~= "MaxStamina" and stat ~= "MaxMana" then
@@ -572,27 +547,21 @@ function LoadPlayerJob:RegisterStates()
 			fsm.Context.CharacterEntityId = entityId
 			fsm.State = "RegisterCommands"
 		end,
-	}, { "RegisterCommands", "Failed" })
-	--[=[
-		@state RegisterCommands
-		@description Handles the `RegisterCommands` state for `LoadPlayerJob`.
-	]=]
+	}, {"RegisterCommands","Failed" })
+
 
 	self:AddState("RegisterCommands", {
 		OnEnter = function(_, fsm)
 			fsm.State = "RegisterCombatCommands"
 		end,
-	}, { "RegisterCombatCommands", "Failed" })
-	--[=[
-		@state RegisterCombatCommands
-		@description Handles the `RegisterCombatCommands` state for `LoadPlayerJob`.
-	]=]
+	}, {"RegisterCombatCommands","Failed" })
+
 
 	self:AddState("RegisterCombatCommands", {
 		OnEnter = function(_, fsm)
 			local orchestrator, charEntityId, playerEntityId, _, isAuthorized = getCommandRegistrationContext(fsm)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestAttack", function(player, comboSlot)
+			registerEntityCommand(orchestrator, charEntityId,"RequestAttack", function(player, comboSlot)
 				if not isAuthorized(player) then
 					return
 				end
@@ -605,7 +574,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"AttackJob",
-					"Attack_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"Attack_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						CharacterEntityId = charEntityId,
 						PlayerEntityId = playerEntityId,
@@ -615,7 +584,7 @@ function LoadPlayerJob:RegisterStates()
 				)
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestMeleeAttack", function(player, comboSlot)
+			registerEntityCommand(orchestrator, charEntityId,"RequestMeleeAttack", function(player, comboSlot)
 				if not isAuthorized(player) then
 					return
 				end
@@ -628,7 +597,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"MeleeAttackJob",
-					"Melee_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"Melee_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						CharacterEntityId = charEntityId,
 						PlayerEntityId = playerEntityId,
@@ -655,7 +624,7 @@ function LoadPlayerJob:RegisterStates()
 					createAndStartStateMachine(
 						orchestrator,
 						"DamageJob",
-						"Damage_" .. charEntityId .. "_" .. tostring(os.clock()),
+						"Damage_" .. charEntityId .."_" .. tostring(os.clock()),
 						{
 							AttackerCharEntityId = charEntityId,
 							VictimUserId = victimUserId,
@@ -666,7 +635,7 @@ function LoadPlayerJob:RegisterStates()
 				end
 			)
 
-			registerEntityCommand(orchestrator, charEntityId, "SetBlocking", function(player, isBlocking)
+			registerEntityCommand(orchestrator, charEntityId,"SetBlocking", function(player, isBlocking)
 				if not isAuthorized(player) then
 					return
 				end
@@ -693,17 +662,14 @@ function LoadPlayerJob:RegisterStates()
 
 			fsm.State = "RegisterEquipCommands"
 		end,
-	}, { "RegisterEquipCommands", "Failed" })
-	--[=[
-		@state RegisterEquipCommands
-		@description Handles the `RegisterEquipCommands` state for `LoadPlayerJob`.
-	]=]
+	}, {"RegisterEquipCommands","Failed" })
+
 
 	self:AddState("RegisterEquipCommands", {
 		OnEnter = function(_, fsm)
 			local orchestrator, charEntityId, playerEntityId, _, isAuthorized = getCommandRegistrationContext(fsm)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestEquip", function(player, itemId, hand)
+			registerEntityCommand(orchestrator, charEntityId,"RequestEquip", function(player, itemId, hand)
 				if not isAuthorized(player) then
 					return
 				end
@@ -716,7 +682,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"EquipJob",
-					"Equip_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"Equip_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						CharacterEntityId = charEntityId,
 						PlayerEntityId = playerEntityId,
@@ -727,7 +693,7 @@ function LoadPlayerJob:RegisterStates()
 				)
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestUnEquip", function(player, hand)
+			registerEntityCommand(orchestrator, charEntityId,"RequestUnEquip", function(player, hand)
 				if not isAuthorized(player) then
 					return
 				end
@@ -740,7 +706,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"UnEquipJob",
-					"UnEquip_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"UnEquip_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						CharacterEntityId = charEntityId,
 						Hand = hand or "Right",
@@ -750,7 +716,7 @@ function LoadPlayerJob:RegisterStates()
 				)
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "ToggleWeapon", function(player)
+			registerEntityCommand(orchestrator, charEntityId,"ToggleWeapon", function(player)
 				if not isAuthorized(player) then
 					return
 				end
@@ -763,7 +729,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"ToggleWeaponJob",
-					"Toggle_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"Toggle_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						CharacterEntityId = charEntityId,
 						PlayerEntityId = playerEntityId,
@@ -772,7 +738,7 @@ function LoadPlayerJob:RegisterStates()
 				)
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestAddItem", function(player, itemId)
+			registerEntityCommand(orchestrator, charEntityId,"RequestAddItem", function(player, itemId)
 				if not isAuthorized(player) then
 					return
 				end
@@ -785,7 +751,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"InventoryItemFSM",
-					"AddItem_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"AddItem_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						Operation = "Add",
 						PlayerEntityId = playerEntityId,
@@ -795,7 +761,7 @@ function LoadPlayerJob:RegisterStates()
 				)
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestDropItem", function(player, itemId)
+			registerEntityCommand(orchestrator, charEntityId,"RequestDropItem", function(player, itemId)
 				if not isAuthorized(player) then
 					return
 				end
@@ -808,7 +774,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"InventoryItemFSM",
-					"Drop_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"Drop_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						Operation = "Drop",
 						CharacterEntityId = charEntityId,
@@ -819,7 +785,7 @@ function LoadPlayerJob:RegisterStates()
 				)
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestMoveItem", function(player, itemId, direction)
+			registerEntityCommand(orchestrator, charEntityId,"RequestMoveItem", function(player, itemId, direction)
 				if not isAuthorized(player) then
 					return
 				end
@@ -832,7 +798,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"InventoryItemFSM",
-					"MoveItem_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"MoveItem_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						Operation = "Move",
 						PlayerEntityId = playerEntityId,
@@ -845,17 +811,14 @@ function LoadPlayerJob:RegisterStates()
 
 			fsm.State = "RegisterAbilityCommands"
 		end,
-	}, { "RegisterAbilityCommands", "Failed" })
-	--[=[
-		@state RegisterAbilityCommands
-		@description Handles the `RegisterAbilityCommands` state for `LoadPlayerJob`.
-	]=]
+	}, {"RegisterAbilityCommands","Failed" })
+
 
 	self:AddState("RegisterAbilityCommands", {
 		OnEnter = function(_, fsm)
 			local orchestrator, charEntityId, playerEntityId, _, isAuthorized = getCommandRegistrationContext(fsm)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestAbility", function(player, abilityId)
+			registerEntityCommand(orchestrator, charEntityId,"RequestAbility", function(player, abilityId)
 				if not isAuthorized(player) then
 					return
 				end
@@ -868,7 +831,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"CastFSM",
-					"Cast_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"Cast_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						CharacterEntityId = charEntityId,
 						PlayerEntityId = playerEntityId,
@@ -878,7 +841,7 @@ function LoadPlayerJob:RegisterStates()
 				)
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestAbilityCombo", function(player, data)
+			registerEntityCommand(orchestrator, charEntityId,"RequestAbilityCombo", function(player, data)
 				if not isAuthorized(player) then
 					return
 				end
@@ -898,7 +861,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"AbilityComboFSM",
-					"Ability_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"Ability_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						AbilityId = abilityId,
 						CharacterEntityId = charEntityId,
@@ -909,7 +872,7 @@ function LoadPlayerJob:RegisterStates()
 				)
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestRangedAttack", function(player)
+			registerEntityCommand(orchestrator, charEntityId,"RequestRangedAttack", function(player)
 				if not isAuthorized(player) then
 					return
 				end
@@ -922,7 +885,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"ProjectileAttackJob",
-					"Ranged_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"Ranged_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						CharacterEntityId = charEntityId,
 						PlayerEntityId = playerEntityId,
@@ -931,7 +894,7 @@ function LoadPlayerJob:RegisterStates()
 				)
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestUseItem", function(player, slotIndex)
+			registerEntityCommand(orchestrator, charEntityId,"RequestUseItem", function(player, slotIndex)
 				if not isAuthorized(player) then
 					return
 				end
@@ -960,7 +923,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"CastFSM",
-					"Item_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"Item_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						CharacterEntityId = charEntityId,
 						PlayerEntityId = playerEntityId,
@@ -971,7 +934,7 @@ function LoadPlayerJob:RegisterStates()
 				)
 			end)
 
-			registerEntityCommand(orchestrator, playerEntityId, "RequestSelectTalent", function(player, data)
+			registerEntityCommand(orchestrator, playerEntityId,"RequestSelectTalent", function(player, data)
 				if not isAuthorized(player) then
 					return
 				end
@@ -989,7 +952,7 @@ function LoadPlayerJob:RegisterStates()
 					return
 				end
 
-				local talentDefs = ModuleLoader.requireSharedModule(orchestrator, "TalentPassiveDefs")
+				local talentDefs = ModuleLoader.requireSharedModule(orchestrator,"TalentPassiveDefs")
 				local playerEntity = orchestrator.GetEntity(playerEntityId)
 				if not playerEntity then
 					return
@@ -1025,7 +988,7 @@ function LoadPlayerJob:RegisterStates()
 				playerEntity:UpdateEntity()
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestUnlockTalent", function(player, nodeId)
+			registerEntityCommand(orchestrator, charEntityId,"RequestUnlockTalent", function(player, nodeId)
 				if not isAuthorized(player) then
 					return
 				end
@@ -1036,7 +999,7 @@ function LoadPlayerJob:RegisterStates()
 					return
 				end
 
-				local talentTreeDefs = ModuleLoader.requireSharedModule(orchestrator, "TalentTreeDefs")
+				local talentTreeDefs = ModuleLoader.requireSharedModule(orchestrator,"TalentTreeDefs")
 				local playerEntity = orchestrator.GetEntity(playerEntityId)
 				if not playerEntity then
 					return
@@ -1045,7 +1008,7 @@ function LoadPlayerJob:RegisterStates()
 				local requestedNodeId = tostring(nodeId or "")
 				local canUnlock, reason = talentTreeDefs.CanUnlock(requestedNodeId, playerEntity)
 				if not canUnlock then
-					warn("[TalentTree] Cannot unlock " .. requestedNodeId .. ": " .. tostring(reason))
+					warn("[TalentTree] Cannot unlock " .. requestedNodeId ..": " .. tostring(reason))
 					return
 				end
 
@@ -1078,17 +1041,14 @@ function LoadPlayerJob:RegisterStates()
 
 			fsm.State = "RegisterUtilityCommands"
 		end,
-	}, { "RegisterUtilityCommands", "Failed" })
-	--[=[
-		@state RegisterUtilityCommands
-		@description Handles the `RegisterUtilityCommands` state for `LoadPlayerJob`.
-	]=]
+	}, {"RegisterUtilityCommands","Failed" })
+
 
 	self:AddState("RegisterUtilityCommands", {
 		OnEnter = function(_, fsm)
 			local orchestrator, charEntityId, playerEntityId, _, isAuthorized = getCommandRegistrationContext(fsm)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestAction", function(player, kind, payload)
+			registerEntityCommand(orchestrator, charEntityId,"RequestAction", function(player, kind, payload)
 				if not isAuthorized(player) then
 					return
 				end
@@ -1101,7 +1061,7 @@ function LoadPlayerJob:RegisterStates()
 				createAndStartStateMachine(
 					orchestrator,
 					"ReplicateIntentJob",
-					"Intent_" .. charEntityId .. "_" .. tostring(os.clock()),
+					"Intent_" .. charEntityId .."_" .. tostring(os.clock()),
 					{
 						CharacterEntityId = charEntityId,
 						Kind = kind,
@@ -1126,7 +1086,7 @@ function LoadPlayerJob:RegisterStates()
 						return
 					end
 
-					local statusEffectHelper = ModuleLoader.requireSharedModule(orchestrator, "StatusEffectHelper")
+					local statusEffectHelper = ModuleLoader.requireSharedModule(orchestrator,"StatusEffectHelper")
 					local requestedEffectId = tostring(effectId or "")
 					local targetId = if typeof(targetCharEntityId) == "string" and targetCharEntityId ~= ""
 						then targetCharEntityId
@@ -1135,7 +1095,7 @@ function LoadPlayerJob:RegisterStates()
 				end
 			)
 
-			registerEntityCommand(orchestrator, charEntityId, "RequestAllocateStat", function(player, statName)
+			registerEntityCommand(orchestrator, charEntityId,"RequestAllocateStat", function(player, statName)
 				if not isAuthorized(player) then
 					return
 				end
@@ -1145,7 +1105,7 @@ function LoadPlayerJob:RegisterStates()
 				if not player.Parent then
 					return
 				end
-				local statDefs = ModuleLoader.getSharedModule(orchestrator, "StatDefs")
+				local statDefs = ModuleLoader.getSharedModule(orchestrator,"StatDefs")
 				if not statDefs or not statDefs.Stats or statDefs.Stats[statName] == nil then
 					return
 				end
@@ -1196,7 +1156,7 @@ function LoadPlayerJob:RegisterStates()
 				end
 			end)
 
-			registerEntityCommand(orchestrator, charEntityId, "SetSprinting", function(player, isSprinting)
+			registerEntityCommand(orchestrator, charEntityId,"SetSprinting", function(player, isSprinting)
 				if not isAuthorized(player) then
 					return
 				end
@@ -1220,11 +1180,8 @@ function LoadPlayerJob:RegisterStates()
 
 			fsm.State = "PublishLoaded"
 		end,
-	}, { "PublishLoaded", "Failed" })
-	--[=[
-		@state PublishLoaded
-		@description Handles the `PublishLoaded` state for `LoadPlayerJob`.
-	]=]
+	}, {"PublishLoaded","Failed" })
+
 
 	self:AddState("PublishLoaded", {
 		OnEnter = function(_, fsm)
@@ -1234,17 +1191,21 @@ function LoadPlayerJob:RegisterStates()
 			fsm:Log({ Level = "INFO", Message = "LoadPlayerJob completed for userId " .. tostring(fsm.UserId) })
 			fsm.State = "Completed"
 		end,
-	}, { "Completed", "Failed" })
+	}, {"Completed","Failed" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `LoadPlayerJob`.
-	]=]
+	@state Completed
+	@description Terminal success sink reached after `PublishLoaded` fires `Player/Loaded`, logs the completed load, and hands the user off to steady-state gameplay. `OnEnter` is a no-op.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `LoadPlayerJob`.
-	]=]
+	@state Failed
+	@description Terminal failure sink for player bootstrap, entity creation, or command-registration errors. `OnEnter` is a no-op because the job logs and cleanup happen before entry.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Failed", function(_fsm) end, {})
 end

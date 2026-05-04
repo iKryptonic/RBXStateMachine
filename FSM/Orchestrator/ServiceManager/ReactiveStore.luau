@@ -1,8 +1,5 @@
 --!strict
---[=[
-	@module ReactiveStore
-	@description Defines the `ReactiveStore` module and its exported API.
-]=]
+
 
 local ReactiveStore = {}
 ReactiveStore.__index = ReactiveStore
@@ -14,11 +11,7 @@ type StoreSubscription = {
 }
 
 local _nextSubId = 0
---[=[
-	@description Implements `ReactiveStore.new`.
-	@param initialData { [string]: any }? -- `initialData` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ReactiveStore.new(initialData: { [string]: any }?): any
 	local self = setmetatable({}, ReactiveStore)
@@ -31,20 +24,13 @@ function ReactiveStore.new(initialData: { [string]: any }?): any
 	self._batchedChanges = {} :: { { key: string, old: any, new: any } }
 	return self
 end
---[=[
-	@description Returns the data produced by `ReactiveStore.Get`.
-	@param key string -- `key` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ReactiveStore:Get(key: string): any
 	return self._data[key]
 end
 --[=[
 	@description Updates module state through `ReactiveStore.Set`.
-	@param key string -- `key` input parameter.
-	@param value any -- `value` input parameter.
-	@return any -- Return value produced by the implementation, if any.
 ]=]
 
 function ReactiveStore:Set(key: string, value: any)
@@ -52,7 +38,7 @@ function ReactiveStore:Set(key: string, value: any)
 	if old == value then return end
 
 	self._data[key] = value
-	self._version += 1
+	self._version + = 1
 	self._dirtyKeys[key] = true
 
 	if self._batchDepth > 0 then
@@ -62,16 +48,12 @@ function ReactiveStore:Set(key: string, value: any)
 
 	self:_Notify(key, value, old)
 end
---[=[
-	@description Implements `ReactiveStore.BatchUpdate`.
-	@param fn () -> () -- `fn` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ReactiveStore:BatchUpdate(fn: () -> ())
-	self._batchDepth += 1
+	self._batchDepth + = 1
 	fn()
-	self._batchDepth -= 1
+	self._batchDepth - = 1
 
 	if self._batchDepth == 0 then
 		local changes = self._batchedChanges
@@ -81,15 +63,10 @@ function ReactiveStore:BatchUpdate(fn: () -> ())
 		end
 	end
 end
---[=[
-	@description Implements `ReactiveStore.Subscribe`.
-	@param key string? -- `key` input parameter.
-	@param handler (key: string, newVal: any, oldVal: any) -> () -- `handler` input parameter.
-	@return () -> () -- Return value produced by the implementation, if any.
-]=]
+
 
 function ReactiveStore:Subscribe(key: string?, handler: (key: string, newVal: any, oldVal: any) -> ()): () -> ()
-	_nextSubId += 1
+	_nextSubId + = 1
 	local sub: StoreSubscription = {
 		Key = key,
 		Handler = handler,
@@ -112,29 +89,17 @@ function ReactiveStore:Subscribe(key: string?, handler: (key: string, newVal: an
 		end
 	end
 end
---[=[
-	@description Returns the data produced by `ReactiveStore.GetVersion`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return number -- Return value produced by the implementation, if any.
-]=]
+
 
 function ReactiveStore:GetVersion(): number
 	return self._version
 end
---[=[
-	@description Returns whether `ReactiveStore` is dirty.
-	@param key string -- `key` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
-]=]
+
 
 function ReactiveStore:IsDirty(key: string): boolean
 	return self._dirtyKeys[key] == true
 end
---[=[
-	@description Implements `ReactiveStore.ClearDirty`.
-	@param key string? -- `key` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ReactiveStore:ClearDirty(key: string?)
 	if key then
@@ -143,20 +108,12 @@ function ReactiveStore:ClearDirty(key: string?)
 		table.clear(self._dirtyKeys)
 	end
 end
---[=[
-	@description Returns the data produced by `ReactiveStore.GetSnapshot`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return { [string]: any } -- Return value produced by the implementation, if any.
-]=]
+
 
 function ReactiveStore:GetSnapshot(): { [string]: any }
 	return table.clone(self._data)
 end
---[=[
-	@description Implements `ReactiveStore.Destroy`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ReactiveStore:Destroy()
 	table.clear(self._subscribers)
@@ -164,13 +121,7 @@ function ReactiveStore:Destroy()
 	table.clear(self._data)
 	table.clear(self._dirtyKeys)
 end
---[=[
-	@description Implements `ReactiveStore._Notify`.
-	@param key string -- `key` input parameter.
-	@param newVal any -- `newVal` input parameter.
-	@param oldVal any -- `oldVal` input parameter.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function ReactiveStore:_Notify(key: string, newVal: any, oldVal: any)
 	-- Key-specific subscribers

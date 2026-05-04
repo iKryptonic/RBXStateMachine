@@ -1,59 +1,59 @@
 --!strict
 --[=[
-    @Name CharacterEntity
-    @Description Ephemeral in-world combat entity for an active character spawn. It mirrors runtime
-    health/resources, equipment hands, movement/combat locks, and animation-observable state.
+	@Name CharacterEntity
+	@Description Ephemeral in-world combat entity for an active character spawn. It mirrors runtime
+	health/resources, equipment hands, movement/combat locks, and animation-observable state.
 
-    Schema Fields:
-    - PlayerEntityId: string (Replicate: true, Persist: false) -- Link back to the owning PlayerEntity.
-    - UserId: number (Replicate: true, Persist: false) -- Runtime owner user id.
-    - Health: number (Replicate: true, Persist: false) -- Current health value.
-    - MaxHealth: number (Replicate: true, Persist: false) -- Derived health cap.
-    - Stamina: number (Replicate: true, Persist: false) -- Current stamina value.
-    - MaxStamina: number (Replicate: true, Persist: false) -- Derived stamina cap.
-    - Mana: number (Replicate: true, Persist: false) -- Current mana value.
-    - MaxMana: number (Replicate: true, Persist: false) -- Derived mana cap.
-    - TargetEntityId: string (Replicate: true, Persist: false) -- Current combat target.
-    - IsBlocking: boolean (Replicate: true, Persist: false) -- Block stance flag.
-    - CanAnimate: boolean (Replicate: true, Persist: false) -- Master animation enable switch.
-    - IsStunned: boolean (Replicate: true, Persist: false) -- Stun crowd-control flag.
-    - IsKnocked: boolean (Replicate: true, Persist: false) -- Knockdown/knockback control flag.
-    - CanMove: boolean (Replicate: true, Persist: false) -- Movement permission flag.
-    - MoveSpeedCap: number (Replicate: true, Persist: false) -- Active walk speed cap.
-    - MouseLocked: boolean (Replicate: true, Persist: false) -- Runtime camera/mouse lock preference.
-    - EquippedRight: string (Replicate: true, Persist: false) -- Right-hand equipped item id.
-    - EquippedLeft: string (Replicate: true, Persist: false) -- Left-hand equipped item id.
-    - EquipLock: any (Replicate: false, Persist: false) -- Server-only equip mutation guard payload.
-    - CombatLock: boolean (Replicate: false, Persist: false) -- Server-only combat lock flag.
-    - CCLock: boolean (Replicate: false, Persist: false) -- Server-only crowd-control lock flag.
-    - AbilityCooldowns: any (Replicate: false, Persist: false) -- Server-only cast cooldown state.
-    - ActiveStatusEffects: any (Replicate: true, Persist: false) -- Replicated active buff/debuff entries.
-    - ActiveCastId: string (Replicate: true, Persist: false) -- Currently executing cast id.
-    - ActionSeq: number (Replicate: true, Persist: false) -- Monotonic action replication sequence.
-    - RecentActions: any (Replicate: true, Persist: false) -- Recent action payloads for render routing.
-    - LocomotionState: string (Replicate: true, Persist: false) -- Client-observed base movement state.
-    - ActionOverlay: string (Replicate: true, Persist: false) -- Client-observed overlay/action state.
-    - AnimationState: string (Replicate: true, Persist: false) -- High-level animation blend state.
-    - SprintIntent: boolean (Replicate: false, Persist: false) -- Local/server sprint request flag.
-    - InputMode: string (Replicate: false, Persist: false) -- Current runtime input/combat mode.
-    - Instance: any (Replicate: false, Persist: false) -- Live character model reference.
+	Schema Fields:
+	- PlayerEntityId: string (Replicate: true, Persist: false) -- Link back to the owning PlayerEntity.
+	- UserId: number (Replicate: true, Persist: false) -- Runtime owner user id.
+	- Health: number (Replicate: true, Persist: false) -- Current health value.
+	- MaxHealth: number (Replicate: true, Persist: false) -- Derived health cap.
+	- Stamina: number (Replicate: true, Persist: false) -- Current stamina value.
+	- MaxStamina: number (Replicate: true, Persist: false) -- Derived stamina cap.
+	- Mana: number (Replicate: true, Persist: false) -- Current mana value.
+	- MaxMana: number (Replicate: true, Persist: false) -- Derived mana cap.
+	- TargetEntityId: string (Replicate: true, Persist: false) -- Current combat target.
+	- IsBlocking: boolean (Replicate: true, Persist: false) -- Block stance flag.
+	- CanAnimate: boolean (Replicate: true, Persist: false) -- Master animation enable switch.
+	- IsStunned: boolean (Replicate: true, Persist: false) -- Stun crowd-control flag.
+	- IsKnocked: boolean (Replicate: true, Persist: false) -- Knockdown/knockback control flag.
+	- CanMove: boolean (Replicate: true, Persist: false) -- Movement permission flag.
+	- MoveSpeedCap: number (Replicate: true, Persist: false) -- Active walk speed cap.
+	- MouseLocked: boolean (Replicate: true, Persist: false) -- Runtime camera/mouse lock preference.
+	- EquippedRight: string (Replicate: true, Persist: false) -- Right-hand equipped item id.
+	- EquippedLeft: string (Replicate: true, Persist: false) -- Left-hand equipped item id.
+	- EquipLock: any (Replicate: false, Persist: false) -- Server-only equip mutation guard payload.
+	- CombatLock: boolean (Replicate: false, Persist: false) -- Server-only combat lock flag.
+	- CCLock: boolean (Replicate: false, Persist: false) -- Server-only crowd-control lock flag.
+	- AbilityCooldowns: any (Replicate: false, Persist: false) -- Server-only cast cooldown state.
+	- ActiveStatusEffects: any (Replicate: true, Persist: false) -- Replicated active buff/debuff entries.
+	- ActiveCastId: string (Replicate: true, Persist: false) -- Currently executing cast id.
+	- ActionSeq: number (Replicate: true, Persist: false) -- Monotonic action replication sequence.
+	- RecentActions: any (Replicate: true, Persist: false) -- Recent action payloads for render routing.
+	- LocomotionState: string (Replicate: true, Persist: false) -- Client-observed base movement state.
+	- ActionOverlay: string (Replicate: true, Persist: false) -- Client-observed overlay/action state.
+	- AnimationState: string (Replicate: true, Persist: false) -- High-level animation blend state.
+	- SprintIntent: boolean (Replicate: false, Persist: false) -- Local/server sprint request flag.
+	- InputMode: string (Replicate: false, Persist: false) -- Current runtime input/combat mode.
+	- Instance: any (Replicate: false, Persist: false) -- Live character model reference.
 
-    Used by:
-    - LoadPlayerJob and SpawnCharacterJob for creation, spawn reset, and humanoid synchronization.
-    - AttackJob, CastFSM, BlockJob, CrowdControlFSM, MovementConstraintJob, and DamageJob for combat state.
-    - EquipJob, UnEquipJob, ToggleWeaponJob, and InventoryItemFSM for hand equipment state.
-    - LocomotionFSM, ActionFSM, AnimationStateFSM, DashFSM, and render routing for replicated animation observability.
+	Used by:
+	- LoadPlayerJob and SpawnCharacterJob for creation, spawn reset, and humanoid synchronization.
+	- AttackJob, CastFSM, BlockJob, CrowdControlFSM, MovementConstraintJob, and DamageJob for combat state.
+	- EquipJob, UnEquipJob, ToggleWeaponJob, and InventoryItemFSM for hand equipment state.
+	- LocomotionFSM, ActionFSM, AnimationStateFSM, DashFSM, and render routing for replicated animation observability.
 
-    Lifecycle:
-    - Created when a character spawn is prepared and linked to a PlayerEntity.
-    - Reset to runtime defaults on each spawn/respawn rather than restored from persistence.
-    - Mutated heavily during combat, movement, and status-effect gameplay.
-    - Destroyed with the current character or player teardown, then recreated for the next spawn.
+	Lifecycle:
+	- Created when a character spawn is prepared and linked to a PlayerEntity.
+	- Reset to runtime defaults on each spawn/respawn rather than restored from persistence.
+	- Mutated heavily during combat, movement, and status-effect gameplay.
+	- Destroyed with the current character or player teardown, then recreated for the next spawn.
 
-    Defaults and Migration:
-    - GetContext seeds fresh combat state for a newly spawned character.
-    - LoadPlayerJob re-applies canonical defaults to protect against stale runtime state between respawns.
-    - No fields persist; migration concerns are about spawn reset consistency rather than save format upgrades.
+	Defaults and Migration:
+	- GetContext seeds fresh combat state for a newly spawned character.
+	- LoadPlayerJob re-applies canonical defaults to protect against stale runtime state between respawns.
+	- No fields persist; migration concerns are about spawn reset consistency rather than save format upgrades.
 ]=]
 
 local RunService = game:GetService("RunService")
@@ -336,8 +336,8 @@ if changes.EquippedRight ~= nil or changes.EquippedLeft ~= nil then
 local renderRouter = self._renderRouter
 if renderRouter and typeof(renderRouter._handleEquipVisual) == "function" then
 renderRouter:_handleEquipVisual({
-Kind = if changes.EquippedRight ~= nil then "Equip" else "UnEquip",
-Payload = { Hand = if changes.EquippedRight ~= nil then "Right" else "Left" },
+Kind = if changes.EquippedRight ~= nil then"Equip" else"UnEquip",
+Payload = { Hand = if changes.EquippedRight ~= nil then"Right" else"Left" },
 })
 end
 end

@@ -1,23 +1,16 @@
 --!strict
---[=[
-	@module RequestFSM
-	@description Defines the `RequestFSM` state machine module and its exported API.
-]=]
+
 
 local RequestFSM = {
 	Definition = {
 		Name = "RequestFSM",
-		ValidStates = { "Queued", "Processing", "Retrying", "Success", "Failed" },
-		TerminalStates = { "Success", "Failed" },
+		ValidStates = {"Queued","Processing","Retrying","Success","Failed" },
+		TerminalStates = {"Success","Failed" },
 		InitialState = "Queued",
 		Priority = 2 -- High priority for responsive data handling
 	}
 }
---[=[
-	@description Handles `RegisterStates` for `RequestFSM`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function RequestFSM:RegisterStates()
 	local Orchestrator = self.Context.Orchestrator
@@ -38,20 +31,14 @@ function RequestFSM:RegisterStates()
 		warn("[RequestFSM] RetryBehavior module not found — using inline retry")
 	end
 	local RetryBehavior = retryModule and require(retryModule).Create(Orchestrator) or nil
-	--[=[
-		@state Queued
-		@description Handles the `Queued` state for `RequestFSM`.
-	]=]
+
 
 	self:AddState("Queued", {
 		OnEnter = function(_, fsm)
 			fsm.State = "Processing"
 		end
 	})
-	--[=[
-		@state Processing
-		@description Handles the `Processing` state for `RequestFSM`.
-	]=]
+
 
 	self:AddState("Processing", {
 		OnEnter = function(_, fsm)
@@ -63,20 +50,14 @@ function RequestFSM:RegisterStates()
 			RetryBehavior(fsm.Context)
 		end
 	})
-	--[=[
-		@state Retrying
-		@description Handles the `Retrying` state for `RequestFSM`.
-	]=]
+
 
 	self:AddState("Retrying", {
 		OnEnter = function(_, fsm)
 			fsm.State = "Processing"
 		end
 	})
-	--[=[
-		@state Success
-		@description Handles the `Success` state for `RequestFSM`.
-	]=]
+
 
 	self:AddState("Success", {
 		OnEnter = function(_, fsm)
@@ -88,7 +69,7 @@ function RequestFSM:RegisterStates()
 	--[=[
 		@state Failed
 		@description Handles the `Failed` terminal state for `RequestFSM`.
-	]=]
+]=]
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm)

@@ -1,13 +1,10 @@
 --!strict
---[=[
-	@module JumpFSM
-	@description Defines the `JumpFSM` state machine module and its exported API.
-]=]
+
 
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
-assert(Helpers, "Helpers folder not found")
+assert(Helpers,"Helpers folder not found")
 local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 
 local JumpFSM = {
@@ -29,7 +26,7 @@ local JumpFSM = {
 		"Completed",
 		"Failed",
 	},
-	terminalStates = { "Completed", "Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Grounded",
 }
 
@@ -84,17 +81,10 @@ local function getCharacterEntity(fsm: any): any?
 	end
 	return orchestrator.GetEntity(fsm.CharacterEntityId)
 end
---[=[
-	@description Handles `RegisterStates` for `JumpFSM`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function JumpFSM:RegisterStates()
-	--[=[
-		@state Grounded
-		@description Handles the `Grounded` state for `JumpFSM`.
-	]=]
+
 
 	self:AddState("Grounded", {
 		OnEnter = function(_, fsm)
@@ -115,11 +105,8 @@ function JumpFSM:RegisterStates()
 				TargetState = "InAir",
 			},
 		},
-	}, { "InAir" })
-	--[=[
-		@state InAir
-		@description Handles the `InAir` state for `JumpFSM`.
-	]=]
+	}, {"InAir" })
+
 
 	self:AddState("InAir", {
 		OnEnter = function(_, fsm)
@@ -143,11 +130,8 @@ function JumpFSM:RegisterStates()
 				TargetState = "Grounded",
 			},
 		},
-	}, { "ValidateFlip", "Grounded" })
-	--[=[
-		@state ValidateFlip
-		@description Handles the `ValidateFlip` state for `JumpFSM`.
-	]=]
+	}, {"ValidateFlip","Grounded" })
+
 
 	self:AddState("ValidateFlip", {
 		OnEnter = function(_, fsm)
@@ -161,11 +145,8 @@ function JumpFSM:RegisterStates()
 			fsm.Context._humanoid = humanoid
 			fsm.State = "DeductFlipStamina"
 		end,
-	}, { "DeductFlipStamina", "Grounded" })
-	--[=[
-		@state DeductFlipStamina
-		@description Handles the `DeductFlipStamina` state for `JumpFSM`.
-	]=]
+	}, {"DeductFlipStamina","Grounded" })
+
 
 	self:AddState("DeductFlipStamina", {
 		OnEnter = function(_, fsm)
@@ -187,11 +168,8 @@ function JumpFSM:RegisterStates()
 			end)
 			fsm.State = "PlayFlipSound"
 		end,
-	}, { "PlayFlipSound", "InAir" })
-	--[=[
-		@state PlayFlipSound
-		@description Handles the `PlayFlipSound` state for `JumpFSM`.
-	]=]
+	}, {"PlayFlipSound","InAir" })
+
 
 	self:AddState("PlayFlipSound", {
 		OnEnter = function(_, fsm)
@@ -206,11 +184,8 @@ function JumpFSM:RegisterStates()
 			end
 			fsm.State = "TriggerFlipAnimation"
 		end,
-	}, { "TriggerFlipAnimation" })
-	--[=[
-		@state TriggerFlipAnimation
-		@description Handles the `TriggerFlipAnimation` state for `JumpFSM`.
-	]=]
+	}, {"TriggerFlipAnimation" })
+
 
 	self:AddState("TriggerFlipAnimation", {
 		OnEnter = function(_, fsm)
@@ -222,11 +197,8 @@ function JumpFSM:RegisterStates()
 			end
 			fsm.State = "ApplyUpwardForce"
 		end,
-	}, { "ApplyUpwardForce" })
-	--[=[
-		@state ApplyUpwardForce
-		@description Handles the `ApplyUpwardForce` state for `JumpFSM`.
-	]=]
+	}, {"ApplyUpwardForce" })
+
 
 	self:AddState("ApplyUpwardForce", {
 		OnEnter = function(_, fsm)
@@ -240,15 +212,12 @@ function JumpFSM:RegisterStates()
 			bodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
 			bodyVelocity.Velocity = Vector3.new(0, UPWARD_VELOCITY, 0)
 			bodyVelocity.Parent = rootPart
-			fsm:TrackInstance(bodyVelocity, "FlipBodyVelocity")
+			fsm:TrackInstance(bodyVelocity,"FlipBodyVelocity")
 			fsm.Context._bodyVelocity = bodyVelocity
 			fsm.State = "RotateCharacter"
 		end,
-	}, { "RotateCharacter", "Grounded" })
-	--[=[
-		@state RotateCharacter
-		@description Handles the `RotateCharacter` state for `JumpFSM`.
-	]=]
+	}, {"RotateCharacter","Grounded" })
+
 
 	self:AddState("RotateCharacter", {
 		OnEnter = function(_, fsm)
@@ -272,11 +241,8 @@ function JumpFSM:RegisterStates()
 			end
 			fsm.State = "Flipping"
 		end,
-	}, { "Flipping" })
-	--[=[
-		@state Flipping
-		@description Handles the `Flipping` state for `JumpFSM`.
-	]=]
+	}, {"Flipping" })
+
 
 	self:AddState("Flipping", {
 		OnEnter = function(_, fsm)
@@ -296,11 +262,8 @@ function JumpFSM:RegisterStates()
 		},
 		Timeout = FLIP_TIMEOUT,
 		OnTimeout = "Cooldown",
-	}, { "PlayLandSound", "Cooldown" })
-	--[=[
-		@state PlayLandSound
-		@description Handles the `PlayLandSound` state for `JumpFSM`.
-	]=]
+	}, {"PlayLandSound","Cooldown" })
+
 
 	self:AddState("PlayLandSound", {
 		OnEnter = function(_, fsm)
@@ -316,11 +279,8 @@ function JumpFSM:RegisterStates()
 			end
 			fsm.State = "TriggerLandAnimation"
 		end,
-	}, { "TriggerLandAnimation" })
-	--[=[
-		@state TriggerLandAnimation
-		@description Handles the `TriggerLandAnimation` state for `JumpFSM`.
-	]=]
+	}, {"TriggerLandAnimation" })
+
 
 	self:AddState("TriggerLandAnimation", {
 		OnEnter = function(_, fsm)
@@ -330,35 +290,32 @@ function JumpFSM:RegisterStates()
 			end
 			fsm.State = "Cooldown"
 		end,
-	}, { "Cooldown" })
-	--[=[
-		@state Cooldown
-		@description Handles the `Cooldown` state for `JumpFSM`.
-	]=]
+	}, {"Cooldown" })
+
 
 	self:AddState("Cooldown", {
 		OnEnter = function(_, fsm)
-			fsm:ScheduleTransition(COOLDOWN_DURATION, "Grounded")
+			fsm:ScheduleTransition(COOLDOWN_DURATION,"Grounded")
 		end,
-	}, { "Grounded" })
+	}, {"Grounded" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `JumpFSM`.
-	]=]
+	@state Completed
+	@description Terminal success sink reserved for explicit shutdown of the jump FSM. Normal jump and flip handling returns to `Grounded` after landing cooldown rather than terminating here.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `JumpFSM`.
-	]=]
+	@state Failed
+	@description Terminal failure sink reserved for future jump-processing errors. The current flow does not route here, and `OnEnter` is a no-op.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Failed", function(_fsm) end, {})
 end
---[=[
-	@description Implements `JumpFSM.TryDoubleJump`.
-	@param fsm any -- `fsm` input parameter.
-	@return boolean -- Return value produced by the implementation, if any.
-]=]
+
 
 function JumpFSM.TryDoubleJump(fsm: any): boolean
 	if fsm.State ~= "InAir" then

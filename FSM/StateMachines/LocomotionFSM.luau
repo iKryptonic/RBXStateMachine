@@ -1,14 +1,11 @@
 --!strict
---[=[
-	@module LocomotionFSM
-	@description Defines the `LocomotionFSM` state machine module and its exported API.
-]=]
+
 
 local LocomotionFSM = {
 	Name = "LocomotionFSM",
 	className = "LocomotionFSM",
-	validStates = { "Idle", "Walking", "Running", "Airborne", "Completed", "Failed" },
-	terminalStates = { "Completed", "Failed" },
+	validStates = {"Idle","Walking","Running","Airborne","Completed","Failed" },
+	terminalStates = {"Completed","Failed" },
 	initialState = "Idle",
 }
 
@@ -57,21 +54,14 @@ local function writeState(fsm: any, state: string)
 		charEntity.LocomotionState = state
 	end
 end
---[=[
-	@description Handles `RegisterStates` for `LocomotionFSM`.
-	@param none nil -- This function does not accept explicit parameters.
-	@return any -- Return value produced by the implementation, if any.
-]=]
+
 
 function LocomotionFSM:RegisterStates()
-	--[=[
-		@state Idle
-		@description Handles the `Idle` state for `LocomotionFSM`.
-	]=]
+
 
 	self:AddState("Idle", {
 		OnEnter = function(_, fsm)
-			writeState(fsm, "Idle")
+			writeState(fsm,"Idle")
 		end,
 		Transitions = {
 			{
@@ -96,15 +86,12 @@ function LocomotionFSM:RegisterStates()
 				TargetState = "Walking",
 			},
 		},
-	}, { "Walking", "Running", "Airborne" })
-	--[=[
-		@state Walking
-		@description Handles the `Walking` state for `LocomotionFSM`.
-	]=]
+	}, {"Walking","Running","Airborne" })
+
 
 	self:AddState("Walking", {
 		OnEnter = function(_, fsm)
-			writeState(fsm, "Walking")
+			writeState(fsm,"Walking")
 		end,
 		Transitions = {
 			{
@@ -129,15 +116,12 @@ function LocomotionFSM:RegisterStates()
 				TargetState = "Idle",
 			},
 		},
-	}, { "Idle", "Running", "Airborne" })
-	--[=[
-		@state Running
-		@description Handles the `Running` state for `LocomotionFSM`.
-	]=]
+	}, {"Idle","Running","Airborne" })
+
 
 	self:AddState("Running", {
 		OnEnter = function(_, fsm)
-			writeState(fsm, "Running")
+			writeState(fsm,"Running")
 		end,
 		Transitions = {
 			{
@@ -166,15 +150,12 @@ function LocomotionFSM:RegisterStates()
 				TargetState = "Walking",
 			},
 		},
-	}, { "Idle", "Walking", "Airborne" })
-	--[=[
-		@state Airborne
-		@description Handles the `Airborne` state for `LocomotionFSM`.
-	]=]
+	}, {"Idle","Walking","Airborne" })
+
 
 	self:AddState("Airborne", {
 		OnEnter = function(_, fsm)
-			writeState(fsm, "Airborne")
+			writeState(fsm,"Airborne")
 		end,
 		Transitions = {
 			{
@@ -205,17 +186,21 @@ function LocomotionFSM:RegisterStates()
 				TargetState = "Idle",
 			},
 		},
-	}, { "Idle", "Walking", "Running" })
+	}, {"Idle","Walking","Running" })
 	--[=[
-		@state Completed
-		@description Handles the `Completed` terminal state for `LocomotionFSM`.
-	]=]
+	@state Completed
+	@description Terminal success sink reserved for explicit shutdown of the locomotion observer. Normal operation continuously cycles between `Idle`, `Walking`, `Running`, and `Airborne`.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
-		@state Failed
-		@description Handles the `Failed` terminal state for `LocomotionFSM`.
-	]=]
+	@state Failed
+	@description Terminal failure sink reserved for future locomotion errors. The current movement observer never routes here, and `OnEnter` is a no-op.
+		Transitions: none.
+		Writes: none.
+]=]
 
 	self:AddState("Failed", function() end, {})
 end
