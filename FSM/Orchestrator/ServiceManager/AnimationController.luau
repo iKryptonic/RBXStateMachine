@@ -1,8 +1,5 @@
 --!strict
--- @Name ServiceManager/AnimationController.luau
--- @Author iKrypto
--- @Description FSM-driven staggered animation system. Every interaction triggers
--- responsive, queued animations giving the UI an "alive" feel.
+
 
 local TweenService = game:GetService("TweenService")
 
@@ -18,7 +15,7 @@ type AnimationEntry = {
 	TweenInfo: TweenInfo,
 	Delay: number,
 	OnComplete: (() -> ())?,
-	State: "queued" | "playing" | "done",
+	State:"queued" |"playing" |"done",
 	Tween: Tween?,
 }
 
@@ -32,6 +29,7 @@ type PulseEntry = {
 	Active: boolean,
 }
 
+
 function AnimationController.new(): any
 	local self = setmetatable({}, AnimationController)
 	self._queue = {} :: { AnimationEntry }
@@ -42,7 +40,7 @@ function AnimationController.new(): any
 	return self
 end
 
--- Queue a single animated property change
+
 function AnimationController:Animate(target: Instance, properties: { [string]: any }, tweenInfo: TweenInfo?, delay: number?, onComplete: (() -> ())?)
 	self._nextId += 1
 	local id = "anim_" .. tostring(self._nextId)
@@ -62,7 +60,7 @@ function AnimationController:Animate(target: Instance, properties: { [string]: a
 	return id
 end
 
--- Staggered list animation: animate N items with incremental delays
+
 function AnimationController:StaggerIn(items: { Instance }, propertyFrom: { [string]: any }, propertyTo: { [string]: any }, tweenInfo: TweenInfo?)
 	local ti = tweenInfo or Theme.Tween.Fast
 	for i, item in ipairs(items) do
@@ -75,7 +73,7 @@ function AnimationController:StaggerIn(items: { Instance }, propertyFrom: { [str
 	end
 end
 
--- Pulse effect: continuous glow/dim cycle on an element
+
 function AnimationController:StartPulse(id: string, target: Instance, property: string, pulseValue: any, tweenInfo: TweenInfo?)
 	-- Stop existing pulse if any
 	self:StopPulse(id)
@@ -97,6 +95,7 @@ function AnimationController:StartPulse(id: string, target: Instance, property: 
 	}
 end
 
+
 function AnimationController:StopPulse(id: string)
 	local pulse = self._pulses[id]
 	if not pulse then return end
@@ -112,7 +111,7 @@ function AnimationController:StopPulse(id: string)
 	self._pulses[id] = nil
 end
 
--- Expand-in animation for sub-panes
+
 function AnimationController:ExpandIn(frame: Frame, fromScale: number?, duration: number?)
 	local scale = fromScale or 0.92
 	local dur = duration or 0.3
@@ -142,7 +141,7 @@ function AnimationController:ExpandIn(frame: Frame, fromScale: number?, duration
 	end
 end
 
--- Collapse-out animation
+
 function AnimationController:CollapseOut(frame: Frame, onDone: (() -> ())?)
 	local ti = Theme.Tween.Collapse
 	local content = frame:FindFirstChild("Content") :: Frame?
@@ -163,7 +162,7 @@ function AnimationController:CollapseOut(frame: Frame, onDone: (() -> ())?)
 	end)
 end
 
--- Hover glow effect
+
 function AnimationController:HoverGlow(button: GuiButton, glowColor: Color3?)
 	local color = glowColor or Theme.Colors.Accent
 	local origBG = button.BackgroundColor3
@@ -184,7 +183,7 @@ function AnimationController:HoverGlow(button: GuiButton, glowColor: Color3?)
 	end)
 end
 
--- Process the animation queue (called each tick)
+
 function AnimationController:Tick()
 	local i = 1
 	while i <= #self._queue do
@@ -224,7 +223,7 @@ function AnimationController:Tick()
 	end
 end
 
--- Cleanup all
+
 function AnimationController:Destroy()
 	for _, entry in ipairs(self._queue) do
 		if entry.Tween then entry.Tween:Cancel() end

@@ -32,14 +32,16 @@ local BaseStateMachine = {}
 
 local Logger, Signal, Settings, Initialized;
 
---[=[
-	@description Initializes the BaseStateMachine module with shared utilities.
-	Must be called once before any instances are created.
 
-	@param Util table -- Orchestrator utility table containing Logger, Signal, and Settings
-	@return ()
+--[=[
+	Bootstraps the BaseStateMachine module with the shared framework utilities.
+	Stores Logger, Signal, and Settings in module-local upvalues used by every
+	subsequent `new()` call. No-ops after the first successful call.
+
+	@param Util table -- Shared Orchestrator utilities; must expose `Util.Logger.new`,
+	       `Util.Signal`, and `Util.Settings`.
 	@reads Initialized
-	@writes Module-level Logger, Signal, Settings upvalues, Initialized
+	@writes Logger, Signal, Settings, Initialized
 ]=]
 function BaseStateMachine.Initialize(Util)
 	if Initialized then return end
@@ -71,7 +73,7 @@ local function __index(t, k)
 		if classMember ~= nil then return classMember end
 	end
 
-	local context = rawget(t, "Context")
+	local context = rawget(t,"Context")
 	if context and context[k] ~= nil then
 		return context[k]
 	end
@@ -87,10 +89,10 @@ BaseStateMachine.__tostring = __tostring
 
 -- Standard Priority Levels
 BaseStateMachine.Priorities = {
-	Render = 1,      -- Runs every frame
-	High = 2,        -- Runs every 2 frames
-	Medium = 5,      -- Runs every 5 frames
-	Low = 10,        -- Runs every 10 frames
+	Render = 1, -- Runs every frame
+	High = 2, -- Runs every 2 frames
+	Medium = 5, -- Runs every 5 frames
+	Low = 10, -- Runs every 10 frames
 	Background = 30, -- Runs every 30 frames (0.5s at 60fps)
 }
 
@@ -100,10 +102,10 @@ local GlobalHeartbeat: RBXScriptConnection? = nil
 local GlobalFrameCount = 0
 
 local function initPerf(self: any)
-	if rawget(self, "Perf") ~= nil then
+	if rawget(self,"Perf") ~= nil then
 		return
 	end
-	rawset(self, "Perf", {
+	rawset(self,"Perf", {
 		UpdateCount = 0,
 		TotalUpdateTime = 0,
 		MaxUpdateTime = 0,
@@ -119,24 +121,25 @@ local function initPerf(self: any)
 	})
 end
 
--- Types are now imported from Types.luau
 
 --[=[
-	@description Creates a new BaseStateMachine instance with the given parameters.
-	Sets up internal state tracking, signal events, priority scheduling, and
-	performance telemetry. This is the low-level constructor; prefer using
-	`Subclass.new()` from `BaseStateMachine.Extend()` for user-facing FSMs.
+	Low-level constructor that allocates and returns a raw BaseStateMachine
+	instance table. Validates and stores the priority (clamped to ≥1),
+	allocates the four lifecycle signals (Completed, Failed, Cancelled,
+	StateChanged), constructs the `validStates` and `TerminalStates` lookup
+	sets, initialises the `Perf` telemetry block, and sets up all runtime
+	tracking fields (StateDuration, TransitionHistory, WaitSpan, etc.).
+	Most code should use a subclass constructor from `BaseStateMachine.Extend`
+	rather than calling this directly.
 
-	@param params table
-		- Id: string -- Unique identifier for this FSM instance
-		- Name: string -- Display name (used in logging)
-		- ValidStates: { string }? -- Whitelist of allowed state names
-		- TerminalStates: { string }? -- States that auto-finish the FSM
-		- InitialState: string? -- Default state when Start() is called without one
-		- Context: any? -- Arbitrary data table accessible via `self.Context`
-		- Priority: number? -- Update frequency (see BaseStateMachine.Priorities)
-	@return BaseStateMachine -- The new instance (not yet started)
-	@reads None
+	@param params { Id, Name, ValidStates?, TerminalStates?, InitialState?,
+	       Context?, Priority?, TransitionHistoryMax? } -- Construction parameters.
+	       `Id` is the unique FSM identifier used in logs and Registry.
+	       `ValidStates` populates the allowlist checked on every `AddState` and
+	       `ChangeState` call. `TerminalStates` are auto-finished on entry.
+	       `Priority` controls heartbeat update cadence (1 = every frame).
+	@return any -- Raw FSM instance; call `:Start()` to begin execution.
+	@reads Logger, Signal, Initialized
 	@writes self.* (all instance fields)
 ]=]
 function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {string}?, TerminalStates: {string}?, InitialState: string?, Context: any?, Priority: number? })
@@ -167,13 +170,14 @@ function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {
 	self._states = {} :: { [string]: any }
 	self._transitions = {} :: { [string]: {string} }
 	self._cleanupTasks = {} :: { any }
+	self._managedInstances = {} :: { { Instance: Instance, Label: string, CreatedAt: number } }
 	self._legacyCleanup = {} :: {[(() -> ())?]: any}?
 	self._connection = nil :: RBXScriptConnection?
 	-- Ring buffer of transitions for the visualizer's history panel.
 	-- Each entry: { From: string?, To: string, Time: number }
 	self.TransitionHistory = {} :: { { From: string?, To: string, Time: number } }
 	-- Clamp to a sane range so users can't accidentally set this to 10M.
-	local histMax = 100
+	local histMax = 30
 	if type(params) == "table" and type((params :: any).TransitionHistoryMax) == "number" then
 		histMax = math.clamp(math.floor((params :: any).TransitionHistoryMax), 10, 500)
 	end
@@ -241,30 +245,77 @@ function BaseStateMachine.new(params: { Id: string, Name: string, ValidStates: {
 	return self
 end
 
+
+--[=[
+	Returns the Orchestrator instance accessible from this FSM. Checks
+	`self.Context._Orchestrator` first (injected by the Orchestrator when it
+	creates FSMs), then falls back to `shared.fsm.Orchestrator` for FSMs
+	created outside the factory. Returns nil if neither route resolves.
+
+	@return any? -- Orchestrator instance, or nil.
+	@reads self.Context._Orchestrator, shared.fsm
+	@writes None
+]=]
+function BaseStateMachine:GetOrchestrator()
+	if self.Context and self.Context._Orchestrator then
+		return self.Context._Orchestrator
+	end
+
+	local sharedFsm = (shared :: any).fsm
+	if sharedFsm then
+		return sharedFsm.Orchestrator or sharedFsm
+	end
+
+	return nil
+end
+
+
+--[=[
+	Convenience shortcut that resolves an entity by id through the Orchestrator.
+	Equivalent to `self:GetOrchestrator().GetEntity(entityId)`.
+	Returns nil when the Orchestrator is unavailable or the entity is not
+	registered.
+
+	@param entityId string -- Unique entity identifier to look up.
+	@return any? -- Entity instance, or nil.
+	@reads self.Context._Orchestrator (via GetOrchestrator)
+	@writes None
+]=]
+function BaseStateMachine:GetEntity(entityId: string)
+	local orchestrator = self:GetOrchestrator()
+	if orchestrator and orchestrator.GetEntity then
+		return orchestrator.GetEntity(entityId)
+	end
+
+	return nil
+end
+
 local function isTerminalState(self: any, stateName: string): boolean
-	local setTable = rawget(self, "TerminalStates")
+	local setTable = rawget(self,"TerminalStates")
 	if type(setTable) == "table" and setTable[stateName] == true then
 		return true
 	end
 	return false
 end
 
---[=[
-	@description Creates a BaseStateMachine subclass (class table) from a definition.
-	Returns a new class table with a `.new()` constructor that produces properly
-	initialized FSM instances. The subclass inherits all BaseStateMachine methods
-	and calls `RegisterStates()` automatically during construction.
 
-	@param extensionParams table
-		- className: string -- Name for logging and identification
-		- validStates: { string }? -- Whitelist of allowed state names
-		- terminalStates: { string }? -- States that auto-finish the FSM
-		- InitialState: string? -- Default starting state
-		- context: { [any]: any }? -- Default context template
-		- Priority: number? -- Update frequency tier (default: Priorities.Render)
-	@return any -- Subclass table with `.new(...)` constructor
+--[=[
+	Creates and returns a new FSM subclass. `extensionParams` is stored as
+	`Subclass.Definition` and propagated to the base constructor. The returned
+	Subclass inherits all BaseStateMachine methods via a static metatable and
+	exposes a `.new(...)` constructor that creates an instance, sets its
+	instance metatable (including the `super` shortcut), and calls
+	`RegisterStates` immediately so all state handlers are registered before
+	`Start` is called.
+
+	@param extensionParams { className, validStates?, terminalStates?,
+	       InitialState?, context?, Priority? } -- Class definition fields.
+	       `className` is used as the FSM display name and log prefix.
+	       `validStates` enforces the allowed state name set at both
+	       `AddState` and `ChangeState` time.
+	@return table -- Subclass with `.new`, `.Definition`, and inherited methods.
 	@reads None
-	@writes None (pure factory)
+	@writes None (returns a new table per call)
 ]=]
 function BaseStateMachine.Extend(extensionParams: {className: string, validStates: {string}?, terminalStates: {string}?, InitialState: string?, context: { [any]: any }?, Priority: number?})
 	-- This is the Class Table (where methods like MyClass:Method() will live)
@@ -274,17 +325,14 @@ function BaseStateMachine.Extend(extensionParams: {className: string, validState
 
 	-- Static inheritance: make Subclass inherit from BaseStateMachine
 	setmetatable(Subclass, { __index = BaseStateMachine })
-
 	--[=[
-		@description Creates a new instance of this subclass StateMachine.
-		Calls BaseStateMachine.new() internally, wires up the subclass metatable,
-		and invokes RegisterStates() to register state definitions.
-
-		@param ... any -- Typically a single table { Id/StateMachineId: string, [string]: any }
-		@return BaseStateMachine -- Fully initialized subclass instance
-		@reads extensionParams.className, .validStates, .terminalStates, self.RegisterStates
-		@writes self.Context, self.validStates, self.TerminalStates, self._states, self._transitions
+		@description Creates a concrete FSM instance for the subclass returned by `BaseStateMachine.Extend`. The first variadic argument is treated as the constructor context table, merged with the extension defaults to choose the instance id, valid-state metadata, initial state, priority, and exposed context. After the metatable is installed, `RegisterStates` is invoked immediately so subclass overrides register states against the fully initialized object.
+		@param ... any -- Optional constructor arguments; the first value is expected to be a table containing `Id` or `StateMachineId` plus any per-instance context fields.
+		@return any -- Initialized subclass instance with base signals, context, and registered states ready for `:Start()`.
+		@reads extensionParams.className, extensionParams.validStates, extensionParams.terminalStates, extensionParams.InitialState, extensionParams.Priority
+		@writes self.Id, self.Name, self.Context, self.Priority, self._states, self._transitions
 	]=]
+
 	function Subclass.new(...)
 		local fsmArguments = {...}
 		local ctorArgs = fsmArguments[1] or {} :: any
@@ -316,10 +364,10 @@ function BaseStateMachine.Extend(extensionParams: {className: string, validState
 		if self.RegisterStates then
 			self.RegisterStates(self)
 		else
-			self.Logger:Log({ 
-				Level = "WARN", 
+			self.Logger:Log({
+				Level = "WARN",
 				Message = string.format("Subclass '%s' did not implement 'RegisterStates'.", extensionParams.className),
-				OperationId = self.Id 
+				OperationId = self.Id
 			})
 		end
 
@@ -329,17 +377,21 @@ function BaseStateMachine.Extend(extensionParams: {className: string, validState
 	return Subclass
 end
 
---[=[
-	@description Registers a new state definition with the StateMachine.
-	States can be either a function `(fsm, ...args) -> ()` or a table with
-	`OnEnter`, `OnLeave`, `OnHeartbeat`, and `Transitions` fields.
 
-	@param name string -- The unique state name (must be in validStates if defined)
-	@param state any -- Function or state-object table
-	@param validOutcomes { string }? -- Legal successor state names from this state
-	@return ()
-	@reads self.validStates
-	@writes self._states, self._transitions
+--[=[
+	Registers a state handler under `name`. `state` can be a plain function
+	`(fsm, ...args)` or a table with optional `OnEnter`, `OnLeave`,
+	`OnHeartbeat`, `Transitions`, `Timeout`, and `OnTimeout` hooks.
+	`validOutcomes` is an allowlist of state names that may be transitioned
+	to from this state; an empty/absent list allows all transitions.
+	Warns if called after `:Start()` since late-registered states may miss
+	in-flight transitions.
+
+	@param name string -- State name; must be in `validStates` if that set is non-empty.
+	@param state any -- Function or table defining the state's behavior.
+	@param validOutcomes {string}? -- Allowed destination states from this state.
+	@reads self.validStates, self._started
+	@writes self._states[name], self._transitions[name]
 ]=]
 function BaseStateMachine:AddState(name: string, state: any, validOutcomes: {string}?)
 	if self._started then
@@ -347,17 +399,17 @@ function BaseStateMachine:AddState(name: string, state: any, validOutcomes: {str
 			Level = "WARN",
 			Message = string.format(
 				"AddState('%s') called after :Start(). Late-registered states may miss transitions in flight. "
-				.. "Register all states before calling :Start().",
+				.."Register all states before calling :Start().",
 				name),
 			OperationId = self.Id,
 		})
 	end
 	if next(self.validStates) and not self.validStates[name] then
 		self.Logger:Log
-		{ 
-			Level = "ERROR", 
-			Message = string.format("State '%s' is not in the validStates list.", name), 
-			OperationId = self.Id 
+		{
+			Level = "ERROR",
+			Message = string.format("State '%s' is not in the validStates list.", name),
+			OperationId = self.Id
 		}
 		return
 	end
@@ -365,20 +417,26 @@ function BaseStateMachine:AddState(name: string, state: any, validOutcomes: {str
 	self._transitions[name] = validOutcomes or {}
 end
 
---[=[
-	@description Registers a state that wraps a child StateMachine (hierarchical FSM).
-	The child is created on enter and destroyed on leave. Its Completed/Failed/Cancelled
-	signals are wired to transition the parent FSM according to `config.Transitions`.
 
-	@param name string -- State name for the sub-machine slot
-	@param subMachineClass any -- The child StateMachine class (must have `.new()`)
-	@param config table
-		- Transitions: { OnCompleted: string?, OnFailed: string?, OnCancelled: string? }
-		- InitialState: string -- Starting state for the child FSM
-		- StoreReference: string? -- Optional context key to store the child instance
-	@return ()
-	@reads self.Context
-	@writes self._states, self._transitions
+--[=[
+	Registers a composite state that owns a nested sub-FSM for the duration
+	the parent FSM is in that state. On `OnEnter` a new `subMachineClass`
+	instance is created (sharing the parent's Context), signal connections
+	route sub-machine Completed/Failed/Cancelled to the configured
+	`transitions.OnCompleted / OnFailed / OnCancelled` target states (or
+	propagate upward as Finish/Fail/Cancel when no target is specified).
+	On `OnLeave` all connections are disconnected and the sub-machine is
+	cancelled if still active.
+
+	@param name string -- State name for the composite state in the parent FSM.
+	@param subMachineClass any -- FSM subclass created by `BaseStateMachine.Extend`.
+	@param config { Transitions: { OnCompleted?, OnFailed?, OnCancelled? },
+	       InitialState: string, StoreReference: string? } -- Wiring config.
+	       `StoreReference` names a Context key where the live sub-machine
+	       instance is stored while active.
+	@reads self.validStates, config.Transitions, config.InitialState
+	@writes self._states[name], self._transitions[name],
+	        self.Context[config.StoreReference] (while sub-machine is active)
 ]=]
 function BaseStateMachine:AddSubMachine(name: string, subMachineClass: any, config: any)
 	local subMachineState = {}:: any;
@@ -386,27 +444,37 @@ function BaseStateMachine:AddSubMachine(name: string, subMachineClass: any, conf
 	local initialSubState = config.InitialState;
 	local storeReference = config.StoreReference; -- Uses config.StoreReference as defined in type
 
-	local FailureMessage = (if not transitions then 
+	local FailureMessage = (if not transitions then
 		"AddSubMachine called without transitions configuration."
 		elseif not initialSubState then
 		"AddSubMachine called without initial sub-state configuration."
-		else 
+		else
 		"");
 
 	if FailureMessage ~= "" then
 		self.Logger:Log
-		{ 
-			Level = "ERROR", 
-			Message = FailureMessage, 
-			OperationId = self.Id 
+		{
+			Level = "ERROR",
+			Message = FailureMessage,
+			OperationId = self.Id
 		}
 		return
 	end
 
+
+	--[=[
+		State lifecycle hook called by the parent FSM when it enters the composite
+		state. Instantiates the sub-machine, connects result signals, optionally
+		stores the instance in the parent Context, and calls `sub:Start()`.
+
+		@param fsm any -- The parent BaseStateMachine instance.
+		@reads subMachineClass, transitions, initialSubState, storeReference
+		@writes self.Machine, self._connections, fsm.Context[storeReference]
+	]=]
 	function subMachineState:OnEnter(fsm)
 		self._connections = {}
 		self.Machine = subMachineClass.new({
-			StateMachineId = fsm.Id::string .. "." .. name,
+			StateMachineId = fsm.Id::string .."." .. name,
 			Context = fsm.Context -- Shared context allows data passing
 		})
 
@@ -445,6 +513,16 @@ function BaseStateMachine:AddSubMachine(name: string, subMachineClass: any, conf
 		self.Machine:Start({ State = initialSubState})
 	end
 
+
+	--[=[
+		State lifecycle hook called by the parent FSM when it leaves the composite
+		state. Disconnects all signal connections accumulated in `_connections` and
+		cancels the sub-machine if it is still running.
+
+		@param fsm any -- The parent BaseStateMachine instance (unused, but required by the OnLeave contract).
+		@reads self._connections, self.Machine.IsActive
+		@writes self._connections = nil, self.Machine = nil
+	]=]
 	function subMachineState:OnLeave(fsm)
 		if self._connections then
 			for _, conn in ipairs(self._connections) do
@@ -466,30 +544,80 @@ function BaseStateMachine:AddSubMachine(name: string, subMachineClass: any, conf
 	self:AddState(name, subMachineState, validOutcomes)
 end
 
---[=[
-	@description Registers a disposable object for cleanup when the FSM is destroyed.
-	Accepts Instances, RBXScriptConnections, functions, or tables with a Destroy method.
 
-	@param object any -- The disposable resource to track
-	@return any -- The same object (for inline chaining)
+--[=[
+	Registers `object` for automatic cleanup when `Destroy` is called. Supports
+	Roblox `Instance` (`:Destroy()`), `RBXScriptConnection` (`:Disconnect()`),
+	functions (called directly), and tables with a `.Destroy` method.
+
+	@param object any -- Resource to track.
+	@return any -- Returns `object` unchanged for chaining.
 	@reads None
-	@writes self._cleanupTasks
+	@writes self._cleanupTasks (appends)
 ]=]
 function BaseStateMachine:Manage(object: any)
 	table.insert(self._cleanupTasks, object)
 	return object
 end
 
--- RUNTIME
 
 --[=[
-	@description Disables the internal RunService.Heartbeat connection, allowing
-	external drivers (such as the TaskScheduler) to call `BaseStateMachine.Step(dt)`
-	manually each frame.
+	Records a managed Instance in `_managedInstances` for diagnostics and
+	optionally adds it to the cleanup list so it is destroyed on `Destroy`.
+	When `trackOnly` is true the Instance is only tracked (visible in
+	`GetManagedInstances`) but not destroyed during cleanup.
 
-	@return ()
+	@param inst Instance -- The Roblox Instance to track.
+	@param label string? -- Human-readable label for the visualizer; defaults to `inst.Name`.
+	@param trackOnly boolean? -- When true, skip adding to the cleanup list. Default false.
+	@return Instance -- Returns `inst` for chaining.
+	@reads None
+	@writes self._managedInstances (appends), self._cleanupTasks (appends unless trackOnly)
+]=]
+function BaseStateMachine:TrackInstance(inst: Instance, label: string?, trackOnly: boolean?): Instance
+	table.insert(self._managedInstances, {
+		Instance = inst,
+		Label = label or inst.Name,
+		CreatedAt = os.clock(),
+		TrackOnly = trackOnly or false,
+	})
+	if not trackOnly then
+		table.insert(self._cleanupTasks, inst)
+	end
+	return inst
+end
+
+
+--[=[
+	Returns the list of tracked instances, pruning any that have been destroyed
+	(i.e. whose `.Parent` is nil) before returning. The internal
+	`_managedInstances` list is compacted in place.
+
+	@return { any } -- Array of live `{ Instance, Label, CreatedAt, TrackOnly }` entries.
+	@reads self._managedInstances
+	@writes self._managedInstances (removes stale entries)
+]=]
+function BaseStateMachine:GetManagedInstances(): { any }
+	-- Prune destroyed Instances before returning
+	local alive = {}
+	for _, entry in ipairs(self._managedInstances) do
+		if entry.Instance and entry.Instance.Parent ~= nil then
+			table.insert(alive, entry)
+		end
+	end
+	self._managedInstances = alive
+	return alive
+end
+
+
+--[=[
+	Disconnects the global RunService.Heartbeat connection and sets
+	`_ExternalLoop = true`, preventing any future `Start` call from
+	re-registering the heartbeat. Use this when the hosting system
+	manages its own update loop and drives `BaseStateMachine.Step` manually.
+
 	@reads GlobalHeartbeat
-	@writes GlobalHeartbeat, BaseStateMachine._ExternalLoop
+	@writes GlobalHeartbeat = nil, BaseStateMachine._ExternalLoop = true
 ]=]
 function BaseStateMachine.DisableInternalLoop()
 	if GlobalHeartbeat then
@@ -499,15 +627,18 @@ function BaseStateMachine.DisableInternalLoop()
 	BaseStateMachine._ExternalLoop = true
 end
 
---[=[
-	@description Global step function that drives all active StateMachine updates.
-	Called once per frame (either by the internal Heartbeat or by an external scheduler).
-	Iterates through `ActiveMachines`, respects priority-based frame skipping, accumulates
-	delta time, and dispatches `_Update` with error isolation.
 
-	@param dt number -- Delta time since the last frame (seconds)
-	@return ()
-	@reads ActiveMachines, GlobalFrameCount
+--[=[
+	The shared per-frame update driver, connected to RunService.Heartbeat by
+	`Start`. Increments `GlobalFrameCount`, then iterates `ActiveMachines` and
+	calls `_Update(dt)` on each machine whose priority and random offset align
+	with the current frame. Render-priority (Priority=1) machines are updated
+	inline; all others are wrapped in `task.spawn` for isolation. Delta time
+	is accumulated across skipped frames so lower-priority machines receive
+	the correct total elapsed time.
+
+	@param dt number -- Delta time in seconds from RunService.Heartbeat.
+	@reads GlobalFrameCount, ActiveMachines, machine.IsActive, machine.Priority
 	@writes GlobalFrameCount, machine._accumulatedDt
 ]=]
 function BaseStateMachine.Step(dt: number)
@@ -525,10 +656,10 @@ function BaseStateMachine.Step(dt: number)
 				if machine.Priority == 1 then
 					local success, err = xpcall(machine._Update, xpcallHandler, machine, stepDt)
 					if not success then
-						machine.Logger:Log({ 
-							Level = "ERROR", 
-							Message = string.format("Runtime Error in %s: %s", machine.Name, tostring(err)), 
-							OperationId = machine.Id 
+						machine.Logger:Log({
+							Level = "ERROR",
+							Message = string.format("Runtime Error in %s: %s", machine.Name, tostring(err)),
+							OperationId = machine.Id
 						})
 					end
 				else
@@ -536,10 +667,10 @@ function BaseStateMachine.Step(dt: number)
 					task.spawn(function()
 						local success, err = xpcall(machine._Update, xpcallHandler, machine, stepDt)
 						if not success then
-							machine.Logger:Log({ 
-								Level = "ERROR", 
-								Message = string.format("Runtime Error in %s: %s", machine.Name, tostring(err)), 
-								OperationId = machine.Id 
+							machine.Logger:Log({
+								Level = "ERROR",
+								Message = string.format("Runtime Error in %s: %s", machine.Name, tostring(err)),
+								OperationId = machine.Id
 							})
 						end
 					end)
@@ -549,22 +680,27 @@ function BaseStateMachine.Step(dt: number)
 	end
 end
 
---[=[
-	@description Begins execution of the StateMachine by registering it in the
-	global update loop and transitioning to the initial state.
 
-	@param params { State: string?, Args: { any }? }? -- Optional start config;
-		State defaults to self.initialState. Args are forwarded to the first state.
-	@return ()
-	@reads self.initialState, BaseStateMachine._ExternalLoop
-	@writes self.IsActive, ActiveMachines, GlobalHeartbeat
+--[=[
+	Activates the FSM by registering it in `ActiveMachines` and transitioning
+	to the initial state. If the global heartbeat is not yet running and
+	`_ExternalLoop` is false, the heartbeat connection is created here.
+	Fails with an ERROR log if no start state can be determined, or if the
+	initial `ChangeState` call does not successfully enter a state (which
+	would leave `_activeStateName` nil and leak the machine in ActiveMachines).
+	Idempotent: already-active machines return immediately.
+
+	@param params { State: string?, Args: {any}? }? -- Optional override for the
+	       initial state and its entry arguments. Defaults to `self.initialState`.
+	@reads self.IsActive, self.initialState, BaseStateMachine._ExternalLoop
+	@writes self.IsActive, self._started, ActiveMachines, GlobalHeartbeat
 ]=]
 function BaseStateMachine:Start(params: { State: string?, Args: {any}? }?)
 	if self.IsActive then return end
 	self.IsActive = true
 	self._started = true
 	local startParams = params or {}
-	
+
 	local startState = startParams.State or self.initialState or self.InitialState
 	if not startState then
 		-- validation already warned if InitialState was bad, but if it's nil entirely:
@@ -583,16 +719,16 @@ function BaseStateMachine:Start(params: { State: string?, Args: {any}? }?)
 	end
 
 	self.Logger:Log
-	{ 
-		Level = "DEBUG", 
-		Message = "StateMachine Started. Initial State: " .. tostring(startState), 
-		OperationId = self.Id 
+	{
+		Level = "DEBUG",
+		Message = "StateMachine Started. Initial State: " .. tostring(startState),
+		OperationId = self.Id
 	}
 
 	self:ChangeState
-	{ 
-		Name = startState, 
-		Args = startParams.Args 
+	{
+		Name = startState,
+		Args = startParams.Args
 	}
 
 	if self.IsActive and self._activeStateName == nil then
@@ -610,23 +746,30 @@ function BaseStateMachine:Start(params: { State: string?, Args: {any}? }?)
 	end
 end
 
---[=[
-	@description Internal per-instance update step called by the centralized loop.
-	Handles deferred state transitions (when `fsm.State` is set externally),
-	WaitSpan-based re-entry delays, performance telemetry, automatic transition
-	evaluation for table-based states, and OnHeartbeat callbacks.
 
-	@param dt number -- Accumulated delta time for this update cycle
-	@return ()
-	@reads self.State, self._activeStateName, self.CurrentState, self.WaitSpan
-	@writes self.TotalDuration, self.StateDuration, self.Perf
+--[=[
+	Internal per-frame update called by `BaseStateMachine.Step`. Handles three
+	sequential concerns each tick:
+	  1. Deferred external state write: if `self.State` was set externally
+	     (not equal to `_activeStateName`) triggers `ChangeState`.
+	  2. WaitSpan re-entry: a positive `WaitSpan` schedules a `ScheduleTransition`
+	     self-loop so the current state is re-entered after the delay.
+	  3. Active state evaluation: fires the `_pendingTimedTransition` if its
+	     deadline has passed, checks `currentState.Transitions` conditions, handles
+	     `Timeout`/`OnTimeout`, and calls `OnHeartbeat` for object-based states.
+	Records performance telemetry in `Perf` after each tick.
+
+	@param dt number -- Frame delta time, accumulated across priority-skipped frames.
+	@reads self.IsActive, self.State, self._activeStateName, self.WaitSpan,
+	       self._pendingTimedTransition, self.CurrentState, self.Perf
+	@writes self.StateDuration, self.TotalDuration, self.Perf, self._pendingTimedTransition
 ]=]
 function BaseStateMachine:_Update(dt: number)
 	if not self.IsActive then return end
 
 	-- Deferred state transition: detect if State was set externally (e.g. fsm.State = "X")
-	local pendingState = rawget(self, "State")
-	local activeState = rawget(self, "_activeStateName")
+	local pendingState = rawget(self,"State")
+	local activeState = rawget(self,"_activeStateName")
 	if pendingState ~= nil and pendingState ~= activeState then
 		-- Different state requested: clear pending then trigger transition
 		self.State = activeState
@@ -645,7 +788,7 @@ function BaseStateMachine:_Update(dt: number)
 		-- which would crash `nil > 0`. The field is xpcall'd by the heartbeat
 		-- so the error would be silently swallowed but the FSM would skip
 		-- the rest of its frame.
-		local ws = rawget(self, "WaitSpan") or 0
+		local ws = rawget(self,"WaitSpan") or 0
 		if type(ws) == "number" and ws > 0 then
 			local reentryDelay = ws
 			self.WaitSpan = 0
@@ -806,24 +949,19 @@ function BaseStateMachine:_Update(dt: number)
 	end
 end
 
+
 --[=[
-	@description Schedules a one-shot transition to fire `seconds` from now,
-	cancelled automatically if the FSM leaves the current state before the
-	timer elapses. Replaces any existing pending timed transition (the most
-	recent ScheduleTransition call wins).
+	Schedules a one-shot delayed transition to `targetState` that fires after
+	`seconds` of `StateDuration` (not wallclock time). The timer is stored
+	in `_pendingTimedTransition` and polled by `_Update`; it is automatically
+	cancelled when `ChangeState` switches to a different state. Idempotent: a
+	duplicate schedule with an identical target and nearly identical fire-at
+	time is silently skipped to prevent wasteful re-scheduling from `OnHeartbeat`.
 
-	This is the framework-native replacement for the `task.delay` +
-	`fsm.State == fromState` guard pattern that user state actions used to
-	have to write by hand. The timer is polled in `_Update` against
-	`StateDuration`, so there are no orphaned tasks if the state changes
-	for any other reason (manual ChangeState, Cancel, Fail, etc.).
-
-	@param seconds number -- Delay before firing the transition
-	@param targetState string -- Name of the state to transition to
-	@param args { any }? -- Optional arguments forwarded to the new state's
-		OnEnter/function (same shape as :ChangeState({Args = ...}))
-	@return ()
-	@reads self.IsActive, self._activeStateName
+	@param seconds number -- Delay in seconds of state-local time (StateDuration units).
+	@param targetState string -- Name of the state to transition to when the timer fires.
+	@param args {any}? -- Arguments forwarded to the state's `OnEnter` / function.
+	@reads self.IsActive, self.StateDuration, self._pendingTimedTransition
 	@writes self._pendingTimedTransition
 ]=]
 function BaseStateMachine:ScheduleTransition(seconds: number, targetState: string, args: {any}?)
@@ -861,11 +999,15 @@ function BaseStateMachine:ScheduleTransition(seconds: number, targetState: strin
 	}
 end
 
+
 --[=[
-	@description Cancels any pending timed transition. Idempotent.
-	@return boolean -- true if a transition was cancelled, false if none was pending
+	Cancels any pending timed transition set by `ScheduleTransition`. Returns
+	`true` if a pending transition was cancelled, `false` if there was nothing
+	to cancel.
+
+	@return boolean -- Whether a pending transition existed and was cancelled.
 	@reads self._pendingTimedTransition
-	@writes self._pendingTimedTransition
+	@writes self._pendingTimedTransition = nil
 ]=]
 function BaseStateMachine:CancelScheduledTransition(): boolean
 	if self._pendingTimedTransition then
@@ -890,19 +1032,28 @@ local function releaseTransitionGuard(self: any)
 	end
 end
 
---[=[
-	@description Transitions the StateMachine to a new state. Validates the
-	transition against validStates and the allowed transitions table, executes
-	OnLeave on the old state, fires StateChanged, and defers OnEnter/function
-	call for the new state. Supports delayed transitions via WaitSpan.
 
-	@param params table
-		- Name: string -- Target state name
-		- Args: { any }? -- Arguments forwarded to the new state's OnEnter/function
-		- WaitSpan: number? -- Seconds to delay before transitioning
-	@return ()
-	@reads self.validStates, self._transitions, self._states, self.TerminalStates
-	@writes self._activeStateName, self.CurrentState, self.State, self.StateDuration, self.TransitionCount
+--[=[
+	Transitions the FSM to a new state. Enforces the `validStates` allowlist
+	and the per-state `_transitions` legality table, executes `OnLeave` for
+	the departing state (wrapped in xpcall), resets `StateDuration`,
+	appends a `TransitionHistory` entry with a sanitized Context snapshot,
+	fires `StateChanged`, invokes the new state's `OnEnter` (deferred for
+	non-terminal states), and auto-finishes terminal states via
+	`Finish`/`Fail`/`Cancel`. A re-entrance guard queues concurrent
+	`ChangeState` calls and drains them in order after the current transition
+	completes.
+
+	@param params { Name: string, Args: {any}?, WaitSpan: number? } --
+	       `Name` is the target state name. `Args` are forwarded to the state
+	       entry handler. `WaitSpan` defers the transition by that many seconds
+	       (via `task.delay`).
+	@reads self.IsActive, self.validStates, self._transitions, self._states,
+	       self.TerminalStates, self._inTransition
+	@writes self.CurrentState, self._activeStateName, self.State, self.StateDuration,
+	        self.WaitSpan, self.TransitionCount, self.TransitionHistory,
+	        self._pendingTimedTransition = nil, self._legacyCleanup
+	@fires StateChanged
 ]=]
 function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, WaitSpan: number? })
 	if not self.IsActive then return end
@@ -945,10 +1096,10 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 	-- ─── VALIDATION (no side effects yet) ───────────────────────────────
 	if next(self.validStates) and not self.validStates[name] then
 		self.Logger:Log
-		{ 
-			Level = "ERROR", 
-			Message = string.format("Cannot transition to state '%s': Not in validStates.", tostring(name)), 
-			OperationId = self.Id 
+		{
+			Level = "ERROR",
+			Message = string.format("Cannot transition to state '%s': Not in validStates.", tostring(name)),
+			OperationId = self.Id
 		}
 		releaseTransitionGuard(self)
 		return
@@ -968,10 +1119,10 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 			end
 			if not isLegal then
 				self.Logger:Log
-				{ 
-					Level = "ERROR", 
-					Message = string.format("Illegal transition from '%s' to '%s'", oldState, name), 
-					OperationId = self.Id 
+				{
+					Level = "ERROR",
+					Message = string.format("Illegal transition from '%s' to '%s'", oldState, name),
+					OperationId = self.Id
 				}
 				releaseTransitionGuard(self)
 				return
@@ -980,15 +1131,15 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 	end
 
 	-- Allow implicit terminal states (defined below) even if not registered
-	if not newState and not self.TerminalStates[name] then 
+	if not newState and not self.TerminalStates[name] then
 		self.Logger:Log
-		{ 
-			Level = "ERROR", 
-			Message = string.format("State '%s' is not registered in the FSM.", tostring(name)), 
-			OperationId = self.Id 
+		{
+			Level = "ERROR",
+			Message = string.format("State '%s' is not registered in the FSM.", tostring(name)),
+			OperationId = self.Id
 		}
 		releaseTransitionGuard(self)
-		return 
+		return
 	end
 
 	-- ─── COMMIT (validation passed; side effects begin) ─────────────────
@@ -998,10 +1149,10 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 	if oldState and newState then
 		local duration = math.floor(self.StateDuration * 1000) / 1000
 		self.Logger:Log
-		{ 
-			Level = "DEBUG", 
-			Message = string.format("Leaving '%s' (Duration: %.3fs)", tostring(oldState), duration), 
-			OperationId = self.Id 
+		{
+			Level = "DEBUG",
+			Message = string.format("Leaving '%s' (Duration: %.3fs)", tostring(oldState), duration),
+			OperationId = self.Id
 		}
 	end
 
@@ -1044,10 +1195,10 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 		self.TransitionCount += 1
 	else
 		self.Logger:Log
-		{ 
-			Level = "DEBUG", 
-			Message = string.format("Transition: '%s' -> '%s'", tostring(self._activeStateName), name), 
-			OperationId = self.Id 
+		{
+			Level = "DEBUG",
+			Message = string.format("Transition: '%s' -> '%s'", tostring(self._activeStateName), name),
+			OperationId = self.Id
 		}
 
 		self.StateDuration = 0
@@ -1080,16 +1231,16 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 			-- BaseEntity instances are tables with methods set directly on the
 			-- proxy (GetRawData, GetSchema, UpdateEntity). The inner private
 			-- props are in a closure, so we duck-type via the method.
-			if rawget(t, "GetRawData") and rawget(t, "GetSchema") then
+			if rawget(t,"GetRawData") and rawget(t,"GetSchema") then
 				-- Try to read a friendly name through the proxy's __index
 				-- (which surfaces Data.Name → Context.Name → class.Name).
 				local ok, name = pcall(function() return (t :: any).Name end)
 				return string.format("Entity[%s]", ok and tostring(name) or "?")
 			end
 			-- BaseStateMachine instances have Id + State + _states.
-			if rawget(t, "Id") and rawget(t, "_states") then
-				local stateName = rawget(t, "State") or rawget(t, "_activeStateName") or "?"
-				return string.format("FSM[%s @ %s]", tostring(rawget(t, "Id")), tostring(stateName))
+			if rawget(t,"Id") and rawget(t,"_states") then
+				local stateName = rawget(t,"State") or rawget(t,"_activeStateName") or "?"
+				return string.format("FSM[%s @ %s]", tostring(rawget(t,"Id")), tostring(stateName))
 			end
 			return nil
 		end
@@ -1127,7 +1278,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 				end
 				return out
 			elseif tv == "function" then
-				return "[function]"
+				return"[function]"
 			elseif tv == "nil" then
 				return nil
 			else
@@ -1169,7 +1320,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 	if typeof(newState) == "table" then
 		(newState :: any)._timeoutFired = nil
 	end
-	self._stateChanged:Fire(name, oldState)  -- fire AFTER commit
+	self._stateChanged:Fire(name, oldState) -- fire AFTER commit
 
 	if newState then
 		if isTerminalState(self, name) then
@@ -1177,13 +1328,13 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 			if typeof(newState) == "function" then
 				local ok, cleanupFunction = xpcall(newState, xpcallHandler, self, table.unpack(args))
 				if not ok then
-					self.Logger:Log({Level="ERROR", Message="Terminal function state error: "..tostring(cleanupFunction)})
+					self.Logger:Log({Level = "ERROR", Message = "Terminal function state error: "..tostring(cleanupFunction)})
 				elseif type(cleanupFunction) == "function" then
 					self._legacyCleanup[name] = cleanupFunction
 				end
 			elseif typeof(newState) == "table" and type(newState.OnEnter) == "function" then
 				local ok, err = xpcall(newState.OnEnter, xpcallHandler, newState, self, table.unpack(args))
-				if not ok then self.Logger:Log({Level="ERROR", Message="Terminal OnEnter error: "..tostring(err)}) end
+				if not ok then self.Logger:Log({Level = "ERROR", Message = "Terminal OnEnter error: "..tostring(err)}) end
 			end
 		else
 			-- Non-terminal: defer as before
@@ -1229,10 +1380,10 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 					end
 				end)
 				self.Logger:Log
-				{ 
-					Level = "DEBUG", 
-					Message = string.format("Entered function state '%s'.", name), 
-					OperationId = self.Id 
+				{
+					Level = "DEBUG",
+					Message = string.format("Entered function state '%s'.", name),
+					OperationId = self.Id
 				}
 			elseif typeof(newState) == "table" then
 				if type(newState.OnEnter) == "function" then
@@ -1255,10 +1406,10 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 						end
 					end)
 					self.Logger:Log
-					{ 
-						Level = "DEBUG", 
-						Message = string.format("Entered state object '%s'.", name), 
-						OperationId = self.Id 
+					{
+						Level = "DEBUG",
+						Message = string.format("Entered state object '%s'.", name),
+						OperationId = self.Id
 					}
 				end
 			end
@@ -1281,64 +1432,62 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 	-- ─── RELEASE REENTRANCE GUARD + DRAIN QUEUE ──────────────────────────
 	releaseTransitionGuard(self)
 end
--- END RUNTIME
+
 
 --[=[
-	@description Virtual method called during teardown; subclasses should override
-	to release custom resources (connections, instances, etc.).
+	Virtual lifecycle hook called by `_Teardown` after the FSM has been
+	deactivated and removed from `ActiveMachines`. Subclasses override this
+	to perform FSM-specific teardown (e.g. returning resources, notifying
+	other systems). The base implementation is intentionally empty.
 
-	@return ()
 	@reads None
-	@writes None (subclass-defined)
+	@writes Nothing (base implementation is a no-op stub)
 ]=]
 function BaseStateMachine:OnCleanup()
-	self.Logger:Log
-	{ 
-		Level = "WARN", 
-		Message = "Abstract Method 'OnCleanup' called.", 
-		OperationId = self.Id 
-	}
-	self.Logger:Log
-	{ 
-		Level = "WARN", 
-		Message = "Subclasses must implement 'OnCleanup' to handle cleanup tasks.", 
-		OperationId = self.Id 
-	}
 end
 
---[=[
-	@description Virtual method called during construction; subclasses must override
-	to register state definitions via `self:AddState()` and `self:AddSubMachine()`.
 
-	@return ()
+--[=[
+	Abstract hook called by `Subclass.new` (from `BaseStateMachine.Extend`)
+	immediately after the instance metatable is installed. Subclasses override
+	this to call `self:AddState(...)` and `self:AddSubMachine(...)` for every
+	state in the FSM. The base implementation logs a WARN to remind
+	implementers to override it; failing to do so leaves the FSM with no
+	registered states.
+
 	@reads None
-	@writes self._states, self._transitions (via AddState)
+	@writes self._states, self._transitions (via AddState calls in overrides)
 ]=]
 function BaseStateMachine:RegisterStates()
 	-- Virtual method intended to be overridden by subclasses
 	self.Logger:Log
-	{ 
-		Level = "WARN", 
-		Message = "Abstract Method 'RegisterStates' called.", 
-		OperationId = self.Id 
+	{
+		Level = "WARN",
+		Message = "Abstract Method 'RegisterStates' called.",
+		OperationId = self.Id
 	}
 	self.Logger:Log
-	{ 
-		Level = "WARN", 
-		Message = "Subclasses must implement 'RegisterStates' to define FSM states.", 
-		OperationId = self.Id 
+	{
+		Level = "WARN",
+		Message = "Subclasses must implement 'RegisterStates' to define FSM states.",
+		OperationId = self.Id
 	}
 end
--- END OVERRIDES
+
 
 --[=[
-	@description Internal helper that deactivates the FSM, executes OnLeave for the
-	current state, removes from the global update loop, disconnects the global
-	heartbeat if no machines remain, and invokes OnCleanup.
+	Internal deactivation routine shared by `Finish`, `Fail`, `Cancel`, and
+	`Destroy`. Sets `IsActive = false`, nils `_activeStateName`, calls
+	`OnLeave` for the current state (xpcall'd), runs any pending legacy
+	cleanup function for the leaving state, cancels the pending timed
+	transition, removes the machine from `ActiveMachines` (stopping the
+	global heartbeat if no machines remain), and finally invokes `OnCleanup`.
 
-	@return ()
-	@reads self.IsActive, self.CurrentState, ActiveMachines
-	@writes self.IsActive, self._activeStateName, ActiveMachines, GlobalHeartbeat
+	@reads self.IsActive, self.CurrentState, self._legacyCleanup,
+	       self._pendingTimedTransition, ActiveMachines, GlobalHeartbeat
+	@writes self.IsActive = false, self._activeStateName = nil,
+	        self.CurrentState = nil, self._pendingTimedTransition = nil,
+	        self.WaitSpan = 0, ActiveMachines, GlobalHeartbeat
 ]=]
 function BaseStateMachine:_Teardown()
 	local wasActive = self.IsActive
@@ -1378,35 +1527,40 @@ function BaseStateMachine:_Teardown()
 	end
 end
 
---[=[
-	@description Ends the FSM execution with a 'Completed' status.
-	Calls _Teardown() then fires the Completed signal.
 
-	@return ()
+--[=[
+	Marks the FSM as successfully completed. Calls `_Teardown` to deactivate
+	and then fires the `Completed` signal. No-ops if already inactive.
+	Typically called automatically when a terminal state (that is not "Failed"
+	or "Cancelled") is entered via `ChangeState`.
+
 	@reads self.IsActive
-	@writes self.IsActive (via _Teardown)
+	@writes self.IsActive = false (via _Teardown)
+	@fires Completed
 ]=]
 function BaseStateMachine:Finish()
 	if not self.IsActive then return end
 	self:_Teardown()
 	self._completed:Fire()
 	self.Logger:Log
-	{ 
-		Level = "INFO", 
-		Message = "StateMachine Completed Successfully.", 
-		OperationId = self.Id 
+	{
+		Level = "INFO",
+		Message = "StateMachine Completed Successfully.",
+		OperationId = self.Id
 	}
 end
 
---[=[
-	@description Ends the FSM execution with a 'Failed' status.
-	Aggregates all ERROR-level log entries into the failure reason,
-	calls _Teardown(), then fires the Failed signal.
 
-	@param reason string? -- Optional failure reason (prepended to aggregated errors)
-	@return ()
+--[=[
+	Marks the FSM as failed. Aggregates all ERROR-level log entries from the
+	Logger's history (if available) into `combinedReason`, calls `_Teardown`,
+	stores the reason in `self._error` and `self.Error`, and fires the `Failed`
+	signal with the combined reason string. No-ops if already inactive.
+
+	@param reason string? -- Optional explicit failure reason; combined with logged errors.
 	@reads self.IsActive, self.Logger.History
-	@writes self.IsActive (via _Teardown)
+	@writes self._error, self.Error
+	@fires Failed(combinedReason)
 ]=]
 function BaseStateMachine:Fail(reason: string?)
 	if not self.IsActive then return end
@@ -1416,31 +1570,38 @@ function BaseStateMachine:Fail(reason: string?)
 	if logs then
 		for _, logEntry in ipairs(logs) do
 			if logEntry.Level == "ERROR" then
-				combinedReason = combinedReason .. logEntry.Message::string .. " | "
+				combinedReason = combinedReason .. logEntry.Message::string .." | "
 			end
 		end
 	end
 	if combinedReason ~= "" then
-		combinedReason = combinedReason:gsub(" | $", "")
+		combinedReason = combinedReason:gsub(" | $","")
+	else
+		combinedReason = "StateMachine failed"
 	end
 
+	self._error = combinedReason
+	self.Error = combinedReason
 	self:_Teardown()
 	self._failed:Fire(combinedReason)
 	self.Logger:Log
-	{ 
-		Level = "ERROR", 
-		Message = "StateMachine Failed: " .. combinedReason .. " " .. tostring(self.Context), 
-		OperationId = self.Id 
+	{
+		Level = "ERROR",
+		Message = "StateMachine Failed: " .. combinedReason .." " .. tostring(self.Context),
+		OperationId = self.Id
 	}
 end
 
---[=[
-	@description Ends the FSM execution with a 'Cancelled' status.
-	Safe to call even if the FSM is not active. Fires the Cancelled signal.
 
-	@return ()
-	@reads self.IsActive
-	@writes self.IsActive (via _Teardown)
+--[=[
+	Cancels the FSM cleanly. Idempotent: uses `_cancelledFired` to ensure the
+	`Cancelled` signal fires at most once even if `Cancel` is called multiple
+	times or after `Destroy`. Calls `_Teardown` if the machine is still active,
+	then fires `Cancelled`. Does not fire if the FSM has already been destroyed.
+
+	@reads self._cancelledFired, self.IsActive, self._cancelled, self._destroyed
+	@writes self._cancelledFired = true
+	@fires Cancelled
 ]=]
 function BaseStateMachine:Cancel()
 	-- Idempotent: only fire Cancelled once, even if Cancel is called multiple
@@ -1456,21 +1617,23 @@ function BaseStateMachine:Cancel()
 		self._cancelled:Fire()
 	end
 	self.Logger:Log
-	{ 
-		Level = "WARN", 
-		Message = "StateMachine Cancelled.", 
-		OperationId = self.Id 
+	{
+		Level = "WARN",
+		Message = "StateMachine Cancelled.",
+		OperationId = self.Id
 	}
 end
 
---[=[
-	@description Completely destroys the StateMachine instance and all managed resources.
-	Calls _Teardown(), disposes every object registered via Manage(), and destroys
-	all lifecycle signals. The instance should not be used after this call.
 
-	@return ()
-	@reads self._cleanupTasks
-	@writes self._cleanupTasks, self._completed, self._failed, self._cancelled, self._stateChanged
+--[=[
+	Permanently destroys the FSM. Idempotent via the `_destroyed` guard.
+	Unregisters from the Orchestrator's Registry if present, calls `_Teardown`,
+	runs all cleanup tasks (Instances, Connections, functions, tables), clears
+	the transition queue, history ring buffer, and Logger history, nulls out
+	the Context orchestrator references, then destroys all four lifecycle signals.
+
+	@reads self._destroyed, self.Context, self._cleanupTasks, self._managedInstances
+	@writes self._destroyed = true, self.Context (cleared), signals destroyed
 ]=]
 function BaseStateMachine:Destroy()
 	-- Idempotent: a double-Destroy would otherwise re-iterate cleanup tasks
@@ -1485,7 +1648,29 @@ function BaseStateMachine:Destroy()
 		OperationId = self.Id
 	}
 
+	local orchestrator = self:GetOrchestrator()
+	local registry = orchestrator and orchestrator.Factory and orchestrator.Factory.Registry
+	if registry and type(registry.GetStateMachine) == "function" and type(registry.UnregisterStateMachine) == "function" then
+		local registered = registry.GetStateMachine(self.Id)
+		if registered == self then
+			registry.UnregisterStateMachine(self.Id)
+		end
+	end
+
 	self:_Teardown()
+	-- Log managed Instance cleanup count for diagnostics
+	if #self._managedInstances > 0 then
+		local aliveCount = 0
+		for _, entry in ipairs(self._managedInstances) do
+			if entry.Instance and entry.Instance.Parent ~= nil then
+				aliveCount += 1
+			end
+		end
+		if aliveCount > 0 then
+			self:Log { Level = "DEBUG", Message = string.format("Cleaning up %d managed Instances", aliveCount) }
+		end
+	end
+	self._managedInstances = {}
 	for _, cleanupTask in ipairs(self._cleanupTasks) do
 		pcall(function()
 			if typeof(cleanupTask) == "Instance" then cleanupTask:Destroy()
@@ -1500,23 +1685,36 @@ function BaseStateMachine:Destroy()
 	if self._pendingTransitions then table.clear(self._pendingTransitions) end
 	-- Free history ring buffer
 	if self.TransitionHistory then table.clear(self.TransitionHistory) end
+	-- Free logger history + summary
+	if self.Logger then
+		if self.Logger.History then table.clear(self.Logger.History) end
+		if self.Logger.Summary then table.clear(self.Logger.Summary) end
+	end
+
+	local context = self.Context
+	if type(context) == "table" then
+		context._Orchestrator = nil
+		context.Orchestrator = nil
+		context.FSM = nil
+	end
+	self.Context = nil
+
 	if self._completed then self._completed:Destroy() end
 	if self._failed then self._failed:Destroy() end
 	if self._cancelled then self._cancelled:Destroy() end
 	if self._stateChanged then self._stateChanged:Destroy() end
 end
 
---[=[
-	@description Records a log entry for this StateMachine instance.
-	Delegates to the instance-local Logger with the FSM's Id as OperationId.
 
-	@param params table
-		- Level: string -- Log level ("DEBUG", "INFO", "WARN", "ERROR")
-		- Message: string -- Log message
-		- Data: any? -- Optional structured data
-	@return ()
-	@reads self.Id
-	@writes None (side-effect: log output)
+--[=[
+	Forwards a log entry to the instance's Logger with `self.Id` as the
+	`OperationId`, ensuring every log line can be correlated back to the
+	specific FSM instance that emitted it.
+
+	@param params { Level: string, Message: string, Data: any? } -- Log level,
+	       message text, and optional structured data payload.
+	@reads self.Logger, self.Id
+	@writes Logger output
 ]=]
 function BaseStateMachine:Log(params: { Level: string, Message: string, Data: any? })
 	self.Logger:Log

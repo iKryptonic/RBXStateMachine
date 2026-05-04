@@ -1,7 +1,5 @@
 --!strict
--- @Name ServiceManager/Tests/TestRunner.luau
--- @Author iKrypto
--- @Description Minimal expect/describe/it framework for in-game tests.
+
 
 local TestRunner = {}
 
@@ -49,16 +47,18 @@ local function valueToString(v: any): string
 		local ct = 0
 		for k, val in pairs(v) do
 			ct += 1
-			if ct > 6 then table.insert(parts, "..."); break end
-			table.insert(parts, tostring(k) .. "=" .. tostring(val))
+			if ct > 6 then table.insert(parts,"..."); break end
+			table.insert(parts, tostring(k) .."=" .. tostring(val))
 		end
-		return "{" .. table.concat(parts, ", ") .. "}"
+		return"{" .. table.concat(parts,", ") .."}"
 	end
 	return tostring(v)
 end
 
+
 function TestRunner.expect(actual: any): any
 	local matcher = {}
+
 
 	function matcher.toEqual(expected: any)
 		if not deepEqual(actual, expected) then
@@ -66,23 +66,28 @@ function TestRunner.expect(actual: any): any
 		end
 	end
 
+
 	function matcher.toBe(expected: any)
 		if actual ~= expected then
 			error(string.format("Expected %s to be %s (identity)", valueToString(actual), valueToString(expected)), 2)
 		end
 	end
 
+
 	function matcher.toBeNil()
 		if actual ~= nil then error("Expected nil, got " .. valueToString(actual), 2) end
 	end
+
 
 	function matcher.toBeTruthy()
 		if not actual then error("Expected truthy, got " .. valueToString(actual), 2) end
 	end
 
+
 	function matcher.toBeFalsy()
 		if actual then error("Expected falsy, got " .. valueToString(actual), 2) end
 	end
+
 
 	function matcher.toBeGreaterThan(n: number)
 		if type(actual) ~= "number" or actual <= n then
@@ -90,11 +95,13 @@ function TestRunner.expect(actual: any): any
 		end
 	end
 
+
 	function matcher.toBeGreaterThanOrEqual(n: number)
 		if type(actual) ~= "number" or actual < n then
 			error(string.format("Expected %s >= %s", valueToString(actual), valueToString(n)), 2)
 		end
 	end
+
 
 	function matcher.toBeLessThan(n: number)
 		if type(actual) ~= "number" or actual >= n then
@@ -102,12 +109,14 @@ function TestRunner.expect(actual: any): any
 		end
 	end
 
+
 	function matcher.toBeCloseTo(n: number, tolerance: number?)
 		local tol = tolerance or 0.001
 		if type(actual) ~= "number" or math.abs(actual - n) > tol then
 			error(string.format("Expected %s ≈ %s (tol %s)", valueToString(actual), valueToString(n), valueToString(tol)), 2)
 		end
 	end
+
 
 	function matcher.toContain(needle: any)
 		if type(actual) == "string" then
@@ -124,17 +133,19 @@ function TestRunner.expect(actual: any): any
 		end
 	end
 
+
 	function matcher.toHaveProperty(key: string, value: any?)
 		if type(actual) ~= "table" then
 			error("Expected table, got " .. type(actual), 2)
 		end
 		if actual[key] == nil then
-			error("Expected property " .. key .. " to exist", 2)
+			error("Expected property " .. key .." to exist", 2)
 		end
 		if value ~= nil and not deepEqual(actual[key], value) then
 			error(string.format("Expected property %s = %s, got %s", key, valueToString(value), valueToString(actual[key])), 2)
 		end
 	end
+
 
 	function matcher.toHaveLength(n: number)
 		if type(actual) ~= "table" and type(actual) ~= "string" then
@@ -145,6 +156,7 @@ function TestRunner.expect(actual: any): any
 			error(string.format("Expected length %d, got %d", n, len), 2)
 		end
 	end
+
 
 	function matcher.toThrow(messagePattern: string?)
 		if type(actual) ~= "function" then
@@ -164,7 +176,7 @@ function TestRunner.expect(actual: any): any
 			return function(...)
 				local ok = pcall(matcher[methodName], ...)
 				if ok then
-					error("Expected NOT to " .. methodName .. " but it did", 2)
+					error("Expected NOT to " .. methodName .." but it did", 2)
 				end
 			end
 		end,
@@ -173,9 +185,6 @@ function TestRunner.expect(actual: any): any
 	return matcher
 end
 
--- ══════════════════════════════════════════════════════════════
--- SUITES
--- ══════════════════════════════════════════════════════════════
 
 function TestRunner.describe(name: string, fn: () -> ())
 	local suite: Suite = {
@@ -193,6 +202,7 @@ function TestRunner.describe(name: string, fn: () -> ())
 		warn(string.format("[TestRunner] describe '%s' setup error: %s", name, tostring(err)))
 	end
 end
+
 
 function TestRunner.it(name: string, fn: () -> ())
 	table.insert(_currentSuite.cases, { name = name, fn = fn })
@@ -214,7 +224,7 @@ type Result = {
 
 local function runSuite(suite: Suite, depth: number, prefix: string, results: { Result })
 	if suite.name ~= "_root" and depth >= 0 then
-		print(string.rep("  ", depth) .. "📁 " .. suite.name)
+		print(string.rep("  ", depth) .."📁 " .. suite.name)
 	end
 	for _, case in ipairs(suite.cases) do
 		local startTime = os.clock()
@@ -236,27 +246,24 @@ local function runSuite(suite: Suite, depth: number, prefix: string, results: { 
 		end
 	end
 	for _, child in ipairs(suite.children) do
-		runSuite(child, depth + 1, prefix .. suite.name .. " > ", results)
+		runSuite(child, depth + 1, prefix .. suite.name .." > ", results)
 	end
 end
 
---[=[
-	Run all registered suites. Prints results to console and returns a summary.
-	@return summary table with pass/fail/error counts and timing
-]=]
+
 function TestRunner.run(): {
 	total: number,
 	passed: number,
 	failed: number,
 	durationMs: number,
 	results: { Result },
-}
+	}
 	print("══════════════════════════════════════════════════════════════")
 	print("  TEST RUNNER — running suites")
 	print("══════════════════════════════════════════════════════════════")
 	local startTime = os.clock()
 	local results: { Result } = {}
-	runSuite(_rootSuite, -1, "", results)
+	runSuite(_rootSuite, -1,"", results)
 	local total = #results
 	local passed = 0
 	local failed = 0
@@ -285,9 +292,7 @@ function TestRunner.run(): {
 	}
 end
 
---[=[
-	Reset the runner — useful when re-running tests after hot-reload.
-]=]
+
 function TestRunner.reset()
 	_rootSuite = {
 		name = "_root",
@@ -305,6 +310,7 @@ end
 ]=]
 local _registeredSpecs: { (any) -> () } = {}
 
+
 function TestRunner.register(specFn: (any) -> ())
 	if type(specFn) ~= "function" then return end
 	-- Avoid duplicate registration (require cache may call this multiple times)
@@ -314,13 +320,14 @@ function TestRunner.register(specFn: (any) -> ())
 	table.insert(_registeredSpecs, specFn)
 end
 
+
 function TestRunner.loadAndRun(): {
 	total: number,
 	passed: number,
 	failed: number,
 	durationMs: number,
 	results: { Result },
-}
+	}
 	TestRunner.reset()
 	for _, specFn in ipairs(_registeredSpecs) do
 		local ok, err = pcall(specFn, TestRunner)

@@ -1,8 +1,14 @@
 --!strict
--- @Name Scheduler
--- @Author ikrypto
--- @Date 2026-01-26
--- @Description Lightweight Task Scheduler with basic performance tracking.
+
+--[=[
+	@module Scheduler
+	@description Frame-budget-aware, priority-driven task scheduler. Maintains per-event
+	min-heaps keyed by RunService event name (Heartbeat, Stepped, PreSimulation, etc.).
+	On each `Step`, pops all due tasks from the relevant heap, executes them in coroutines
+	drawn from a shared thread pool, and reschedules recurring tasks. Writes
+	`LastFrameStats` after every step. Requires `Initialize` before any instance is
+	created or any method is invoked.
+]=]
 
 local HttpService = game:GetService("HttpService")
 local RunService = game:GetService("RunService")
@@ -35,23 +41,23 @@ local function runTask(func, thread, ...)
 end
 
 local function yielder()
-    while true do
-        runTask(coroutine.yield())
-    end
+	while true do
+		runTask(coroutine.yield())
+	end
 end
 
 -- Static Error Handler to avoid closure creation
 local function ERROR_HANDLER(err)
-    return debug.traceback(tostring(err), 2)
+	return debug.traceback(tostring(err), 2)
 end
 
 local function ValidateRequest()
-	assert(Initialized, "Scheduler not initialized")
+	assert(Initialized,"Scheduler not initialized")
 end
 
 local function ResolveScheduler(self: any)
 	ValidateRequest()
-	if type(self) == "table" and rawget(self, "_heaps") then
+	if type(self) == "table" and rawget(self,"_heaps") then
 		return self
 	end
 	if not defaultInstance then
@@ -61,22 +67,24 @@ local function ResolveScheduler(self: any)
 end
 
 local function GetWeightedTime(self, delay: number, priority: number)
-    -- Higher priority results in a "smaller" (earlier) timestamp for the Min-Heap
-    local weight = self.Settings.PriorityWeight or 0.001
-    return os_clock() + delay - (priority * weight)
+	-- Higher priority results in a "smaller" (earlier) timestamp for the Min-Heap
+	local weight = self.Settings.PriorityWeight or 0.001
+	return os_clock() + delay - (priority * weight)
 end
 
-do 
+do
 	Scheduler.__index = Scheduler
 
-	--[[
-		@description Initializes shared Scheduler settings and logging utilities.
-		Must be called before using the default singleton fallback in ResolveScheduler.
-		@param Util any -- Orchestrator utility table containing Settings and Logger
-		@return ()
-		@reads Initialized
-		@writes Scheduler.Settings, Scheduler.Logger, Scheduler.Strings, Initialized
-	]]
+
+	--[=[
+		@description One-time module initialization. Reads `Util.Settings.Scheduler` into
+		the shared `Scheduler.Settings`, constructs a named Logger from `Util.Logger`, and
+		stores `Util.StaticStrings`. Sets the module-level `Initialized` flag so subsequent
+		calls are no-ops. Must be called before any Scheduler instance is created or any
+		method is invoked.
+		@param Util any -- Utility bundle exposing `Settings.Scheduler`, `Logger.new`, and `StaticStrings`.
+		@return nil
+	]=]
 	function Scheduler.Initialize(Util: any)
 		if Initialized then return end
 		Initialized = true
@@ -85,13 +93,16 @@ do
 		Scheduler.Strings = Util.StaticStrings
 	end
 
-	--[[
-		@description Creates a new Scheduler instance.
-		@param settings any? -- Optional settings table overriding Scheduler.Initialize defaults
-		@return any -- Scheduler instance with isolated heaps, history, and performance facade
-		@reads Scheduler.Settings
-		@writes self.Tasks, self.History, self._heaps, self.PerformanceManager
-	]]
+
+	--[=[
+		@description Constructs a new independent Scheduler instance. Initializes empty
+		`Tasks`, `_heaps`, `_running`, and `_connections` tables, a ring-buffer `History`
+		of 100 slots, `LastFrameStats`, and a fresh `PerformanceManager` bound to this
+		instance. `settings` overrides the global defaults (FrameBudget, PriorityWeight).
+		Does not start RunService connections; call `Start()` separately.
+		@param settings any? -- Optional config table; keys `FrameBudget` (seconds) and `PriorityWeight` (time shift per priority unit).
+		@return Scheduler -- New scheduler instance.
+	]=]
 	function Scheduler.new(settings: any?)
 		local self = setmetatable({
 			Tasks = {},
@@ -109,59 +120,65 @@ do
 			},
 			Logger = nil,
 		}, Scheduler)
-		
+
 		self.PerformanceManager = PerformanceManager.new(self)
 		return self
 	end
 
-	--[[
-		@description Schedules a task for future execution on a RunService event heap.
-		Overwriting an existing task name replaces the registry entry and relies on lazy heap cleanup.
-		@param params any -- Task descriptor containing TaskName, TaskAction, delay, priority, recurrence, and Event
-		@return Task? -- Pooled task record, or nil when params are invalid
-		@reads self.Tasks, self._heaps
-		@writes self.Tasks, self._heaps, self._taskCount
-	]]
+
+	--[=[
+		@description Registers a task for deferred execution. Acquires a `Task` record from
+		the pool, populates it from `params`, and computes `NextRun` as the current clock
+		plus the delay minus a priority offset (higher priority → earlier timestamp). Inserts
+		the record into the per-event min-heap. If a task with the same name already exists,
+		the old heap entry is abandoned and cleaned up lazily during the next `Step`.
+		Increments `_taskCount` for genuinely new task names. Returns the Task record, or
+		nil if `TaskName` is missing or `TaskAction` is not a function.
+		@param params any -- Table with fields: `TaskName` (string), `TaskAction` (function), `TaskExecutionDelay` (number?), `IsRecurringTask` (boolean?), `Priority` (number?), `Event` (string? defaults to "Heartbeat").
+		@return Task? -- The registered Task record, or nil on invalid input.
+	]=]
 	function Scheduler:Schedule(params: any)
-        if not params.TaskName or type(params.TaskAction) ~= "function" then return nil end
-        
-        -- Use the Pool
-        local t = TaskPool.Get()
-        t.Name = params.TaskName
-        t.Action = params.TaskAction
-        t.Delay = params.TaskExecutionDelay or 0
-        t.IsRecurringTask = params.IsRecurringTask or false
-        t.Priority = params.Priority or 1
-        -- Default to Heartbeat if Event is missing or nil
-        t.Event = params.Event or "Heartbeat" 
-        t.NextRun = GetWeightedTime(self, t.Delay, t.Priority)
-        t.CreationTime = os_clock()
-        t.TotalMemory = 0
-        t.MaxMemory = 0
+		if not params.TaskName or type(params.TaskAction) ~= "function" then return nil end
 
-        local isNew = not self.Tasks[t.Name]
-        if not isNew then
-            -- If overwriting, we should ideally release the old one, 
-            -- but since it's in the Heap, lazy removal handles it.
-            self.Tasks[t.Name] = nil 
-        end
+		-- Use the Pool
+		local t = TaskPool.Get()
+		t.Name = params.TaskName
+		t.Action = params.TaskAction
+		t.Delay = params.TaskExecutionDelay or 0
+		t.IsRecurringTask = params.IsRecurringTask or false
+		t.Priority = params.Priority or 1
+		-- Default to Heartbeat if Event is missing or nil
+		t.Event = params.Event or "Heartbeat"
+		t.NextRun = GetWeightedTime(self, t.Delay, t.Priority)
+		t.CreationTime = os_clock()
+		t.TotalMemory = 0
+		t.MaxMemory = 0
 
-        self.Tasks[t.Name] = t
-        if isNew then
-            self._taskCount += 1
-        end
-        if not self._heaps[t.Event] then self._heaps[t.Event] = {} end
-        self:_heapPush(self._heaps[t.Event], t)
-        
-        return t
-    end
+		local isNew = not self.Tasks[t.Name]
+		if not isNew then
+			-- If overwriting, we should ideally release the old one,
+			-- but since it's in the Heap, lazy removal handles it.
+			self.Tasks[t.Name] = nil
+		end
 
-	--[[
-		@description Clears all scheduled tasks, heaps, history, and stats.
-		@return ()
-		@reads self.TaskStats
-		@writes self.Tasks, self._heaps, self.History, self.LastFrameStats, self.TaskStats, self._historyIndex, self._taskCount
-	]]
+		self.Tasks[t.Name] = t
+		if isNew then
+			self._taskCount += 1
+		end
+		if not self._heaps[t.Event] then self._heaps[t.Event] = {} end
+		self:_heapPush(self._heaps[t.Event], t)
+
+		return t
+	end
+
+
+	--[=[
+		@description Resets the instance to an empty state. Clears `Tasks`, `_heaps`,
+		`History`, `TaskStats`, `LastFrameStats`, `_historyIndex`, and `_taskCount`. Does
+		not disconnect RunService events, release pooled coroutines, or affect the shared
+		thread pool counters.
+		@return nil
+	]=]
 	function Scheduler:Clear()
 		self.Tasks = {}
 		self._heaps = {}
@@ -172,16 +189,18 @@ do
 		self._taskCount = 0
 	end
 
-	--[[
-		@description Adds an entry to History (best-effort; used by ServiceManager).
-		@param taskObj any -- Task record being summarized
-		@param status any -- Completion state such as Completed, Failed, or Cancelled
-		@param duration any -- Execution duration in seconds
-		@param err string? -- Optional error payload captured during execution
-		@return ()
-		@reads self._historyIndex
-		@writes self.History, self._historyIndex
-	]]
+
+	--[=[
+		@description Appends an execution record to the ring-buffer `History`. Writes
+		`Name`, `Status`, `Duration`, `Time` (wall-clock seconds), and optional `Error`
+		string to slot `_historyIndex`, then advances the index modulo 100, overwriting the
+		oldest entry when the buffer is full.
+		@param taskObj any -- Task record; only `Name` is read.
+		@param status any -- Outcome string, e.g. "Completed", "Failed", or "Cancelled".
+		@param duration any -- Wall-clock execution time in seconds.
+		@param err string? -- Error message to store; nil for successful completions.
+		@return nil
+	]=]
 	function Scheduler:AddToHistory(taskObj, status, duration, err: string?)
 		local entry = {
 			Name = taskObj.Name,
@@ -194,17 +213,19 @@ do
 		self._historyIndex = (self._historyIndex % 100) + 1
 	end
 
-	--[[
-		@description Deschedules (cancels) a task by name.
-		@param name string -- Registered task name
-		@return ()
-		@reads self.Tasks, Scheduler.Logger
-		@writes self.Tasks, self._taskCount, self.History
-	]]
+
+	--[=[
+		@description Removes a named task from `Tasks` and decrements `_taskCount`. Appends
+		a "Cancelled" history entry and logs the removal. The stale entry in the min-heap is
+		cleaned up lazily the next time `Step` encounters it. No-ops if the name is not
+		currently registered.
+		@param name string -- The `TaskName` of the task to cancel.
+		@return nil
+	]=]
 	function Scheduler:Deschedule(name: string)
 		self = ResolveScheduler(self)
 		if self.Tasks[name] then
-			self:AddToHistory(self.Tasks[name], "Cancelled", 0, "")
+			self:AddToHistory(self.Tasks[name],"Cancelled", 0,"")
 			self._taskCount -= 1
 			self.Tasks[name] = nil
 			local logger = self.Logger or Scheduler.Logger
@@ -217,35 +238,38 @@ do
 		end
 	end
 
-	--[[
-		@description Gets a task by name.
-		@param name string -- Registered task name
-		@return Task? -- Live scheduled task record, if present
-		@reads self.Tasks
-		@writes None
-	]]
+
+	--[=[
+		@description Returns the live Task record registered under `name`, or nil if not
+		present. Resolves to `defaultInstance` when called on the class rather than on a
+		specific instance.
+		@param name string -- The `TaskName` to look up.
+		@return Task? -- The Task record or nil.
+	]=]
 	function Scheduler:GetTask(name: string)
 		self = ResolveScheduler(self)
 		return self.Tasks[name]
 	end
 
-	--[[
-		@description Returns the number of currently scheduled tasks.
-		@return number -- O(1) count of registry-backed tasks
-		@reads self._taskCount
-		@writes None
-	]]
+
+	--[=[
+		@description Returns the O(1) counter `_taskCount` reflecting the number of
+		currently registered tasks. Does not scan `Tasks` or the heaps.
+		@return number -- Number of active tasks.
+	]=]
 	function Scheduler:GetTaskCount()
 		return self._taskCount
 	end
 
-	--[[
-		@description Executes a task immediately by name or task object.
-		@param taskOrName string | Task -- Either a registered task name or a task record returned by Schedule
-		@return ()
-		@reads self.Tasks, self.Logger
-		@writes self._running, self.History, task performance counters (via _internalExecute)
-	]]
+
+	--[=[
+		@description Immediately executes a task outside of the normal `Step` cycle.
+		Accepts either a task name string or a Task record directly. Logs the manual
+		execution, then delegates to `_internalExecute`, which runs the action in a pooled
+		coroutine and updates all per-task counters normally.
+		@param taskOrName string | Task -- Task name or Task record to execute.
+		@return nil
+	]=]
 	function Scheduler:ExecuteTask(taskOrName: string | Task)
 		self = ResolveScheduler(self)
 		local task: Task? = nil
@@ -265,12 +289,15 @@ do
 		self:_internalExecute(task)
 	end
 
-	--[[
-		@description Returns a sanitized snapshot for ServiceManager server sync.
-		@return any -- Serializable data excluding function values from task records
-		@reads self.Tasks, self.Logger, self.Settings, self.History, self.LastFrameStats, self.TaskStats
-		@writes None
-	]]
+
+	--[=[
+		@description Produces a serialization-safe snapshot of this scheduler's state.
+		Strips all function-valued fields from each Task before returning. Returns a table
+		containing `Tasks` (sanitized), `Logs` (from Logger history), `Settings`, `History`
+		(ring buffer), `LastFrameStats`, and `TaskStats`. Intended for server→client
+		dashboard replication where functions cannot cross the boundary.
+		@return table -- Snapshot with keys: Tasks, Logs, Settings, History, LastFrameStats, TaskStats.
+	]=]
 	function Scheduler:GetSyncData()
 		self = ResolveScheduler(self)
 		local safeTasks = {}
@@ -294,25 +321,28 @@ do
 		}
 	end
 
-	--[[
-		@description Checks whether a player is authorized to use admin-only API.
-		@param player Player -- Caller requesting privileged scheduler operations
-		@return boolean -- True in Studio or when the player owns the experience
-		@reads RunService:IsStudio(), game.CreatorId
-		@writes None
-	]]
+
+	--[=[
+		@description Returns true if `player` should have admin access to scheduler
+		diagnostics. Always returns true inside Roblox Studio. In live games, returns true
+		only when `player.UserId` matches `game.CreatorId`.
+		@param player Player -- The player to authorize.
+		@return boolean -- True if the player is an authorized admin.
+	]=]
 	function Scheduler:CheckAdmin(player: Player)
 		if RunService:IsStudio() then return true end
 		return player.UserId == game.CreatorId
 	end
 
-	--[[
-		@description Resets a task's performance counters.
-		@param name string -- Registered task name
-		@return ()
-		@reads self.Tasks, Scheduler.Logger
-		@writes task.RunCount, task.TotalRunTime, task.MaxRunTime, task.TotalMemory, task.MaxMemory
-	]]
+
+	--[=[
+		@description Resets accumulated performance counters for a named task. If the task
+		exposes its own `Reset` function, calls it. Otherwise zeroes `RunCount`,
+		`TotalRunTime`, `MaxRunTime`, `TotalMemory`, and `MaxMemory` directly, then logs
+		the reset. No-ops if the task is not currently registered.
+		@param name string -- The `TaskName` of the task to reset.
+		@return nil
+	]=]
 	function Scheduler:ResetTask(name: string)
 		self = ResolveScheduler(self)
 		local task = self.Tasks[name]
@@ -336,22 +366,25 @@ do
 		end
 	end
 
-	--[[
-		@description Generates a GUID key string.
-		@return string -- GUID without braces for stable external identifiers
-		@reads HttpService
-		@writes None
-	]]
+
+	--[=[
+		@description Returns a new collision-free GUID string generated by
+		`HttpService:GenerateGUID(false)`. Used to produce unique task names and FSM
+		instance identifiers.
+		@return string -- A fresh GUID string without braces.
+	]=]
 	function Scheduler:GenerateKey()
 		return HttpService:GenerateGUID(false)
 	end
 
-	--[[
-		@description Returns aggregate coroutine-pool statistics used by the scheduler runtime.
-		@return { TotalThreads: number, FreeThreads: number, ActiveThreads: number, PeakThreads: number }
-		@reads totalThreads, freeThreads, activeThreads, peakThreads
-		@writes None
-	]]
+
+	--[=[
+		@description Returns a snapshot of the module-level coroutine thread pool counters
+		shared across all Scheduler instances. Fields: `TotalThreads` (ever created),
+		`FreeThreads` (available to pick up work), `ActiveThreads` (currently executing),
+		and `PeakThreads` (historical maximum concurrent threads).
+		@return table -- Thread pool stats: TotalThreads, FreeThreads, ActiveThreads, PeakThreads.
+	]=]
 	function Scheduler:GetThreadPoolStats()
 		return {
 			TotalThreads = totalThreads,
@@ -361,13 +394,21 @@ do
 		}
 	end
 
-	--[[
-		@description Internal execution wrapper with performance tracking and error capture.
-		@param t Task -- Task record to execute on a pooled coroutine
-		@return ()
-		@reads freeThreads, totalThreads, peakThreads, self.Tasks
-		@writes freeThreads, totalThreads, peakThreads, activeThreads, self._running, task runtime counters, self.History
-	]]
+
+	--[=[
+		@description Executes a single Task record in a pooled coroutine. Acquires a free
+		coroutine from `freeThreads` or creates a new yielder thread, incrementing
+		`totalThreads` and updating `peakThreads`. Increments `activeThreads`. Marks the
+		task in `_running` and records `LastRunTime`. Runs `t.Action` under `xpcall` with
+		a traceback handler. After the call: updates `RunCount`, `TotalRunTime`,
+		`MaxRunTime`, `TotalMemory`, and `MaxMemory`. For non-recurring tasks, appends to
+		History, removes from `Tasks`, decrements `_taskCount`, and releases the record to
+		`TaskPool`. If the task was replaced (stale `Tasks` pointer), releases it directly.
+		An outer `pcall` guards the entire body so `activeThreads` and thread-return always
+		execute; errors are reported via `warn`.
+		@param t any -- The Task record to execute; must be a valid pool entry.
+		@return nil
+	]=]
 	function Scheduler:_internalExecute(t)
 		local thread
 		if #freeThreads > 0 then
@@ -395,21 +436,21 @@ do
 				t.LastRunTime = start
 
 				local s, e = xpcall(t.Action, ERROR_HANDLER)
-				
+
 				local dur = os_clock() - start
 				local endMem = collectgarbage("count")
 				local memDelta = math.max(0, endMem - startMem) -- Ignore negative delta if GC ran
-				
+
 				self._running[t.Name] = nil
 
 				if self.Tasks[t.Name] == t then
 					t.RunCount += 1
 					t.TotalRunTime += dur
 					if dur > t.MaxRunTime then t.MaxRunTime = dur end
-					
+
 					t.TotalMemory = (t.TotalMemory or 0) + memDelta
 					if memDelta > (t.MaxMemory or 0) then t.MaxMemory = memDelta end
-					
+
 					if not t.IsRecurringTask then
 						self:AddToHistory(t, s and "Completed" or "Failed", dur, not s and tostring(e) or nil)
 						self.Tasks[t.Name] = nil
@@ -429,14 +470,15 @@ do
 		end, thread)
 	end
 
-	--[[
-		@description Reduces the task pool size when cached objects have grown well beyond the steady-state budget.
-		@return ()
-		@reads TaskPool._count, Scheduler.Logger
-		@writes TaskPool._storage, TaskPool._count
-	]]
+
+	--[=[
+		@description Shrinks the `TaskPool` free list to 20 entries when it exceeds 100
+		objects, bounding memory from bulk task releases. Calls `TaskPool.Shrink(20)` and
+		logs the operation at DEBUG level if a Logger is available.
+		@return nil
+	]=]
 	function Scheduler:PrunePool()
-    -- Only shrink if the pool is significantly large
+	-- Only shrink if the pool is significantly large
 		if TaskPool._count > 100 then
 			TaskPool.Shrink(20)
 			local logger = self.Logger or Scheduler.Logger
@@ -449,13 +491,19 @@ do
 		end
 	end
 
-	--[[
-		@description Executes due tasks for the given event name (frame-budgeted).
-		@param eventName string? -- RunService event bucket to process; defaults to Heartbeat
-		@return ()
-		@reads self._heaps, self.Tasks, self.Settings.FrameBudget, self._running
-		@writes heap order, self.LastFrameStats, task.NextRun, TaskPool storage (via lazy release)
-	]]
+
+	--[=[
+		@description Executes one frame's worth of due tasks for `eventName` (defaults to
+		"Heartbeat"). Pops all entries with `NextRun <= now` from the corresponding
+		min-heap, skipping stale entries via lazy removal (heap entry not matching
+		`Tasks[name]`). Executes each due task through `_internalExecute`. Reschedules
+		recurring tasks back into the heap with an updated `NextRun`. Stops early if elapsed
+		time since step start exceeds `Settings.FrameBudget`, deferring remaining collected
+		tasks back to the heap. Writes `LastFrameStats` with `FrameTime`, `TaskCount`, and
+		`Budget` after every call.
+		@param eventName string? -- RunService event name to process; defaults to "Heartbeat".
+		@return nil
+	]=]
 	function Scheduler:Step(eventName: string?)
 		local event = eventName or "Heartbeat"
 		local heap = self._heaps[event]
@@ -464,14 +512,14 @@ do
 		local now = os_clock()
 		local startTime = now
 		local budget = self.Settings.FrameBudget
-		
+
 		-- 1. Collect all due tasks
 		local dueTasks = {}
 		local count = 0
-		
+
 		while #heap > 0 do
 			local t = heap[1]
-			
+
 			-- Lazy Removal check
 			if self.Tasks[t.Name] ~= t then
 				self:_heapPop(heap)
@@ -480,36 +528,36 @@ do
 				end
 				continue
 			end
-			
+
 			if t.NextRun > now then break end
-			
+
 			-- Pop and add to execution list
 			self:_heapPop(heap)
 			count += 1
 			dueTasks[count] = t
 		end
-		
+
 		-- 2. Execute and Reschedule
 		for i = 1, count do
 			local t = dueTasks[i]
 			self:_internalExecute(t)
-			
+
 			-- Reschedule if recurring
 			if t.IsRecurringTask and self.Tasks[t.Name] == t then
-				-- IMPORTANT: Ensure NextRun calculated here, but pushed back 
-				-- AFTER we are done popping, effectively shifting it to the next Step execution 
+				-- IMPORTANT: Ensure NextRun calculated here, but pushed back
+				-- AFTER we are done popping, effectively shifting it to the next Step execution
 				-- (because we are inside the same function/frame).
 				-- Even if NextRun is now, it's safe because we already emptied the heap of *currently visible* due tasks.
 				t.NextRun = GetWeightedTime(self, t.Delay, t.Priority)
 				self:_heapPush(heap, t)
 			end
-			
-			-- Budget Check 
+
+			-- Budget Check
 			if (os_clock() - startTime) >= budget then
 				-- If we hit budget, we must re-push the REMAINING tasks (that we popped but didn't run)
 				for j = i + 1, count do
 					local deferred = dueTasks[j]
-					
+
 					-- Optimization: increment deferred priority slightly? No, keep simple.
 					self:_heapPush(heap, deferred)
 				end
@@ -526,14 +574,15 @@ do
 		}
 	end
 
-	--[[
-		@description Pushes an item into a min-heap sorted by NextRun.
-		@param heap { Task } -- Heap table for a specific RunService event bucket
-		@param item Task -- Task record to insert
-		@return ()
-		@reads item.NextRun
-		@writes heap
-	]]
+
+	--[=[
+		@description Inserts `item` into the min-heap array `heap` ordered by `NextRun`.
+		Appends the item to the end and bubbles it up by swapping with its parent until
+		heap order is restored. Mutates `heap` in-place.
+		@param heap any -- The min-heap array for a specific event.
+		@param item any -- Task record with a `NextRun` field.
+		@return nil
+	]=]
 	function Scheduler:_heapPush(heap, item)
 		table_insert(heap, item)
 		local idx = #heap
@@ -546,18 +595,19 @@ do
 		end
 	end
 
-	--[[
-		@description Pops the earliest item from a min-heap sorted by NextRun.
-		@param heap { Task } -- Heap table for a specific RunService event bucket
-		@return Task? -- Earliest runnable task, or nil when the heap is empty
-		@reads heap
-		@writes heap
-		]]
+
+	--[=[
+		@description Removes and returns the root item (minimum `NextRun`) from `heap`.
+		Moves the last element to the root and sifts it down to restore heap order. Returns
+		nil if the heap is empty. Mutates `heap` in-place.
+		@param heap any -- The min-heap array to pop from.
+		@return Task? -- The Task record with the smallest NextRun, or nil if empty.
+	]=]
 	function Scheduler:_heapPop(heap)
 		local size = #heap
 		if size == 0 then return nil end
 		local root = heap[1]
-		
+
 		if size > 1 then
 			heap[1] = heap[size]
 			heap[size] = nil
@@ -578,16 +628,19 @@ do
 		return root
 	end
 
-	--[[
-		@description Connects Scheduler:Step to supported RunService events.
-		@return ()
-		@reads self._connections, RunService event signals, RunService:IsClient()
-		@writes self._connections
-	]]
+
+	--[=[
+		@description Connects `Step` to each supported RunService event: Heartbeat,
+		Stepped, PreSimulation, PostSimulation, and PreAnimation on both server and client;
+		additionally RenderStepped and PreRender on the client only. Stores connections in
+		`_connections` keyed by event name. No-ops if already started (Heartbeat connection
+		present). Logs the start at INFO level.
+		@return nil
+	]=]
 	function Scheduler:Start()
 		if self._connections.Heartbeat then return end
 
-		local ValidStates = 
+		local ValidStates =
 		{
 			"Heartbeat",
 			"Stepped",
@@ -618,12 +671,13 @@ do
 		})
 	end
 
-	--[[
-		@description Disconnects all RunService bindings created by Scheduler:Start.
-		@return ()
-		@reads self._connections
-		@writes self._connections
-	]]
+
+	--[=[
+		@description Disconnects all RunService event connections stored in `_connections`
+		and clears the table. Tasks remain registered and the thread pool is unaffected;
+		calling `Start()` again resumes execution.
+		@return nil
+	]=]
 	function Scheduler:Stop()
 		for state, conn in pairs(self._connections) do
 			if conn and typeof(conn) == "RBXScriptConnection" then

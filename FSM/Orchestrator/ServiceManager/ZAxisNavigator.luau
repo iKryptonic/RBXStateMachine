@@ -1,8 +1,5 @@
 --!strict
--- @Name ServiceManager/ZAxisNavigator.luau
--- @Author iKrypto
--- @Description Z-axis depth-based navigation system. Instead of flat page switching,
--- clicking an element "unfolds" deeper sub-panes with animated transitions.
+
 
 local TweenService = game:GetService("TweenService")
 
@@ -23,7 +20,7 @@ export type LayerEntry = {
 	Timestamp: number,
 }
 
--- Create a navigator bound to the root content container for layered drill-down UI.
+
 function ZAxisNavigator.new(rootContainer: Frame): any
 	local self = setmetatable({}, ZAxisNavigator)
 	self._rootContainer = rootContainer
@@ -37,7 +34,7 @@ function ZAxisNavigator.new(rootContainer: Frame): any
 	return self
 end
 
--- Register a root-level layer (depth 0)
+
 function ZAxisNavigator:RegisterRootLayer(id: string, label: string, builder: (frame: Frame, context: any) -> ())
 	self._layers[id] = {
 		Id = id,
@@ -52,14 +49,14 @@ function ZAxisNavigator:RegisterRootLayer(id: string, label: string, builder: (f
 	}
 end
 
--- Expand a sub-pane from a parent element. This is the Z-axis drill-down.
+
 function ZAxisNavigator:ExpandLayer(params: {
 	Id: string,
 	ParentId: string,
 	Label: string,
 	Builder: (frame: Frame, context: any) -> (),
 	Context: any?,
-})
+	})
 	if self._animating then return end
 	if #self._layerStack >= self._maxDepth then return end
 
@@ -98,7 +95,7 @@ function ZAxisNavigator:ExpandLayer(params: {
 	self:_RebuildBreadcrumbs()
 end
 
--- Collapse back to a specific depth (clicking a breadcrumb)
+
 function ZAxisNavigator:CollapseToLayer(layerId: string)
 	local layer = self._layers[layerId]
 	if not layer then return end
@@ -106,7 +103,7 @@ function ZAxisNavigator:CollapseToLayer(layerId: string)
 	self:_RebuildBreadcrumbs()
 end
 
--- Navigate to a root layer (subsystem switch)
+
 function ZAxisNavigator:NavigateToRoot(layerId: string)
 	-- Collapse everything
 	self:_CollapseToDepth(-1)
@@ -128,7 +125,7 @@ function ZAxisNavigator:NavigateToRoot(layerId: string)
 	self:_RebuildBreadcrumbs()
 end
 
--- Get current depth
+
 function ZAxisNavigator:GetCurrentDepth(): number
 	if #self._layerStack == 0 then return 0 end
 	local topId = self._layerStack[#self._layerStack]
@@ -136,17 +133,17 @@ function ZAxisNavigator:GetCurrentDepth(): number
 	return topLayer and topLayer.Depth or 0
 end
 
--- Get breadcrumb trail
+
 function ZAxisNavigator:GetBreadcrumbs(): { { Id: string, Label: string, Depth: number } }
 	return self._breadcrumbs
 end
 
--- Set callback for breadcrumb changes
+
 function ZAxisNavigator:OnBreadcrumbChanged(callback: (crumbs: { any }) -> ())
 	self._onBreadcrumbChanged = callback
 end
 
--- Re-invoke the builder on the current topmost layer (live refresh without animation)
+
 function ZAxisNavigator:RebuildCurrentLayer(context: any?)
 	if #self._layerStack == 0 then return end
 	local topId = self._layerStack[#self._layerStack]
@@ -168,14 +165,14 @@ function ZAxisNavigator:RebuildCurrentLayer(context: any?)
 	layer.Builder(layer.Frame, layer.Context)
 end
 
--- Get the current topmost layer entry
+
 function ZAxisNavigator:GetCurrentLayer(): LayerEntry?
 	if #self._layerStack == 0 then return nil end
 	local topId = self._layerStack[#self._layerStack]
 	return self._layers[topId]
 end
 
--- Destroy all layers and cleanup
+
 function ZAxisNavigator:Destroy()
 	self:_CollapseToDepth(-1)
 	table.clear(self._layers)
@@ -183,7 +180,6 @@ function ZAxisNavigator:Destroy()
 	table.clear(self._breadcrumbs)
 end
 
--- ═══════════════════ PRIVATE ═══════════════════
 
 function ZAxisNavigator:_CreateSubPaneFrame(layer: LayerEntry): Frame
 	local frame = Instance.new("Frame")
@@ -238,6 +234,7 @@ function ZAxisNavigator:_CreateSubPaneFrame(layer: LayerEntry): Frame
 	return frame
 end
 
+
 function ZAxisNavigator:_AnimateExpand(frame: Frame, depth: number)
 	self._animating = true
 
@@ -266,6 +263,7 @@ function ZAxisNavigator:_AnimateExpand(frame: Frame, depth: number)
 	end)
 end
 
+
 function ZAxisNavigator:_AnimateCollapse(frame: Frame, callback: (() -> ())?)
 	local content = frame:FindFirstChild("Content") :: Frame?
 	if content then
@@ -283,6 +281,7 @@ function ZAxisNavigator:_AnimateCollapse(frame: Frame, callback: (() -> ())?)
 		if callback then callback() end
 	end
 end
+
 
 function ZAxisNavigator:_CollapseToDepth(targetDepth: number)
 	-- Remove all layers above targetDepth from the stack
@@ -303,6 +302,7 @@ function ZAxisNavigator:_CollapseToDepth(targetDepth: number)
 		end
 	end
 end
+
 
 function ZAxisNavigator:_RebuildBreadcrumbs()
 	table.clear(self._breadcrumbs)

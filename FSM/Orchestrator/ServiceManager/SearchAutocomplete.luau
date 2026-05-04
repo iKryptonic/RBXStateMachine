@@ -1,9 +1,5 @@
 --!strict
--- @Name ServiceManager/SearchAutocomplete.luau
--- @Author iKrypto
--- @Description Reusable autocomplete dropdown for search TextBox inputs.
--- Supports Up/Down arrow navigation, Enter/Right arrow selection, and mouse click.
--- Attach to any TextBox with a suggestion provider function.
+
 
 local UserInputService = game:GetService("UserInputService")
 
@@ -18,18 +14,7 @@ export type OnSelectCallback = (selected: string) -> ()
 local MAX_VISIBLE = 6
 local ROW_HEIGHT = 24
 
---[[
-	Create a new autocomplete controller attached to a TextBox.
 
-	@param config {
-		TextBox: TextBox — the search input to attach to
-		ParentFrame: Frame — the frame to parent the dropdown into (usually contentFrame)
-		GetSuggestions: (text: string) -> { string } — returns filtered matches
-		OnSelect: (selected: string) -> () — called when a suggestion is chosen
-		AnchorPosition: UDim2? — optional override for dropdown position
-		DropDirection: "up" | "down"? — default "down"
-	}
-]]
 function SearchAutocomplete.new(config: {
 	TextBox: TextBox,
 	ParentFrame: GuiObject,
@@ -37,7 +22,7 @@ function SearchAutocomplete.new(config: {
 	OnSelect: OnSelectCallback,
 	AnchorPosition: UDim2?,
 	DropDirection: string?,
-}): any
+	}): any
 	local self = setmetatable({}, SearchAutocomplete)
 
 	self._textBox = config.TextBox
@@ -91,6 +76,7 @@ function SearchAutocomplete.new(config: {
 	return self
 end
 
+
 function SearchAutocomplete:_PositionDropdown(anchorOverride: UDim2?)
 	if anchorOverride then
 		self._dropdown.Position = anchorOverride
@@ -121,6 +107,7 @@ function SearchAutocomplete:_PositionDropdown(anchorOverride: UDim2?)
 		)
 	end
 end
+
 
 function SearchAutocomplete:_Connect()
 	-- Text change → update suggestions
@@ -159,6 +146,7 @@ function SearchAutocomplete:_Connect()
 	end))
 end
 
+
 function SearchAutocomplete:_Navigate(direction: number)
 	local count = #self._currentSuggestions
 	if count == 0 then return end
@@ -177,6 +165,7 @@ function SearchAutocomplete:_Navigate(direction: number)
 	self:_HighlightRow(newIndex, true)
 end
 
+
 function SearchAutocomplete:_HighlightRow(index: number, highlighted: boolean)
 	local btn = self._suggestionButtons[index]
 	if not btn then return end
@@ -190,6 +179,7 @@ function SearchAutocomplete:_HighlightRow(index: number, highlighted: boolean)
 	end
 end
 
+
 function SearchAutocomplete:_SelectCurrent()
 	local suggestion = self._currentSuggestions[self._selectedIndex]
 	if not suggestion then return end
@@ -202,6 +192,7 @@ function SearchAutocomplete:_SelectCurrent()
 		self._onSelect(suggestion)
 	end
 end
+
 
 function SearchAutocomplete:_UpdateSuggestions()
 	local text = self._textBox.Text
@@ -223,6 +214,7 @@ function SearchAutocomplete:_UpdateSuggestions()
 	self:_RenderDropdown()
 	self:_Show()
 end
+
 
 function SearchAutocomplete:_RenderDropdown()
 	-- Clear old buttons
@@ -292,10 +284,12 @@ function SearchAutocomplete:_RenderDropdown()
 	end
 end
 
+
 function SearchAutocomplete:_Show()
 	self._dropdown.Visible = true
 	self._visible = true
 end
+
 
 function SearchAutocomplete:_Hide()
 	self._dropdown.Visible = false
@@ -303,9 +297,7 @@ function SearchAutocomplete:_Hide()
 	self._selectedIndex = 0
 end
 
---[[
-	Disconnect textbox/dropdown listeners and destroy the autocomplete popup.
-]]
+
 function SearchAutocomplete:Destroy()
 	for _, conn in ipairs(self._connections) do
 		conn:Disconnect()

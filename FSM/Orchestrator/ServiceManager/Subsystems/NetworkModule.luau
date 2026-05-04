@@ -1,9 +1,5 @@
 --!strict
--- @Name ServiceManager/Subsystems/NetworkModule.luau
--- @Author iKrypto
--- @Description Enhanced NETWORK subsystem with command type badges (EntityCommand,
--- RemoteFunction, NetworkCommand, EventBus, ServerRequest), invocation history,
--- subscriber/message counts, 50/50 list+detail layout, and ServerRequestCallbacks display.
+
 
 local Theme = require(script.Parent.Parent.Theme)
 local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
@@ -11,23 +7,19 @@ local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
 local NetworkModule = {}
 NetworkModule.__index = NetworkModule
 
-local SORT_MODES = { "Name", "Type", "Subscribers", "Messages" }
+local SORT_MODES = {"Name","Type","Subscribers","Messages" }
 
 local TYPE_COLORS: { [string]: Color3 } = {
-	EntityCommand = Color3.fromRGB(100, 200, 255),     -- Cyan-blue
-	RemoteFunction = Color3.fromRGB(180, 140, 255),     -- Purple
-	RemoteEvent = Color3.fromRGB(120, 170, 255),        -- Lighter blue
-	NetworkCommand = Color3.fromRGB(255, 180, 80),      -- Orange
-	EventBus = Color3.fromRGB(60, 210, 120),            -- Green
-	ServerRequest = Color3.fromRGB(255, 100, 100),      -- Red
-	Unknown = Color3.fromRGB(140, 140, 160),            -- Gray
+	EntityCommand = Color3.fromRGB(100, 200, 255), -- Cyan-blue
+	RemoteFunction = Color3.fromRGB(180, 140, 255), -- Purple
+	RemoteEvent = Color3.fromRGB(120, 170, 255), -- Lighter blue
+	NetworkCommand = Color3.fromRGB(255, 180, 80), -- Orange
+	EventBus = Color3.fromRGB(60, 210, 120), -- Green
+	ServerRequest = Color3.fromRGB(255, 100, 100), -- Red
+	Unknown = Color3.fromRGB(140, 140, 160), -- Gray
 }
 
---[[
-	Create the NETWORK subsystem controller.
-	Tracks command/event-bus caches, selection state, and the Nexus reference used
-	by root-layer widgets that trigger detail drill-downs.
-]]
+
 function NetworkModule.new(): any
 	local self = setmetatable({}, NetworkModule)
 	self._commandCache = {} :: { [string]: any }
@@ -40,10 +32,7 @@ function NetworkModule.new(): any
 	return self
 end
 
---[[
-	Refresh network command, event-bus, and server-callback snapshots for the
-	active context, normalizing data into the caches consumed by the UI.
-]]
+
 function NetworkModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
 	if not orchestrator then return end
@@ -128,7 +117,7 @@ function NetworkModule:FetchData(nexus: any)
 			for entityId, commands in pairs(entityCbs) do
 				if type(commands) == "table" then
 					for cmdName, _ in pairs(commands) do
-						local fullName = entityId .. ":" .. cmdName
+						local fullName = entityId ..":" .. cmdName
 						self._commandCache[fullName] = {
 							Name = fullName,
 							Type = "EntityCommand",
@@ -145,7 +134,7 @@ function NetworkModule:FetchData(nexus: any)
 			end
 
 			-- Remote instances
-			local remoteNames = { "OrchestratorEvent", "OrchestratorFunction", "EntityUpdateEvent", "EntityCommandEvent" }
+			local remoteNames = {"OrchestratorEvent","OrchestratorFunction","EntityUpdateEvent","EntityCommandEvent" }
 			local remoteStats = nm._remoteStats or {}
 			for _, remoteName in ipairs(remoteNames) do
 				local remote = nm[remoteName]
@@ -250,17 +239,19 @@ function NetworkModule:FetchData(nexus: any)
 	end)
 end
 
+
 function NetworkModule:_DetectCommandType(name: string, cmd: any): string
-	if type(cmd) ~= "table" then return "Unknown" end
+	if type(cmd) ~= "table" then return"Unknown" end
 	if cmd.Type then return cmd.Type end
 
 	local nameLower = string.lower(name)
-	if nameLower:find("entity") then return "EntityCommand" end
-	if cmd.IsRemote or cmd._isRemote then return "RemoteFunction" end
-	if cmd.ServerRequestCallbacks or cmd._serverCallback then return "ServerRequest" end
-	if cmd.Subscribers or cmd._subscribers then return "EventBus" end
-	return "NetworkCommand"
+	if nameLower:find("entity") then return"EntityCommand" end
+	if cmd.IsRemote or cmd._isRemote then return"RemoteFunction" end
+	if cmd.ServerRequestCallbacks or cmd._serverCallback then return"ServerRequest" end
+	if cmd.Subscribers or cmd._subscribers then return"EventBus" end
+	return"NetworkCommand"
 end
+
 
 function NetworkModule:_CountSubscribers(obj: any): number
 	if type(obj) ~= "table" then return 0 end
@@ -273,6 +264,7 @@ function NetworkModule:_CountSubscribers(obj: any): number
 	if type(subs) == "number" then return subs end
 	return 0
 end
+
 
 function NetworkModule:_ExtractCmdProperties(cmd: any): { [string]: any }
 	local props = {}
@@ -287,6 +279,7 @@ function NetworkModule:_ExtractCmdProperties(cmd: any): { [string]: any }
 	return props
 end
 
+
 function NetworkModule:_ExtractBusProperties(bus: any): { [string]: any }
 	local props = {}
 	if type(bus) ~= "table" then return props end
@@ -300,15 +293,9 @@ function NetworkModule:_ExtractBusProperties(bus: any): { [string]: any }
 	return props
 end
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	NETWORK rendering is performed by BuildRootLayer and its detail layers.
-]]
+
 function NetworkModule:Render(_nexus: any) end
 
--- ══════════════════════════════════════════════════════════════
--- SORTING / FILTERING
--- ══════════════════════════════════════════════════════════════
 
 function NetworkModule:_GetAllItems(): { { Name: string, Data: any } }
 	local result = {}
@@ -352,15 +339,7 @@ function NetworkModule:_GetAllItems(): { { Name: string, Data: any } }
 	return result
 end
 
--- ══════════════════════════════════════════════════════════════
--- ROOT LAYER
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Build or rebuild the NETWORK root layer inside the supplied navigator frame.
-	Creates the summary strip, toolbar, and normalized item rows that open call
-	history and structured-argument inspectors.
-]]
 function NetworkModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	self._nexusRef = nexus -- store reference for summary strip click handlers
@@ -399,7 +378,7 @@ function NetworkModule:BuildRootLayer(frame: Frame, context: any)
 
 	local itemsToAnimate = {}
 	local order = 20
-	local typeOrder = { "EntityCommand", "NetworkCommand", "RemoteEvent", "RemoteFunction", "EventBus", "ServerRequest", "Unknown" }
+	local typeOrder = {"EntityCommand","NetworkCommand","RemoteEvent","RemoteFunction","EventBus","ServerRequest","Unknown" }
 
 	for _, typeName in ipairs(typeOrder) do
 		local group = byType[typeName]
@@ -435,6 +414,7 @@ function NetworkModule:BuildRootLayer(frame: Frame, context: any)
 		)
 	end
 end
+
 
 function NetworkModule:_BuildSummaryStrip(parent: Frame)
 	local strip = Instance.new("Frame")
@@ -522,6 +502,7 @@ function NetworkModule:_BuildSummaryStrip(parent: Frame)
 		end
 	end
 end
+
 
 function NetworkModule:_BuildToolbar(parent: Frame, nexus: any)
 	local toolbar = Instance.new("Frame")
@@ -633,9 +614,6 @@ function NetworkModule:_BuildToolbar(parent: Frame, nexus: any)
 	end)
 end
 
--- ══════════════════════════════════════════════════════════════
--- NETWORK ROW
--- ══════════════════════════════════════════════════════════════
 
 function NetworkModule:_BuildNetworkRow(parent: Frame, name: string, data: any, nexus: any, order: number): Frame
 	local typeColor = TYPE_COLORS[data.Type] or TYPE_COLORS.Unknown
@@ -702,9 +680,6 @@ function NetworkModule:_BuildNetworkRow(parent: Frame, name: string, data: any, 
 	return row
 end
 
--- ══════════════════════════════════════════════════════════════
--- NETWORK DETAIL LAYER
--- ══════════════════════════════════════════════════════════════
 
 function NetworkModule:_BuildNetworkDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -761,7 +736,7 @@ function NetworkModule:_BuildNetworkDetailLayer(frame: Frame, context: any)
 		or itemData.Type == "RemoteEvent"
 		or itemData.Type == "NetworkCommand"
 	local fireBtn = Theme.CreateIconButton({
-		Label = if canFire then "↯ Fire" else "↯ Fire (n/a)",
+		Label = if canFire then"↯ Fire" else"↯ Fire (n/a)",
 		Size = UDim2.new(0, 80, 0, 26),
 		Color = if canFire then Theme.Colors.Warning else Theme.Colors.GlassTertiary,
 		Parent = actionBar,
@@ -888,7 +863,7 @@ function NetworkModule:_BuildNetworkDetailLayer(frame: Frame, context: any)
 		{ Key = "Last Invoked", Value = (function()
 			local t = itemData.LastInvoked or itemData.LastFired or 0
 			if t > 0 then return string.format("%.1fs ago", os.clock() - t) end
-			return "never"
+			return"never"
 		end)(), Color = Theme.Colors.TextSecondary },
 	}
 	for i, s in ipairs(stats) do
@@ -919,9 +894,6 @@ function NetworkModule:_BuildNetworkDetailLayer(frame: Frame, context: any)
 	end
 end
 
--- ══════════════════════════════════════════════════════════════
--- HELPERS
--- ══════════════════════════════════════════════════════════════
 
 function NetworkModule:_BuildPropRow(parent: Frame, key: string, value: string, color: Color3, order: number)
 	local propRow = Instance.new("Frame")
@@ -942,9 +914,7 @@ function NetworkModule:_BuildPropRow(parent: Frame, key: string, value: string, 
 	Theme.CreateLabel({ Text = value, Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.48, 0, 0, 0), Color = color, FontSize = Theme.TextSize.Body, FontFace = Theme.Font.Mono, Alignment = Enum.TextXAlignment.Right, Parent = propRow })
 end
 
---[[
-	Release autocomplete resources and clear cached network snapshots.
-]]
+
 function NetworkModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end
 	table.clear(self._commandCache)
@@ -952,16 +922,7 @@ function NetworkModule:Destroy()
 	table.clear(self._serverCallbacks)
 end
 
--- ══════════════════════════════════════════════════════════════
--- CALLS HISTORY LAYER (drill-down from network detail)
--- ══════════════════════════════════════════════════════════════
 
---[=[
-	Render a list of recent invocations of the selected event bus / command /
-	remote event. Each entry shows time, args summary, source.
-	@param frame Frame
-	@param context { Nexus, ItemName, ItemData, RecentCalls }
-]=]
 function NetworkModule:_BuildCallsHistoryLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
 	if not contentFrame then return end
@@ -1087,7 +1048,7 @@ function NetworkModule:_BuildCallsHistoryLayer(frame: Frame, context: any)
 		-- Escape angle brackets so RichText doesn't parse them as font tags.
 		-- Historic call entries (captured before the [...] formatting fix)
 		-- may still contain "<userdata:...>" / "<Vector3>" — escape defensively.
-		local argsStr = rawArgsStr:gsub("<", "&lt;"):gsub(">", "&gt;")
+		local argsStr = rawArgsStr:gsub("<","&lt;"):gsub(">","&gt;")
 		local chevron = hasNested and '<font color="#666">▸</font> ' or ''
 		local argLabel = Theme.CreateLabel({
 			Text = '<font color="#3898FF">▶</font>  ' .. chevron .. (argsStr or "()"),
@@ -1160,19 +1121,14 @@ function NetworkModule:_BuildCallsHistoryLayer(frame: Frame, context: any)
 	end
 end
 
---[=[
-	Render structured args as nested rows inside a parent Frame. Tables
-	recurse with indentation. Each `ArgsStruct` entry corresponds to a
-	positional argument (1, 2, 3, ...). The `n` and `truncated` keys are
-	control-plane and are skipped.
-]=]
+
 function NetworkModule:_RenderStructuredArgs(parent: Frame, args: any, depth: number)
 	-- argCount must fall back to #args because RemoteFunction serialization
 	-- strips the explicit .n key when the array length matches.
 	local argCount = args.n or #args
 	for i = 1, argCount do
 		local v = args[i]
-		self:_RenderStructuredArg(parent, "[" .. i .. "]", v, depth, i)
+		self:_RenderStructuredArg(parent,"[" .. i .."]", v, depth, i)
 	end
 	if args.truncated then
 		Theme.CreateLabel({
@@ -1187,6 +1143,7 @@ function NetworkModule:_RenderStructuredArgs(parent: Frame, args: any, depth: nu
 		}).LayoutOrder = argCount + 1
 	end
 end
+
 
 function NetworkModule:_RenderStructuredArg(parent: Frame, key: string, value: any, depth: number, layoutOrder: number)
 	local indent = depth * 12
@@ -1203,7 +1160,7 @@ function NetworkModule:_RenderStructuredArg(parent: Frame, key: string, value: a
 	-- Escape angle brackets in keys/values so RichText labels render them
 	-- visibly instead of treating them as font tags.
 	local function escape(s: string): string
-		return (s:gsub("<", "&lt;"):gsub(">", "&gt;"))
+		return (s:gsub("<","&lt;"):gsub(">","&gt;"))
 	end
 	local safeKey = escape(tostring(key))
 

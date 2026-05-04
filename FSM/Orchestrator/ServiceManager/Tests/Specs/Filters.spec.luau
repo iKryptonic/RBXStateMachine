@@ -40,6 +40,18 @@ local function spec()
 		expect(#sorted).toEqual(1)
 	end)
 
+	it("filters FSMs by class name", function()
+		local mod = FSMModule.new()
+		local source = {
+			DashA = { Name = "DashFSM", CurrentState = "Running" },
+			EquipA = { Name = "EquipJob", CurrentState = "Idle" },
+		}
+		mod._searchText = "equipjob"
+		local sorted = mod:_GetSortedFiltered(source)
+		expect(#sorted).toEqual(1)
+		expect(sorted[1].Id).toEqual("EquipA")
+	end)
+
 	it("sorts by Name alphabetically", function()
 		local mod = FSMModule.new()
 		mod._sortMode = "Name"
@@ -75,6 +87,41 @@ local function spec()
 		}
 		local sorted = mod:_GetSortedFiltered(source)
 		expect(sorted[1].Id).toEqual("B")
+	end)
+
+	it("sorts by Recent descending", function()
+		local mod = FSMModule.new()
+		mod._sortMode = "Recent"
+		local source = {
+			Older = { CreatedAt = 10, LastTransition = 15 },
+			Newest = { CreatedAt = 20, LastTransition = 25 },
+			Middle = { CreatedAt = 12, LastTransition = 18 },
+		}
+		local sorted = mod:_GetSortedFiltered(source)
+		expect(sorted[1].Id).toEqual("Newest")
+		expect(sorted[3].Id).toEqual("Older")
+	end)
+
+	it("groups FSMs by class name with status counts", function()
+		local mod = FSMModule.new()
+		mod._sortMode = "Recent"
+		local groups = mod:_GetGroupedFSMs({
+			DashFailed = { Name = "DashFSM", Status = "failed", CreatedAt = 6 },
+			DashDone = { Name = "DashFSM", Status = "completed", CreatedAt = 5 },
+			DashLive = { Name = "DashFSM", Status = "active", CreatedAt = 4 },
+			EquipLive = { Name = "EquipJob", Status = "active", CreatedAt = 10 },
+		})
+
+		expect(#groups).toEqual(2)
+		expect(groups[1].ClassName).toEqual("EquipJob")
+		expect(groups[1].Items[1].Id).toEqual("EquipLive")
+
+		local dash = groups[2]
+		expect(dash.ClassName).toEqual("DashFSM")
+		expect(dash.ActiveCount).toEqual(1)
+		expect(dash.CompletedCount).toEqual(1)
+		expect(dash.FailedCount).toEqual(1)
+		expect(dash.Items[1].Id).toEqual("DashFailed")
 	end)
 
 	-- ── Context-strict FSM filtering (the GUI's CLIENT/SERVER toggle is

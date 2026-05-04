@@ -13,33 +13,39 @@ local EntityPersistence = require(script.EntityPersistence)
 local Initialized = false
 
 local PersistenceManager = {
-    Controller = nil :: any, -- EntityPersistence instance
-    _logger = nil :: any,
-    _settings = nil :: any,
-	_core = nil :: any
+	Controller = nil :: any, -- EntityPersistence instance
+	_logger = nil :: any,
+	_settings = nil :: any,
+	_core = nil :: any,
 }
 
 --[=[
-	@description Initializes the PersistenceManager module with shared utilities.
-	Only runs on the server. Initializes the EntityPersistence sub-module.
-	The controller is lazy-loaded on first use to avoid dependency cycles.
+	Bootstraps PersistenceManager for server-side use. Initialises the
+	EntityPersistence sub-module, stores the Util reference for lazy
+	controller construction, and captures Logger and Settings. The actual
+	EntityPersistence controller is NOT created here; it is created on first
+	use by `GetController` to avoid a dependency cycle with DataStoreSystem.
+	No-ops on the client or after the first successful call.
 
-	@param Util table -- Orchestrator utility table
-	@return ()
-	@reads RunService:IsServer()
-	@writes PersistenceManager._core, ._settings, ._logger
+	@param Util table -- Shared Orchestrator utilities (Logger, Settings, Factory).
+	@reads Initialized, RunService:IsServer()
+	@writes PersistenceManager._core, PersistenceManager._settings,
+	        PersistenceManager._logger, Initialized
 ]=]
-
 function PersistenceManager.Initialize(Util)
-    if not RunService:IsServer() then return end
-    if Initialized then return end
-    Initialized = true
+	if not RunService:IsServer() then
+		return
+	end
+	if Initialized then
+		return
+	end
+	Initialized = true
 	EntityPersistence.Initialize(Util)
-    
+
 	PersistenceManager._core = Util
-    PersistenceManager._settings = Util.Settings
-    PersistenceManager._logger = Util.Logger.new({ Name = "PersistenceManager" })
-	
+	PersistenceManager._settings = Util.Settings
+	PersistenceManager._logger = Util.Logger.new({ Name = "PersistenceManager" })
+
 	-- Controller is lazy loaded to avoid dependency cycles with DataStoreSystem
 end
 
@@ -53,9 +59,13 @@ end
 	@writes PersistenceManager.Controller
 ]=]
 local function GetController()
-	if PersistenceManager.Controller then return PersistenceManager.Controller end
-	if not PersistenceManager._core then return nil end
-	
+	if PersistenceManager.Controller then
+		return PersistenceManager.Controller
+	end
+	if not PersistenceManager._core then
+		return nil
+	end
+
 	-- Lazy load DataStoreSystem
 	local DataStoreSystem = PersistenceManager._core.Factory.Registry.GetEntity("DataStoreSystem")
 	if not DataStoreSystem then
@@ -65,79 +75,98 @@ local function GetController()
 		return nil
 	end
 
-    PersistenceManager.Controller = EntityPersistence.new({ 
-        DataStoreName = PersistenceManager._settings.DataStore.DataStoreName, 
-        KeyPrefix = PersistenceManager._settings.DataStore.KeyPrefix,
-        DataStoreReference = DataStoreSystem
-    })
-	
+	PersistenceManager.Controller = EntityPersistence.new({
+		DataStoreName = PersistenceManager._settings.DataStore.DataStoreName,
+		KeyPrefix = PersistenceManager._settings.DataStore.KeyPrefix,
+		DataStoreReference = DataStoreSystem,
+	})
+
 	return PersistenceManager.Controller
 end
 
 local function ValidateRequest()
-    assert(Initialized, "PersistenceManager not initialized")
-    assert(RunService:IsServer(), "PersistenceManager can only be used on the server")
-    assert(PersistenceManager._settings.DataStore.PersistenceEnabled, "Persistence is disabled")
+	assert(Initialized, "PersistenceManager not initialized")
+	assert(RunService:IsServer(), "PersistenceManager can only be used on the server")
+	assert(PersistenceManager._settings.DataStore.PersistenceEnabled, "Persistence is disabled")
 end
 
 --[=[
-	@description Loads persistent state into an entity by key.
-	Marks the entity as persistent in its context and delegates to
-	the EntityPersistence controller's Load method.
+	Loads persisted entity state from the DataStore and applies it via
+	`entity:Deserialize`. Also marks the entity as persistent by writing
+	`_PersistenceKey` and `_IsPersistent` into its Context so that
+	subsequent `UpdateEntity` triggers can call `SaveState` automatically.
+	Silently no-ops when the controller is unavailable (DataStoreSystem not
+	yet registered) or when validation fails (client, persistence disabled).
 
-	@param entity any -- Entity instance to load state into
-	@param key string -- DataStore key to load from
-	@return ()
-	@reads entity._privateProperties.Context
-	@writes entity context (_PersistenceKey, _IsPersistent)
+	@param entity any -- Entity instance to load into; must implement `Deserialize`.
+	@param key string -- DataStore key (usually EntityId or a custom prefix key).
+	@reads PersistenceManager._core, PersistenceManager._settings, Initialized
+	@writes entity Context._PersistenceKey, entity Context._IsPersistent
 ]=]
 function PersistenceManager.LoadState(entity: any, key: string)
-    ValidateRequest()
-	
+	ValidateRequest()
+
 	local controller = GetController()
-	if not controller then return end
-    
-    -- Mark entity as persistent
-    if type(entity.SetContext) == "function" then
-        entity:SetContext("_PersistenceKey", key)
-        entity:SetContext("_IsPersistent", true)
-    end
-    
-    local success, data, err = controller:Load(entity, key)
-    if success and data then
-        PersistenceManager._logger:Log({ Level = "INFO", Message = string.format("Restored state for key '%s'", key) })
-    elseif not success then
-        PersistenceManager._logger:Log({ Level = "ERROR", Message = string.format("Failed to load state for key '%s': %s", key, tostring(err)) })
-    end
+	if not controller then
+		return
+	end
+
+	-- Mark entity as persistent
+	if type(entity.SetContext) == "function" then
+		entity:SetContext("_PersistenceKey", key)
+		entity:SetContext("_IsPersistent", true)
+	end
+
+	local success, data, err = controller:Load(entity, key)
+	if success and data then
+		PersistenceManager._logger:Log({ Level = "INFO", Message = string.format("Restored state for key '%s'", key) })
+	elseif not success then
+		PersistenceManager._logger:Log({
+			Level = "ERROR",
+			Message = string.format("Failed to load state for key '%s': %s", key, tostring(err)),
+		})
+	end
 end
 
 --[=[
-	@description Saves the current state of a persistent entity.
-	Only proceeds if the entity has been marked as persistent
-	(via `_IsPersistent` context flag set during LoadState).
+	Serialises entity state and writes it to the DataStore. Only operates when
+	`entity._privateProperties.Context._IsPersistent` is true (set by
+	`LoadState`). Derives the DataStore key from `_PersistenceKey` falling back
+	to `Context.EntityId`. Silently no-ops when the controller is unavailable
+	or validation fails.
 
-	@param entity any -- Entity instance to save
-	@return ()
-	@reads entity._privateProperties.Context (_IsPersistent, _PersistenceKey)
-	@writes DataStore (via controller:Save)
+	@param entity any -- Entity instance to save; must implement `Serialize`.
+	@reads entity._privateProperties.Context._IsPersistent,
+	       entity._privateProperties.Context._PersistenceKey,
+	       entity._privateProperties.Context.EntityId
+	@writes DataStore (via EntityPersistence.Save)
 ]=]
 function PersistenceManager.SaveState(entity: any)
-    ValidateRequest()
+	ValidateRequest()
 
 	local controller = GetController()
-	if not controller then return end
-    
-    -- Check if persistent
-    local context = (entity._privateProperties and entity._privateProperties.Context) or {}
-    if not context._IsPersistent then return end
-    
-    local key = context._PersistenceKey or context.EntityId
-    if not key then return end
-    
-    local ok, err = controller:Save(entity, key)
-    if not ok then
-        PersistenceManager._logger:Log({ Level = "ERROR", Message = string.format("Failed to save state for key '%s': %s", key, tostring(err)) })
-    end
+	if not controller then
+		return
+	end
+
+	-- Check if persistent
+	local context = (entity._privateProperties and entity._privateProperties.Context) or {}
+	if not context._IsPersistent then
+		return
+	end
+
+	local key = context._PersistenceKey or context.EntityId
+	if not key then
+		return
+	end
+
+	local ok, err = controller:Save(entity, key)
+	if not ok then
+		PersistenceManager._logger:Log({
+			Level = "ERROR",
+			Message = string.format("Failed to save state for key '%s': %s", key, tostring(err)),
+		})
+	end
 end
 
 return PersistenceManager

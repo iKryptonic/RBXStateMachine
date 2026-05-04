@@ -1,9 +1,7 @@
 --!strict
--- @Name ServiceManager/Types.luau
--- @Author iKrypto
--- @Description Strict type definitions for the Nexus-Orchestrator Suite.
 
-export type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG"
+
+export type LogLevel = "INFO" |"WARN" |"ERROR" |"DEBUG"
 
 -- Z-Axis depth layer descriptor
 export type DepthLayer = {
@@ -41,7 +39,7 @@ export type SubsystemDescriptor = {
 }
 
 -- Insight severity for analytics engine
-export type InsightSeverity = "CRITICAL" | "WARNING" | "INFO" | "SUGGESTION"
+export type InsightSeverity = "CRITICAL" |"WARNING" |"INFO" |"SUGGESTION"
 
 -- Diagnostic insight produced by the analytics engine
 export type Insight = {

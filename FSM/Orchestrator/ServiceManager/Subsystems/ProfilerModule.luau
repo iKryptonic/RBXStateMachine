@@ -1,25 +1,5 @@
 --!strict
--- @Name ServiceManager/Subsystems/ProfilerModule.luau
--- @Author iKrypto
--- @Description Aggregated profiler subsystem for the ServiceManager dashboard.
--- Provides a single "PROFILER" tab that surfaces hot-path timing data from the
--- Scheduler, FSM heartbeat, and network call tracking — answering the question
--- "what's eating my frame budget?" without requiring the user to dig through
--- individual TASKS/FSM/NETWORK tabs.
---
--- Layout:
---   ┌────────────────────────────────────────────────────┐
---   │ FRAME BUDGET BAR  [━━━━━━━░░░░░░░]  1.2ms / 16.6ms │
---   ├────────────────────────────────────────────────────┤
---   │ ▸ HOT TASKS (top N by avg time)                    │
---   │   Name | AvgMs | MaxMs | ×Runs | MemKB | Status   │
---   ├────────────────────────────────────────────────────┤
---   │ ▸ HOT FSMs (top N by avg update time)              │
---   │   Id | State | AvgMs | MaxMs | ×Updates | MemΔ    │
---   ├────────────────────────────────────────────────────┤
---   │ ▸ DIAGNOSTICS (collapsed by default)               │
---   │   Thread pool | Network traffic | GC stats          │
---   └────────────────────────────────────────────────────┘
+
 
 local Theme = require(script.Parent.Parent.Theme)
 
@@ -28,11 +8,7 @@ ProfilerModule.__index = ProfilerModule
 
 local MAX_HOT_ITEMS = 10
 
---[[
-	Create the PROFILER subsystem controller.
-	Owns the aggregated task/FSM/network snapshots and frame-budget state that
-	feed the cross-cutting performance dashboard.
-]]
+
 function ProfilerModule.new(): any
 	local self = setmetatable({}, ProfilerModule)
 	self._taskPerf = {} :: { [string]: any }
@@ -41,21 +17,15 @@ function ProfilerModule.new(): any
 	self._threadPool = { Total = 0, Free = 0, Active = 0, Peak = 0 }
 	self._networkTraffic = {} :: { { Name: string, Count: number, LastFired: number } }
 	self._gcStats = { MemoryMB = 0 }
+	self._instanceMemory = { Services = {}, TopOffenders = {}, TotalDescendants = 0, DuplicateAssets = nil } :: any
 	self._sortMode = "AvgTime"
 	self._fsmSortMode = "AvgTime"
 	self._showDiagnostics = false
+	self._showInstanceMemory = true
 	return self
 end
 
--- ══════════════════════════════════════════════════════════════
--- DATA FETCH
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Refresh the profiler snapshot for the active context.
-	Merges scheduler, FSM, GC, thread-pool, and network telemetry into a single
-	view so the PROFILER tab can rank the hottest work at a glance.
-]]
 function ProfilerModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
 	if not orchestrator then return end
@@ -78,11 +48,13 @@ function ProfilerModule:FetchData(nexus: any)
 	end)
 end
 
+
 function ProfilerModule:_CountTable(t: { [any]: any }): number
 	local n = 0
 	for _ in pairs(t) do n += 1 end
 	return n
 end
+
 
 function ProfilerModule:_FetchClient(orchestrator: any, nexus: any?)
 	-- Tasks
@@ -151,12 +123,12 @@ function ProfilerModule:_FetchClient(orchestrator: any, nexus: any?)
 			if perf then
 				self._fsmPerf[id] = {
 					Id = id,
-					State = rawget(fsm, "_activeStateName") or rawget(fsm, "State") or "?",
+					State = rawget(fsm,"_activeStateName") or rawget(fsm,"State") or "?",
 					AvgMs = (perf.AvgUpdateTime or 0) * 1000,
 					MaxMs = (perf.MaxUpdateTime or 0) * 1000,
 					UpdateCount = perf.UpdateCount or 0,
 					MemDeltaKB = perf.MaxMemKBDelta or 0,
-					IsActive = rawget(fsm, "IsActive") or false,
+					IsActive = rawget(fsm,"IsActive") or false,
 				}
 			end
 		end
@@ -167,7 +139,11 @@ function ProfilerModule:_FetchClient(orchestrator: any, nexus: any?)
 
 	-- GC
 	self._gcStats.MemoryMB = collectgarbage("count") / 1024
+
+	-- Instance memory (client-side)
+	self:_FetchInstanceMemoryLocal()
 end
+
 
 function ProfilerModule:_FetchServer(serverData: any?)
 	self._taskPerf = {}
@@ -252,7 +228,13 @@ function ProfilerModule:_FetchServer(serverData: any?)
 		end
 		table.sort(self._networkTraffic, function(a, b) return a.Count > b.Count end)
 	end
+
+	-- Instance memory from server snapshot
+	if serverData.InstanceMemory then
+		self._instanceMemory = serverData.InstanceMemory
+	end
 end
+
 
 function ProfilerModule:_FetchNetworkClient(nm: any?)
 	self._networkTraffic = {}
@@ -276,15 +258,80 @@ function ProfilerModule:_FetchNetworkClient(nm: any?)
 	table.sort(self._networkTraffic, function(a, b) return a.Count > b.Count end)
 end
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	PROFILER rendering is produced by BuildRootLayer and its section builders.
-]]
+
+function ProfilerModule:_FetchInstanceMemoryLocal()
+	local instMem: { [string]: any } = { Services = {}, TopOffenders = {}, TotalDescendants = 0 }
+	local serviceNames = {"ReplicatedStorage","Workspace","Lighting","SoundService"}
+	for _, svcName in ipairs(serviceNames) do
+		local ok, svc = pcall(function() return game:GetService(svcName) end)
+		if ok and svc then
+			local c = 0
+			for _ in svc:GetDescendants() do c += 1 end
+			instMem.Services[svcName] = c
+			instMem.TotalDescendants += c
+		end
+	end
+	-- PlayerGui
+	local Players = game:GetService("Players")
+	local lp = Players.LocalPlayer
+	if lp then
+		local pg = lp:FindFirstChild("PlayerGui")
+		if pg then
+			local c = 0
+			for _ in pg:GetDescendants() do c += 1 end
+			instMem.Services["PlayerGui"] = c
+			instMem.TotalDescendants += c
+		end
+	end
+	-- Top offenders in RS
+	local rs = game:FindFirstChild("ReplicatedStorage")
+	if rs then
+		for _, child in rs:GetChildren() do
+			local c = 0
+			for _ in child:GetDescendants() do c += 1 end
+			if c > 50 then
+				table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "RS" })
+			end
+		end
+	end
+	-- Top offenders in Workspace
+	for _, child in game.Workspace:GetChildren() do
+		local c = 0
+		for _ in child:GetDescendants() do c += 1 end
+		if c > 100 then
+			table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "WS" })
+		end
+	end
+	table.sort(instMem.TopOffenders, function(a, b) return a.Count > b.Count end)
+	if #instMem.TopOffenders > 15 then
+		local trimmed = {}
+		for i = 1, 15 do trimmed[i] = instMem.TopOffenders[i] end
+		instMem.TopOffenders = trimmed
+	end
+	-- Detect duplicate assets
+	local assetsFolder = rs and rs:FindFirstChild("Assets")
+	if assetsFolder then
+		local nameCounts: {[string]: number} = {}
+		for _, child in assetsFolder:GetChildren() do
+			nameCounts[child.Name] = (nameCounts[child.Name] or 0) + 1
+		end
+		local dupes = {}
+		for name, count in pairs(nameCounts) do
+			if count > 1 then
+				table.insert(dupes, { Name = name, Count = count })
+			end
+		end
+		if #dupes > 0 then
+			table.sort(dupes, function(a, b) return a.Count > b.Count end)
+			instMem.DuplicateAssets = dupes
+		end
+	end
+	self._instanceMemory = instMem
+end
+
+
 function ProfilerModule:Render(_nexus: any) end
 
--- ══════════════════════════════════════════════════════════════
--- SORTING
--- ══════════════════════════════════════════════════════════════
 
 function ProfilerModule:_GetSortedTasks(): { any }
 	local result = {}
@@ -304,6 +351,7 @@ function ProfilerModule:_GetSortedTasks(): { any }
 	return result
 end
 
+
 function ProfilerModule:_GetSortedFSMs(): { any }
 	local result = {}
 	for _, data in pairs(self._fsmPerf) do
@@ -322,15 +370,7 @@ function ProfilerModule:_GetSortedFSMs(): { any }
 	return result
 end
 
--- ══════════════════════════════════════════════════════════════
--- ROOT LAYER
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Build or rebuild the PROFILER root layer inside the supplied navigator frame.
-	Lays out the frame-budget bar, hot-task table, hot-FSM table, and optional
-	diagnostics section from the current aggregated snapshot.
-]]
 function ProfilerModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -366,13 +406,13 @@ function ProfilerModule:BuildRootLayer(frame: Frame, context: any)
 	-- ── HOT FSMs ──────────────────────────────────────────────
 	self:_BuildHotFSMsSection(contentFrame, nexus, nextOrder())
 
+	-- ── INSTANCE MEMORY ──────────────────────────────────────
+	self:_BuildInstanceMemorySection(contentFrame, nexus, nextOrder())
+
 	-- ── DIAGNOSTICS (collapsed) ───────────────────────────────
 	self:_BuildDiagnosticsSection(contentFrame, nexus, nextOrder())
 end
 
--- ══════════════════════════════════════════════════════════════
--- FRAME BUDGET BAR
--- ══════════════════════════════════════════════════════════════
 
 function ProfilerModule:_BuildBudgetBar(parent: Frame, layoutOrder: number)
 	local fb = self._frameBudget
@@ -433,10 +473,14 @@ function ProfilerModule:_BuildBudgetBar(parent: Frame, layoutOrder: number)
 	fill.Parent = track
 	Instance.new("UICorner", fill).CornerRadius = UDim.new(0, 4)
 
-	-- Memory badge
+	-- Memory badge (Lua heap + Instance count)
+	local totalInst = self._instanceMemory.TotalDescendants or 0
+	local instColor = if totalInst > 5000 then"#FF4444" elseif totalInst > 2000 then"#FFAA00" else"#888"
 	Theme.CreateLabel({
-		Text = string.format('<font color="#666">MEM</font> %.1fMB', self._gcStats.MemoryMB),
-		Size = UDim2.new(0, 100, 0, 14),
+		Text = string.format('<font color="#666">LUA</font> %.1fMB  <font color="%s">INST</font> <font color="%s">%s</font>',
+			self._gcStats.MemoryMB, instColor, instColor,
+			if totalInst > 1000 then string.format("%.1fK", totalInst / 1000) else tostring(totalInst)),
+		Size = UDim2.new(0, 200, 0, 14),
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, 0),
 		Color = Theme.Colors.TextMuted,
@@ -447,9 +491,6 @@ function ProfilerModule:_BuildBudgetBar(parent: Frame, layoutOrder: number)
 	})
 end
 
--- ══════════════════════════════════════════════════════════════
--- HOT TASKS TABLE
--- ══════════════════════════════════════════════════════════════
 
 function ProfilerModule:_BuildHotTasksSection(parent: Frame, nexus: any, layoutOrder: number)
 	local sorted = self:_GetSortedTasks()
@@ -468,7 +509,7 @@ function ProfilerModule:_BuildHotTasksSection(parent: Frame, nexus: any, layoutO
 	-- Header row
 	local headerOrder = layoutOrder * 100 + 1
 	self:_BuildTableHeader(parent, headerOrder,
-		{ "Name", "AvgMs", "MaxMs", "×Runs", "MemKB", "Pri" },
+		{"Name","AvgMs","MaxMs","×Runs","MemKB","Pri" },
 		{ 0.35, 0.13, 0.13, 0.13, 0.13, 0.08 })
 
 	for i, task in ipairs(sorted) do
@@ -502,9 +543,6 @@ function ProfilerModule:_BuildHotTasksSection(parent: Frame, nexus: any, layoutO
 	end
 end
 
--- ══════════════════════════════════════════════════════════════
--- HOT FSMs TABLE
--- ══════════════════════════════════════════════════════════════
 
 function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOrder: number)
 	local sorted = self:_GetSortedFSMs()
@@ -523,7 +561,7 @@ function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOr
 	-- Header
 	local headerOrder = layoutOrder * 100 + 1
 	self:_BuildTableHeader(parent, headerOrder,
-		{ "FSM Id", "State", "AvgMs", "MaxMs", "×Updates", "MemΔ" },
+		{"FSM Id","State","AvgMs","MaxMs","×Updates","MemΔ" },
 		{ 0.30, 0.15, 0.13, 0.13, 0.13, 0.11 })
 
 	for i, fsm in ipairs(sorted) do
@@ -536,7 +574,7 @@ function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOr
 
 		-- Truncate FSM id for display
 		local displayId = fsm.Id or "?"
-		if #displayId > 30 then displayId = displayId:sub(1, 28) .. ".." end
+		if #displayId > 30 then displayId = displayId:sub(1, 28) ..".." end
 
 		self:_BuildTableRow(parent, rowOrder, {
 			{ Text = displayId, Width = 0.30, Color = if fsm.IsActive then Theme.Colors.TextPrimary else Theme.Colors.TextMuted },
@@ -561,9 +599,224 @@ function ProfilerModule:_BuildHotFSMsSection(parent: Frame, nexus: any, layoutOr
 	end
 end
 
--- ══════════════════════════════════════════════════════════════
--- DIAGNOSTICS (collapsed by default)
--- ══════════════════════════════════════════════════════════════
+
+function ProfilerModule:_BuildInstanceMemorySection(parent: Frame, _nexus: any, layoutOrder: number)
+	local im = self._instanceMemory
+	local total = im.TotalDescendants or 0
+	local totalColor = if total > 5000 then Theme.Colors.Danger
+		elseif total > 2000 then Theme.Colors.Warning
+		else Theme.Colors.Success
+
+	-- Toggle button
+	local btn = Instance.new("TextButton")
+	btn.Name = "InstanceMemoryToggle"
+	btn.Size = UDim2.new(1, 0, 0, 22)
+	btn.BackgroundColor3 = Theme.Colors.GlassTertiary
+	btn.BackgroundTransparency = 0.8
+	btn.BorderSizePixel = 0
+	btn.AutoButtonColor = false
+	btn.LayoutOrder = layoutOrder * 100
+	btn.Text = ""
+	btn.Parent = parent
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, Theme.Radius.Xs)
+
+	local chevron = if self._showInstanceMemory then"▾" else"▸"
+	Theme.CreateLabel({
+		Text = string.format(
+			'<font color="#FF8C00">%s</font> INSTANCE MEMORY <font color="#666">(%s total descendants)</font>',
+			chevron,
+			if total > 1000 then string.format("%.1fK", total / 1000) else tostring(total)),
+		Size = UDim2.new(1, -8, 1, 0),
+		Position = UDim2.new(0, 8, 0, 0),
+		Color = totalColor,
+		FontSize = Theme.TextSize.Caption,
+		FontFace = Theme.Font.Bold,
+		Alignment = Enum.TextXAlignment.Left,
+		Parent = btn,
+	})
+
+	if not self._showInstanceMemory then
+		btn.MouseButton1Click:Connect(function()
+			self._showInstanceMemory = true
+			local nav = _nexus and _nexus._navigator
+			if nav then nav:RebuildCurrentLayer() end
+		end)
+		return
+	end
+
+	btn.MouseButton1Click:Connect(function()
+		self._showInstanceMemory = false
+		local nav = _nexus and _nexus._navigator
+		if nav then nav:RebuildCurrentLayer() end
+	end)
+
+	-- Service breakdown
+	Theme.CreateLabel({
+		Text = '<font color="#888">SERVICE BREAKDOWN</font>',
+		Size = UDim2.new(1, 0, 0, 14),
+		Color = Theme.Colors.TextSecondary,
+		FontSize = Theme.TextSize.Tiny,
+		FontFace = Theme.Font.Bold,
+		Alignment = Enum.TextXAlignment.Left,
+		Parent = parent,
+	}).LayoutOrder = layoutOrder * 100 + 1
+
+	-- Sort services by count descending
+	local services = {}
+	for name, count in pairs(im.Services or {}) do
+		table.insert(services, { Name = name, Count = count })
+	end
+	table.sort(services, function(a, b) return a.Count > b.Count end)
+
+	for i, svc in ipairs(services) do
+		local svcColor = if svc.Count > 3000 then"#FF4444"
+			elseif svc.Count > 1000 then"#FFAA00"
+			elseif svc.Count > 500 then"#FFD700"
+			else"#888"
+		Theme.CreateLabel({
+			Text = string.format('  <font color="%s">%-28s</font> <font color="%s">%s</font>',
+				"#9DC9FF", svc.Name, svcColor,
+				if svc.Count > 1000 then string.format("%.1fK", svc.Count / 1000) else tostring(svc.Count)),
+			Size = UDim2.new(1, 0, 0, 14),
+			Color = Theme.Colors.TextSecondary,
+			FontSize = Theme.TextSize.Tiny,
+			FontFace = Theme.Font.Mono,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = parent,
+		}).LayoutOrder = layoutOrder * 100 + 1 + i
+	end
+
+	-- Top offenders
+	local offenders = im.TopOffenders or {}
+	if #offenders > 0 then
+		Theme.CreateLabel({
+			Text = string.format('<font color="#888">TOP OFFENDERS</font> <font color="#666">(>50 descendants)</font>'),
+			Size = UDim2.new(1, 0, 0, 14),
+			Color = Theme.Colors.TextSecondary,
+			FontSize = Theme.TextSize.Tiny,
+			FontFace = Theme.Font.Bold,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = parent,
+		}).LayoutOrder = layoutOrder * 100 + 50
+
+		-- Header
+		self:_BuildTableHeader(parent, layoutOrder * 100 + 51,
+			{"Name","Class","Descendants","Service" },
+			{ 0.35, 0.20, 0.25, 0.15 })
+
+		for i, off in ipairs(offenders) do
+			if i > 10 then break end
+			local countColor = if off.Count > 1000 then Theme.Colors.Danger
+				elseif off.Count > 500 then Theme.Colors.Warning
+				else Theme.Colors.TextSecondary
+
+			self:_BuildTableRow(parent, layoutOrder * 100 + 51 + i, {
+				{ Text = off.Name or "?", Width = 0.35, Color = Theme.Colors.TextPrimary },
+				{ Text = off.Class or "?", Width = 0.20, Color = Theme.Colors.TextMuted },
+				{ Text = if off.Count > 1000 then string.format("%.1fK", off.Count / 1000) else tostring(off.Count), Width = 0.25, Color = countColor },
+				{ Text = off.Service or "RS", Width = 0.15, Color = Theme.Colors.Cyan },
+			})
+		end
+	end
+
+	-- Duplicate assets warning
+	local dupes = im.DuplicateAssets
+	if dupes and #dupes > 0 then
+		local dupeOrder = layoutOrder * 100 + 70
+		Theme.CreateLabel({
+			Text = string.format('<font color="#FF4444">⚠ DUPLICATE ASSETS DETECTED (%d names)</font>', #dupes),
+			Size = UDim2.new(1, 0, 0, 16),
+			Color = Theme.Colors.Danger,
+			FontSize = Theme.TextSize.Caption,
+			FontFace = Theme.Font.Bold,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = parent,
+		}).LayoutOrder = dupeOrder
+
+		for i, dupe in ipairs(dupes) do
+			if i > 10 then break end
+			Theme.CreateLabel({
+				Text = string.format('  <font color="#FF6666">%s</font> × <font color="#FF4444">%d copies</font>',
+					dupe.Name, dupe.Count),
+				Size = UDim2.new(1, 0, 0, 14),
+				Color = Theme.Colors.TextSecondary,
+				FontSize = Theme.TextSize.Tiny,
+				FontFace = Theme.Font.Mono,
+				Alignment = Enum.TextXAlignment.Left,
+				Parent = parent,
+			}).LayoutOrder = dupeOrder + i
+		end
+	end
+
+	-- FSM Instance ownership
+	local ownership = im.FSMOwnership
+	if ownership and next(ownership) then
+		local ownOrder = layoutOrder * 100 + 82
+		Theme.CreateLabel({
+			Text = '<font color="#888">FSM INSTANCE OWNERSHIP</font>',
+			Size = UDim2.new(1, 0, 0, 14),
+			Color = Theme.Colors.TextSecondary,
+			FontSize = Theme.TextSize.Tiny,
+			FontFace = Theme.Font.Bold,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = parent,
+		}).LayoutOrder = ownOrder
+
+		-- Sort by count descending
+		local sorted = {}
+		for fsmId, count in pairs(ownership) do
+			table.insert(sorted, { Id = fsmId, Count = count })
+		end
+		table.sort(sorted, function(a, b) return a.Count > b.Count end)
+
+		for i, entry in ipairs(sorted) do
+			if i > 8 then break end
+			local countColor = if entry.Count > 5 then"#FF4444" elseif entry.Count > 2 then"#FFAA00" else"#888"
+			local displayId = entry.Id
+			if #displayId > 35 then displayId = displayId:sub(1, 33) ..".." end
+			Theme.CreateLabel({
+				Text = string.format('  <font color="#9DC9FF">%s</font>  <font color="%s">×%d instances</font>',
+					displayId, countColor, entry.Count),
+				Size = UDim2.new(1, 0, 0, 14),
+				Color = Theme.Colors.TextSecondary,
+				FontSize = Theme.TextSize.Tiny,
+				FontFace = Theme.Font.Mono,
+				Alignment = Enum.TextXAlignment.Left,
+				Parent = parent,
+			}).LayoutOrder = ownOrder + i
+		end
+	end
+
+	-- Suspected orphans
+	local orphans = im.SuspectedOrphans
+	if orphans and #orphans > 0 then
+		local orphOrder = layoutOrder * 100 + 92
+		Theme.CreateLabel({
+			Text = string.format('<font color="#FF8C00">⚠ SUSPECTED ORPHAN INSTANCES (%d found)</font>', #orphans),
+			Size = UDim2.new(1, 0, 0, 16),
+			Color = Theme.Colors.Warning,
+			FontSize = Theme.TextSize.Caption,
+			FontFace = Theme.Font.Bold,
+			Alignment = Enum.TextXAlignment.Left,
+			Parent = parent,
+		}).LayoutOrder = orphOrder
+
+		for i, orphan in ipairs(orphans) do
+			if i > 8 then break end
+			Theme.CreateLabel({
+				Text = string.format('  <font color="#FFB347">%s</font> (%s)  <font color="#666">age: %ds</font>',
+					orphan.Name, orphan.Class, orphan.Age or 0),
+				Size = UDim2.new(1, 0, 0, 14),
+				Color = Theme.Colors.TextSecondary,
+				FontSize = Theme.TextSize.Tiny,
+				FontFace = Theme.Font.Mono,
+				Alignment = Enum.TextXAlignment.Left,
+				Parent = parent,
+			}).LayoutOrder = orphOrder + i
+		end
+	end
+end
+
 
 function ProfilerModule:_BuildDiagnosticsSection(parent: Frame, _nexus: any, layoutOrder: number)
 	local btn = Instance.new("TextButton")
@@ -578,7 +831,7 @@ function ProfilerModule:_BuildDiagnosticsSection(parent: Frame, _nexus: any, lay
 	btn.Parent = parent
 	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, Theme.Radius.Xs)
 
-	local chevron = if self._showDiagnostics then "▾" else "▸"
+	local chevron = if self._showDiagnostics then"▾" else"▸"
 	Theme.CreateLabel({
 		Text = string.format('<font color="#666">%s</font> DIAGNOSTICS', chevron),
 		Size = UDim2.new(1, -8, 1, 0),
@@ -677,9 +930,6 @@ function ProfilerModule:_BuildDiagnosticsSection(parent: Frame, _nexus: any, lay
 	end
 end
 
--- ══════════════════════════════════════════════════════════════
--- SHARED TABLE RENDERING
--- ══════════════════════════════════════════════════════════════
 
 function ProfilerModule:_BuildTableHeader(parent: Frame, layoutOrder: number, columns: { string }, widths: { number })
 	local row = Instance.new("Frame")
@@ -705,6 +955,7 @@ function ProfilerModule:_BuildTableHeader(parent: Frame, layoutOrder: number, co
 		xOff += w
 	end
 end
+
 
 function ProfilerModule:_BuildTableRow(parent: Frame, layoutOrder: number, cells: { { Text: string, Width: number, Color: Color3 } })
 	local row = Instance.new("Frame")
@@ -733,13 +984,7 @@ function ProfilerModule:_BuildTableRow(parent: Frame, layoutOrder: number, cells
 	end
 end
 
--- ══════════════════════════════════════════════════════════════
--- DESTROY
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Clear all cached profiler aggregates.
-]]
 function ProfilerModule:Destroy()
 	table.clear(self._taskPerf)
 	table.clear(self._fsmPerf)

@@ -1,9 +1,5 @@
 --!strict
--- @Name ServiceManager/Subsystems/EntityModule.luau
--- @Author iKrypto
--- @Description Enhanced ENTITY subsystem with active/dead tracking, full object inspector
--- (Identity, State, Context, Data, Schema, Logs sections), sort options, search bar,
--- type badges, and detailed entity drill-down.
+
 
 local Theme = require(script.Parent.Parent.Theme)
 local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
@@ -11,13 +7,9 @@ local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
 local EntityModule = {}
 EntityModule.__index = EntityModule
 
-local SORT_MODES = { "Name", "Type", "Age", "Status" }
+local SORT_MODES = {"Name","Type","Age","Status" }
 
---[[
-	Create the ENTITY subsystem controller.
-	Owns the live/dead entity caches plus the search and selection state used by
-	the inspector and its nested drill-down layers.
-]]
+
 function EntityModule.new(): any
 	local self = setmetatable({}, EntityModule)
 	self._entityCache = {} :: { [string]: any }
@@ -29,10 +21,7 @@ function EntityModule.new(): any
 	return self
 end
 
---[[
-	Refresh the entity snapshot for the current context and publish the latest
-	list data into local caches and the shared store.
-]]
+
 function EntityModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
 	if not orchestrator then return end
@@ -119,6 +108,7 @@ function EntityModule:FetchData(nexus: any)
 		nexus.Store:Set("entity.dead", self._deadEntities)
 	end)
 end
+
 
 function EntityModule:_ExtractEntityData(id: string, entity: any): any
 	local className = "Unknown"
@@ -252,15 +242,9 @@ function EntityModule:_ExtractEntityData(id: string, entity: any): any
 	}
 end
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	ENTITY rendering is performed by BuildRootLayer and detail-layer builders.
-]]
+
 function EntityModule:Render(_nexus: any) end
 
--- ══════════════════════════════════════════════════════════════
--- SORTING / FILTERING
--- ══════════════════════════════════════════════════════════════
 
 function EntityModule:_GetSorted(source: { [string]: any }): { { Id: string, Data: any } }
 	local result = {}
@@ -287,15 +271,7 @@ function EntityModule:_GetSorted(source: { [string]: any }): { { Id: string, Dat
 	return result
 end
 
--- ══════════════════════════════════════════════════════════════
--- ROOT LAYER
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Build or rebuild the ENTITY overview layer inside the supplied navigator frame.
-	Creates the summary strip, toolbar, and entity rows that fan out into the
-	full inspector, table view, and version-history drill-downs.
-]]
 function EntityModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -370,6 +346,7 @@ function EntityModule:BuildRootLayer(frame: Frame, context: any)
 	end
 end
 
+
 function EntityModule:_BuildSummaryStrip(parent: Frame)
 	local strip = Instance.new("Frame")
 	strip.Name = "EntitySummary"
@@ -440,6 +417,7 @@ function EntityModule:_BuildSummaryStrip(parent: Frame)
 		})
 	end
 end
+
 
 function EntityModule:_BuildToolbar(parent: Frame, nexus: any)
 	local toolbar = Instance.new("Frame")
@@ -560,9 +538,6 @@ function EntityModule:_BuildToolbar(parent: Frame, nexus: any)
 	end)
 end
 
--- ══════════════════════════════════════════════════════════════
--- ENTITY ROW
--- ══════════════════════════════════════════════════════════════
 
 function EntityModule:_BuildEntityRow(parent: Frame, id: string, entityData: any, nexus: any, order: number, isDead: boolean): Frame
 	local statusColor = if isDead then Theme.Colors.Danger else Theme.Colors.Success
@@ -638,7 +613,7 @@ function EntityModule:_BuildEntityRow(parent: Frame, id: string, entityData: any
 	-- Pulse status dot when alive
 	local dot = row:FindFirstChild("StatusDot")
 	if dot and not isDead and nexus._animationController then
-		nexus._animationController:StartPulse("entity_" .. id, dot, "BackgroundTransparency", 0.6)
+		nexus._animationController:StartPulse("entity_" .. id, dot,"BackgroundTransparency", 0.6)
 	end
 
 	-- Hover glow
@@ -650,9 +625,6 @@ function EntityModule:_BuildEntityRow(parent: Frame, id: string, entityData: any
 	return row
 end
 
--- ══════════════════════════════════════════════════════════════
--- ENTITY DETAIL LAYER
--- ══════════════════════════════════════════════════════════════
 
 function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -678,7 +650,7 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 	pad.Parent = contentFrame
 
 	-- Header
-	local headerIcon = if isDead then "✕" else "◇"
+	local headerIcon = if isDead then"✕" else"◇"
 	Theme.CreateLabel({
 		Text = string.format('%s %s', headerIcon, entityId),
 		Size = UDim2.new(1, 0, 0, 22),
@@ -701,7 +673,7 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 	local identityProps = {
 		{ Key = "Entity Id", Value = entityId, Color = Theme.Colors.Accent },
 		{ Key = "Class", Value = entityData.ClassName or "Unknown", Color = Theme.Colors.Cyan },
-		{ Key = "Status", Value = if isDead then "DEAD" else "ALIVE", Color = if isDead then Theme.Colors.Danger else Theme.Colors.Success },
+		{ Key = "Status", Value = if isDead then"DEAD" else"ALIVE", Color = if isDead then Theme.Colors.Danger else Theme.Colors.Success },
 	}
 	for i, p in ipairs(identityProps) do
 		self:_BuildPropRow(contentFrame, p.Key, p.Value, p.Color, 5 + i)
@@ -878,7 +850,7 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 					pp.PaddingRight = UDim.new(0, 8)
 					pp.Parent = propRow
 					Theme.CreateLabel({ Text = tostring(key), Size = UDim2.new(0.45, 0, 1, 0), Color = Theme.Colors.TextSecondary, FontSize = Theme.TextSize.Caption, Parent = propRow })
-					Theme.CreateLabel({ Text = valStr .. " ▶", Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.48, 0, 0, 0), Color = Theme.Colors.Purple, FontSize = Theme.TextSize.Body, FontFace = Theme.Font.Mono, Alignment = Enum.TextXAlignment.Right, Parent = propRow })
+					Theme.CreateLabel({ Text = valStr .." ▶", Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.48, 0, 0, 0), Color = Theme.Colors.Purple, FontSize = Theme.TextSize.Body, FontFace = Theme.Font.Mono, Alignment = Enum.TextXAlignment.Right, Parent = propRow })
 					local tableBtn = Instance.new("TextButton")
 					tableBtn.Size = UDim2.new(1, 0, 1, 0)
 					tableBtn.BackgroundTransparency = 1
@@ -890,7 +862,7 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 					tableBtn.MouseButton1Click:Connect(function()
 						if nexus and nexus._navigator then
 							nexus._navigator:ExpandLayer({
-								Id = "entity.data." .. entityId .. "." .. tostring(capturedKey),
+								Id = "entity.data." .. entityId .."." .. tostring(capturedKey),
 								ParentId = "entity.detail." .. entityId,
 								Label = tostring(capturedKey),
 								Builder = function(f, ctx) self:_BuildTableViewLayer(f, ctx) end,
@@ -925,7 +897,7 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 			for fieldName, fieldDef in pairs(entityData.Schema) do
 				local badges = ""
 				if type(fieldDef) == "table" then
-					if fieldDef.Type then badges ..= fieldDef.Type .. " " end
+					if fieldDef.Type then badges ..= fieldDef.Type .." " end
 					if fieldDef.Persist then badges ..= "◆ " end
 					if fieldDef.Replicate then badges ..= "↗ " end
 				else
@@ -939,22 +911,20 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 	end
 end
 
--- ══════════════════════════════════════════════════════════════
--- HELPERS
--- ══════════════════════════════════════════════════════════════
 
 function EntityModule:_Stringify(value: any): string
 	local t = type(value)
-	if t == "string" then return '"' .. value .. '"'
+	if t == "string" then return'"' .. value ..'"'
 	elseif t == "number" then return tostring(value)
 	elseif t == "boolean" then return tostring(value)
 	elseif t == "table" then
 		local count = 0
 		for _ in pairs(value) do count += 1 end
 		return string.format("{%d entries}", count)
-	elseif t == "nil" then return "nil"
+	elseif t == "nil" then return"nil"
 	else return tostring(value) end
 end
+
 
 function EntityModule:_TypeColor(value: any): Color3
 	local t = type(value)
@@ -964,6 +934,7 @@ function EntityModule:_TypeColor(value: any): Color3
 	elseif t == "table" then return Theme.Colors.Purple
 	else return Theme.Colors.TextMuted end
 end
+
 
 function EntityModule:_BuildPropRow(parent: Frame, key: string, value: string, color: Color3, order: number)
 	local propRow = Instance.new("Frame")
@@ -984,9 +955,6 @@ function EntityModule:_BuildPropRow(parent: Frame, key: string, value: string, c
 	Theme.CreateLabel({ Text = value, Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.48, 0, 0, 0), Color = color, FontSize = Theme.TextSize.Body, FontFace = Theme.Font.Mono, Alignment = Enum.TextXAlignment.Right, Parent = propRow })
 end
 
--- ══════════════════════════════════════════════════════════════
--- TABLE DRILL-DOWN LAYER
--- ══════════════════════════════════════════════════════════════
 
 function EntityModule:_BuildTableViewLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -1056,8 +1024,8 @@ function EntityModule:_BuildTableViewLayer(frame: Frame, context: any)
 			btn.MouseButton1Click:Connect(function()
 				if nexus and nexus._navigator then
 					nexus._navigator:ExpandLayer({
-						Id = "entity.data." .. entityId .. "." .. tableKey .. "." .. tostring(capturedKey),
-						ParentId = "entity.data." .. entityId .. "." .. tableKey,
+						Id = "entity.data." .. entityId .."." .. tableKey .."." .. tostring(capturedKey),
+						ParentId = "entity.data." .. entityId .."." .. tableKey,
 						Label = tostring(capturedKey),
 						Builder = function(f, ctx) self:_BuildTableViewLayer(f, ctx) end,
 						Context = { Nexus = nexus, TableKey = tostring(capturedKey), TableData = capturedValue, EntityId = entityId },
@@ -1072,25 +1040,14 @@ function EntityModule:_BuildTableViewLayer(frame: Frame, context: any)
 	end
 end
 
---[[
-	Release autocomplete resources and clear cached entity snapshots.
-]]
+
 function EntityModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end
 	table.clear(self._entityCache)
 	table.clear(self._deadEntities)
 end
 
--- ══════════════════════════════════════════════════════════════
--- VERSION HISTORY LAYER (drill-down from entity detail)
--- ══════════════════════════════════════════════════════════════
 
---[=[
-	Render a per-entity version history list. Each entry shows:
-	  v<N>  field name  old → new   timestamp
-	@param frame Frame — the layer frame containing a child named "Content"
-	@param context { Nexus, EntityId, VersionHistory: { { Version, Time, Field, From, To } }, CurrentVersion }
-]=]
 function EntityModule:_BuildVersionHistoryLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
 	if not contentFrame then return end
@@ -1165,8 +1122,8 @@ function EntityModule:_BuildVersionHistoryLayer(frame: Frame, context: any)
 		})
 
 		-- Field name + transition (with arrow)
-		local fromStr = if entry.From == nil then "<font color=\"#888\">∅</font>" else tostring(entry.From)
-		local toStr = if entry.To == nil then "<font color=\"#888\">∅</font>" else tostring(entry.To)
+		local fromStr = if entry.From == nil then"<font color=\"#888\">∅</font>" else tostring(entry.From)
+		local toStr = if entry.To == nil then"<font color=\"#888\">∅</font>" else tostring(entry.To)
 		Theme.CreateLabel({
 			Text = string.format(
 				'<font color="#9DC9FF">%s</font>  %s <font color="#3898FF">▶</font> %s',

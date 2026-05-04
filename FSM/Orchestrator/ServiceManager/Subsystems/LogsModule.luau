@@ -1,9 +1,5 @@
 --!strict
--- @Name ServiceManager/Subsystems/LogsModule.luau
--- @Author iKrypto
--- @Description Aggregated log viewer subsystem with level filters, regex search,
--- source subsystem badges, auto-scroll, and correlation ID support.
--- Feature parity with legacy ServiceManager Logs page.
+
 
 local TweenService = game:GetService("TweenService")
 
@@ -30,13 +26,9 @@ local LogsModule = {}
 LogsModule.__index = LogsModule
 
 local MAX_DISPLAY_LOGS = 200
-local LEVEL_ORDER = { "ALL", "DEBUG", "INFO", "WARN", "ERROR" }
+local LEVEL_ORDER = {"ALL","DEBUG","INFO","WARN","ERROR" }
 
---[[
-	Create the LOGS subsystem controller.
-	Owns the rolling log buffers, active filters, and cached UI references needed
-	to render the live log viewer efficiently.
-]]
+
 function LogsModule.new(): any
 	local self = setmetatable({}, LogsModule)
 	self._logCache = {} :: { LogEntry }
@@ -53,14 +45,7 @@ function LogsModule.new(): any
 	return self
 end
 
--- ══════════════════════════════════════════════════════════════
--- DATA FETCH
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Ingest fresh log lines from orchestrator, Nexus, and optional server buffers.
-	Applies retention limits before pushing counts back into the shared store.
-]]
 function LogsModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
 	if not orchestrator then return end
@@ -150,15 +135,9 @@ function LogsModule:FetchData(nexus: any)
 	end)
 end
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	LOGS rendering is produced by BuildRootLayer and incremental log redraws.
-]]
+
 function LogsModule:Render(nexus: any) end
 
--- ══════════════════════════════════════════════════════════════
--- FILTERING
--- ══════════════════════════════════════════════════════════════
 
 function LogsModule:_ApplyFilters()
 	self._filteredLogs = {}
@@ -188,14 +167,7 @@ function LogsModule:_ApplyFilters()
 	end
 end
 
--- ══════════════════════════════════════════════════════════════
--- Z-AXIS LAYER BUILDERS
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Build or rebuild the LOGS root layer inside the supplied navigator frame.
-	Sets up the filter controls, search box, and scrolling log transcript view.
-]]
 function LogsModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -451,6 +423,7 @@ function LogsModule:BuildRootLayer(frame: Frame, context: any)
 	self:_RenderLogs()
 end
 
+
 function LogsModule:_UpdateFilterVisuals()
 	local levelColors = {
 		ALL = Theme.Colors.TextSecondary,
@@ -469,6 +442,7 @@ function LogsModule:_UpdateFilterVisuals()
 		}):Play()
 	end
 end
+
 
 function LogsModule:_RenderLogs()
 	local scroll = self._scrollFrame
@@ -595,9 +569,7 @@ function LogsModule:_RenderLogs()
 	end
 end
 
---[[
-	Release autocomplete resources and clear cached log state.
-]]
+
 function LogsModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end
 	table.clear(self._logCache)

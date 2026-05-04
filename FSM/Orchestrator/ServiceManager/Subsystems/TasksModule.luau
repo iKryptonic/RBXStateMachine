@@ -1,9 +1,5 @@
 --!strict
--- @Name ServiceManager/Subsystems/TasksModule.luau
--- @Author iKrypto
--- @Description Enhanced TASKS subsystem with search/filter toolbar, sort options,
--- active/archived sections, task actions (execute/kill), performance strip with
--- sparkline indicators, and per-task detail drill-downs.
+
 
 local Theme = require(script.Parent.Parent.Theme)
 local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
@@ -11,13 +7,9 @@ local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
 local TasksModule = {}
 TasksModule.__index = TasksModule
 
-local SORT_MODES = { "Priority", "Name", "Status", "Executions", "AvgTime" }
+local SORT_MODES = {"Priority","Name","Status","Executions","AvgTime" }
 
---[[
-	Create the TASKS subsystem controller.
-	Owns the task caches, filter state, and perf-strip smoothing buffers that
-	back both the root list and its drill-down layers.
-]]
+
 function TasksModule.new(): any
 	local self = setmetatable({}, TasksModule)
 	self._taskCache = {} :: { [string]: any }
@@ -76,6 +68,7 @@ local PERF_STABLE_THRESHOLD = {
 	FrameBudgetMs = 0.05,
 }
 
+
 function TasksModule:_UpdateSmoothedPerf()
 	local raw = self._perfCache
 	local smooth = self._smoothPerf
@@ -109,15 +102,7 @@ function TasksModule:_UpdateSmoothedPerf()
 	prev.FrameBudgetMs = rawBudget
 end
 
---[=[
-	Per-frame perf strip update. Called from ServiceManager's RenderStepped hook.
-	Uses a frame-rate independent alpha so smoothing speed is consistent at any FPS.
-	Updates labels in-place — no instance churn.
-	@param nexus any
-	@param dt number — delta time since last frame
-	@reads nexus._orchestrator, nexus._lastFPS, nexus._serverData
-	@writes self._smoothPerf, self._perfDirections, label texts/colors
-]=]
+
 function TasksModule:_TickPerfStrip(nexus: any, dt: number)
 	-- Pull live raw values without invoking the heavy FetchData path.
 	-- Memory + FPS update at frame rate; full data fetch still happens every 2s.
@@ -168,10 +153,7 @@ function TasksModule:_TickPerfStrip(nexus: any, dt: number)
 	self:_UpdatePerfStripLabels(strip)
 end
 
---[=[
-	Apply current smoothed values + direction arrows to the existing perf strip
-	cells without creating any new instances. Safe to call every frame.
-]=]
+
 function TasksModule:_UpdatePerfStripLabels(strip: Frame)
 	local smooth = self._smoothPerf
 	local raw = self._perfCache
@@ -236,9 +218,9 @@ local function dirGlyph(dir: number): string
 	-- Use arrow chars that Gotham covers (↑↓· are not in the typeface).
 	-- ↑ ↓ are universally supported. Stable: empty (no symbol) — the muted
 	-- color already conveys "no change".
-	if dir > 0 then return "↑"
-	elseif dir < 0 then return "↓"
-	else return ""
+	if dir > 0 then return"↑"
+	elseif dir < 0 then return"↓"
+	else return""
 	end
 end
 
@@ -251,11 +233,7 @@ local function dirColor(dir: number, higherIsBetter: boolean): Color3
 	end
 end
 
---[[
-	Refresh the TASKS snapshot for the active context and push the latest list /
-	perf data into the shared store. Client mode derives active-vs-idle state
-	from scheduler run deltas; server mode consumes the polled server snapshot.
-]]
+
 function TasksModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
 	if not orchestrator then return end
@@ -360,7 +338,7 @@ function TasksModule:FetchData(nexus: any)
 					if not scheduler.Tasks[entry.Name] then
 						local status = entry.Status or "Completed"
 						local statusLower = string.lower(status)
-						self._completedTasks[entry.Name .. "@" .. tostring(entry.Time or 0)] = {
+						self._completedTasks[entry.Name .."@" .. tostring(entry.Time or 0)] = {
 							Name = entry.Name,
 							Status = statusLower,
 							Priority = 99,
@@ -478,15 +456,9 @@ function TasksModule:FetchData(nexus: any)
 	self._lastFetchTime = os.clock()
 end
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	TASKS renders through BuildRootLayer and navigator-driven rebuilds.
-]]
+
 function TasksModule:Render(_nexus: any) end
 
--- ══════════════════════════════════════════════════════════════
--- SORTING / FILTERING
--- ══════════════════════════════════════════════════════════════
 
 function TasksModule:_GetSortedFilteredTasks(): { { Name: string, Data: any } }
 	local result = {}
@@ -515,15 +487,7 @@ function TasksModule:_GetSortedFilteredTasks(): { { Name: string, Data: any } }
 	return result
 end
 
--- ══════════════════════════════════════════════════════════════
--- Z-AXIS LAYER BUILDERS
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Build or rebuild the TASKS root layer inside the supplied Z-axis frame.
-	Preserves stable toolbar / perf-strip instances so live metrics can animate
-	without being recreated on every brain tick.
-]]
 function TasksModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -644,6 +608,7 @@ function TasksModule:BuildRootLayer(frame: Frame, context: any)
 		)
 	end
 end
+
 
 function TasksModule:_BuildToolbar(parent: Frame, nexus: any)
 	-- Idempotent: reuse if already built. Only the search text and toggle button
@@ -817,6 +782,7 @@ function TasksModule:_BuildToolbar(parent: Frame, nexus: any)
 		if nexus then nexus._lastDataRefresh = 0 end
 	end)
 end
+
 
 function TasksModule:_BuildPerfStrip(parent: Frame, nexus: any)
 	-- Idempotent: reuse existing strip if present, only update values.
@@ -1000,11 +966,7 @@ function TasksModule:_BuildPerfStrip(parent: Frame, nexus: any)
 	end
 end
 
---[=[
-	Render the FPS sparkline as connected line segments (rotated thin frames)
-	with min/max overlay text. Idempotent: clears segments and redraws on each call.
-	@param strip Frame containing the sparkline frame
-]=]
+
 function TasksModule:_RenderSparkline(strip: Frame)
 	local spark = strip:FindFirstChild("Sparkline") :: Frame?
 	if not spark then
@@ -1227,6 +1189,7 @@ function TasksModule:_RenderSparkline(strip: Frame)
 	end
 end
 
+
 function TasksModule:_BuildTaskRow(parent: Frame, name: string, taskData: any, nexus: any, order: number): Frame
 	local statusColor = if taskData.Status == "running" then Theme.Colors.Accent
 		elseif taskData.Status == "active" then Theme.Colors.Success
@@ -1315,7 +1278,7 @@ function TasksModule:_BuildTaskRow(parent: Frame, name: string, taskData: any, n
 	-- Pulse status dot for live tasks (running this instant or recently active)
 	local dot = row:FindFirstChild("StatusDot")
 	if dot and (taskData.Status == "running" or taskData.Status == "active") and nexus._animationController then
-		nexus._animationController:StartPulse("task_" .. name, dot, "BackgroundTransparency", 0.6)
+		nexus._animationController:StartPulse("task_" .. name, dot,"BackgroundTransparency", 0.6)
 	end
 
 	-- Hover glow on the click overlay
@@ -1327,9 +1290,6 @@ function TasksModule:_BuildTaskRow(parent: Frame, name: string, taskData: any, n
 	return row
 end
 
--- ══════════════════════════════════════════════════════════════
--- TASK DETAIL
--- ══════════════════════════════════════════════════════════════
 
 function TasksModule:_BuildTaskDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -1482,6 +1442,7 @@ function TasksModule:_BuildTaskDetailLayer(frame: Frame, context: any)
 	end
 end
 
+
 function TasksModule:_BuildPropRow(parent: Frame, key: string, value: string, color: Color3, order: number)
 	local propRow = Instance.new("Frame")
 	propRow.Size = UDim2.new(1, 0, 0, 24)
@@ -1504,9 +1465,6 @@ function TasksModule:_BuildPropRow(parent: Frame, key: string, value: string, co
 	Theme.CreateLabel({ Text = value, Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.48, 0, 0, 0), Color = color, FontSize = Theme.TextSize.Body, FontFace = Theme.Font.Mono, Alignment = Enum.TextXAlignment.Right, Parent = propRow })
 end
 
--- ══════════════════════════════════════════════════════════════
--- PERF DETAIL
--- ══════════════════════════════════════════════════════════════
 
 function TasksModule:_BuildPerfDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -1683,9 +1641,7 @@ function TasksModule:_BuildPerfDetailLayer(frame: Frame, context: any)
 	end
 end
 
---[[
-	Release autocomplete resources and clear cached task / perf state.
-]]
+
 function TasksModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end
 	table.clear(self._taskCache)

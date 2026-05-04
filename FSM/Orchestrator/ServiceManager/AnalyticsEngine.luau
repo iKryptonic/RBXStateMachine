@@ -1,18 +1,12 @@
 --!strict
--- @Name ServiceManager/AnalyticsEngine.luau
--- @Author iKrypto
--- @Description Additive insight engine. Doesn't just show data — it detects bottlenecks,
--- dependency loops, state stalls, and anomalies across all subsystems.
---
--- Rules use a multi-emit signature: (nexus, emit) -> () so they can surface
--- multiple insights per cycle (e.g. one per stalled FSM, not just the first).
+
 
 local AnalyticsEngine = {}
 AnalyticsEngine.__index = AnalyticsEngine
 
 export type Insight = {
 	Id: string,
-	Severity: "CRITICAL" | "WARNING" | "INFO" | "SUGGESTION",
+	Severity:"CRITICAL" |"WARNING" |"INFO" |"SUGGESTION",
 	Subsystem: string,
 	Title: string,
 	Description: string,
@@ -30,6 +24,7 @@ export type Insight = {
 
 export type RuleFn = (nexus: any, emit: (Insight) -> ()) -> ()
 
+
 function AnalyticsEngine.new(): any
 	local self = setmetatable({}, AnalyticsEngine)
 	self._insights = {} :: { [string]: Insight }
@@ -45,18 +40,12 @@ function AnalyticsEngine.new(): any
 	return self
 end
 
+
 function AnalyticsEngine:HasPendingWork(): boolean
 	return os.clock() - self._lastCycle >= self._cycleInterval
 end
 
---[=[
-	Run all rules against the given nexus, collecting emitted insights.
-	Updates existing insights (preserves dismissed/snoozed state, increments
-	repeat count) and prunes resolved insights older than 10s.
-	@param nexus any
-	@reads _rules, _insights
-	@writes _insights, _history, _lastCycle
-]=]
+
 function AnalyticsEngine:RunCycle(nexus: any)
 	self._lastCycle = os.clock()
 	local newInsights = {} :: { Insight }
@@ -116,12 +105,7 @@ function AnalyticsEngine:RunCycle(nexus: any)
 	end
 end
 
---[=[
-	Return all undismissed insights, sorted by severity then RepeatCount.
-	Snoozed insights are excluded.
-	@return { Insight }
-	@reads _insights
-]=]
+
 function AnalyticsEngine:GetActiveInsights(): { Insight }
 	local result = {}
 	for _, insight in pairs(self._insights) do
@@ -143,13 +127,16 @@ function AnalyticsEngine:GetActiveInsights(): { Insight }
 	return result
 end
 
+
 function AnalyticsEngine:GetHistory(): { Insight }
 	return self._history
 end
 
+
 function AnalyticsEngine:GetInsight(id: string): Insight?
 	return self._insights[id]
 end
+
 
 function AnalyticsEngine:DismissInsight(id: string)
 	local insight = self._insights[id]
@@ -158,12 +145,7 @@ function AnalyticsEngine:DismissInsight(id: string)
 	end
 end
 
---[=[
-	Snooze an insight for the given number of seconds. The insight remains
-	in the registry but is filtered from active lists until the snooze expires.
-	@param id string
-	@param seconds number (default 60)
-]=]
+
 function AnalyticsEngine:SnoozeInsight(id: string, seconds: number?)
 	local insight = self._insights[id]
 	if insight then
@@ -172,18 +154,22 @@ function AnalyticsEngine:SnoozeInsight(id: string, seconds: number?)
 	end
 end
 
+
 function AnalyticsEngine:ResolveInsight(id: string)
 	-- Resolution removes from active and history (user marked it done)
 	self._insights[id] = nil
 end
 
+
 function AnalyticsEngine:AddRule(rule: RuleFn)
 	table.insert(self._rules, rule)
 end
 
+
 function AnalyticsEngine:GetRuleCount(): number
 	return #self._rules
 end
+
 
 function AnalyticsEngine:Destroy()
 	table.clear(self._insights)
@@ -191,11 +177,10 @@ function AnalyticsEngine:Destroy()
 	table.clear(self._history)
 end
 
--- ═══════════════════ PRIVATE: BUILTIN RULES ═══════════════════
 
 function AnalyticsEngine:_CreateInsight(params: {
 	Id: string,
-	Severity: "CRITICAL" | "WARNING" | "INFO" | "SUGGESTION",
+	Severity:"CRITICAL" |"WARNING" |"INFO" |"SUGGESTION",
 	Subsystem: string,
 	Title: string,
 	Description: string,
@@ -203,7 +188,7 @@ function AnalyticsEngine:_CreateInsight(params: {
 	Threshold: number?,
 	RelatedIds: { string }?,
 	ActionableHints: { { Label: string, Command: string? } }?,
-}): Insight
+	}): Insight
 	return {
 		Id = params.Id,
 		Severity = params.Severity,
@@ -218,6 +203,7 @@ function AnalyticsEngine:_CreateInsight(params: {
 		ActionableHints = params.ActionableHints,
 	}
 end
+
 
 function AnalyticsEngine:_RegisterBuiltinRules()
 	-- Rule 1: FSM State Stall Detection (multi-emit: one per stalled FSM)
@@ -326,7 +312,7 @@ function AnalyticsEngine:_RegisterBuiltinRules()
 		if memMB > 512 then
 			emit(self:_CreateInsight({
 				Id = "memory_pressure",
-				Severity = if memMB > 800 then "CRITICAL" else "WARNING",
+				Severity = if memMB > 800 then"CRITICAL" else"WARNING",
 				Subsystem = "TASKS",
 				Title = "Memory Pressure",
 				Description = string.format(
@@ -510,7 +496,7 @@ function AnalyticsEngine:_RegisterBuiltinRules()
 		if fps < 30 then
 			emit(self:_CreateInsight({
 				Id = "fps_degraded",
-				Severity = if fps < 15 then "CRITICAL" else "WARNING",
+				Severity = if fps < 15 then"CRITICAL" else"WARNING",
 				Subsystem = "TASKS",
 				Title = "Frame Rate Degraded",
 				Description = string.format(

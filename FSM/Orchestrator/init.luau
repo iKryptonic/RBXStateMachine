@@ -1,9 +1,8 @@
 --!strict
--- @Name Orchestrator
--- @Author iKrypto
--- @Description Factory and Registry for managing unique StateMachine instances by ID.
+
 
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local Core = {
 	Factory = require(script.Core.Factory),
@@ -13,7 +12,7 @@ local Core = {
 	Signal = require(script.Core.Signal),
 	Types = require(script.Core.Types),
 	Settings = require(script.Core.Settings),
-}; 
+};
 local Strings = Core.Settings.StaticStrings
 
 local Orchestrator = {
@@ -29,22 +28,46 @@ local Orchestrator = {
 
 local Initialized = false
 local _initializing = false
+local _moduleRegistry = {} :: { [string]: any }
+local _sharedModulesRegistered = false
+
+local function RegisterSharedModules()
+	if _sharedModulesRegistered then
+		return
+	end
+
+	local sharedFolder = ReplicatedStorage:FindFirstChild("shared")
+	if not sharedFolder then
+		return
+	end
+
+	for _, mod in ipairs(sharedFolder:GetChildren()) do
+		if mod:IsA("ModuleScript") then
+			pcall(function()
+				Orchestrator.RegisterModule(mod.Name, require(mod))
+			end)
+		end
+	end
+
+	_sharedModulesRegistered = true
+end
+
 local function ValidateRequest(context: string)
 	-- Allow calls during the bootstrap phase (Initialize() runs internal
 	-- helpers that call ValidateRequest before the global Initialized flag
 	-- is set). Without this, InitializeModule/SetSharedVariables fail on
 	-- their first call, leaving Initialized=false forever.
 	if not (Initialized or _initializing) then
-		assert(false, "Orchestrator not initialized")
+		assert(false,"Orchestrator not initialized")
 	end
 	if context then
 		if context == "Server" and not RunService:IsServer() then
-			Orchestrator.Logger:Log({ Level = "ERROR", Message =  Strings.Error.ServerRequestErrorMessage })
+			Orchestrator.Logger:Log({ Level = "ERROR", Message = Strings.Error.ServerRequestErrorMessage })
 			error(Strings.Error.ServerRequestErrorMessage)
 			return false
 		end
 		if context == "Client" and not RunService:IsClient() then
-			Orchestrator.Logger:Log({ Level = "ERROR", Message =  Strings.Error.ClientRequestErrorMessage })
+			Orchestrator.Logger:Log({ Level = "ERROR", Message = Strings.Error.ClientRequestErrorMessage })
 			error(Strings.Error.ClientRequestErrorMessage)
 			return false
 		end
@@ -52,12 +75,13 @@ local function ValidateRequest(context: string)
 	end
 end
 
--------------------------------------------------------------------------------------------
----------------------------------- BEGIN SHARED METHODS -----------------------------------
--------------------------------------------------------------------------------------------
 
 function Orchestrator:RegisterComponents()
 	local initialized = Initialize()
+
+	if initialized then
+		RegisterSharedModules()
+	end
 
 	if initialized and RunService:IsServer() and not self._serviceManager then
 		local serviceManagerModule = script:FindFirstChild("ServiceManager")
@@ -71,40 +95,86 @@ function Orchestrator:RegisterComponents()
 	return initialized
 end
 
+
 function Orchestrator:StartServiceManager()
-	if self._serviceManager then return self._serviceManager end
+	if Orchestrator._serviceManager then return Orchestrator._serviceManager end
 
-	local serviceManager = require(script.ServiceManager)
-	serviceManager.Initialize(self)
-	serviceManager.Show()
-	self._serviceManager = serviceManager
+	local ok, serviceManager = pcall(require, script.ServiceManager)
+	if not ok or not serviceManager then
+		warn("[Orchestrator] Failed to load ServiceManager:", serviceManager)
+		return nil
+	end
 
+	local initOk, initErr = pcall(function()
+		serviceManager.Initialize(Orchestrator)
+	end)
+	if not initOk then
+		warn("[Orchestrator] ServiceManager.Initialize failed:", initErr)
+		return nil
+	end
+
+	Orchestrator._serviceManager = serviceManager
 	return serviceManager
 end
 
+
 function Orchestrator:GetServiceManager()
-	return self._serviceManager
+	return Orchestrator and Orchestrator._serviceManager or nil
 end
+
 
 function Orchestrator.CreateEntity(params: { EntityClass: any, EntityId: string, Context: {any}?, Persistent: boolean?, PersistenceKey: string? })
 	ValidateRequest()
+	if not params.Context then params.Context = {} end
+	params.Context._Orchestrator = Orchestrator
 	return Core.Factory.CreateEntity(params)
 end
 
+
 function Orchestrator.CreateStateMachine(params: { StateMachineClass: any, StateMachineId: string, Context: {any}? })
 	ValidateRequest()
+	if not params.Context then params.Context = {} end
+	params.Context._Orchestrator = Orchestrator
+	params.Context.Orchestrator = Orchestrator -- backward compat for framework FSMs
 	return Core.Factory.CreateStateMachine(params)
 end
+
+
+function Orchestrator.RegisterModule(name: string, module: any)
+	_moduleRegistry[name] = module
+end
+
+
+function Orchestrator.GetModule(name: string): any?
+	if _moduleRegistry[name] then
+		return _moduleRegistry[name]
+	end
+
+	local sharedFolder = ReplicatedStorage:FindFirstChild("shared")
+	if sharedFolder then
+		local mod = sharedFolder:FindFirstChild(name)
+		if mod and mod:IsA("ModuleScript") then
+			local result = require(mod)
+			_moduleRegistry[name] = result
+			return result
+		end
+	end
+
+	return nil
+end
+
 
 function Orchestrator.GetStateMachine(stateMachineId: string)
 	ValidateRequest()
 	return Core.Factory.Registry.GetStateMachine(stateMachineId)
 end
 
+
 function Orchestrator.GetEntity(entityId: string)
 	ValidateRequest()
 	return Core.Factory.Registry.GetEntity(entityId)
 end
+
 
 function Orchestrator.CancelStateMachine(stateMachineId: string)
 	ValidateRequest()
@@ -115,6 +185,7 @@ function Orchestrator.CancelStateMachine(stateMachineId: string)
 	end
 	return false
 end
+
 
 function Orchestrator.RetryStateMachine(stateMachineId: string)
 	ValidateRequest()
@@ -143,6 +214,7 @@ function Orchestrator.RetryStateMachine(stateMachineId: string)
 	return true
 end
 
+
 function Orchestrator.DeleteEntity(entityId: string)
 	ValidateRequest()
 	local entity = Core.Factory.Registry.GetEntity(entityId)
@@ -150,6 +222,7 @@ function Orchestrator.DeleteEntity(entityId: string)
 	entity:Destroy() -- Entity.Destroy triggers Registry cleanup via signal in Factory
 	return true
 end
+
 
 function Orchestrator.DeleteAllEntities()
 	ValidateRequest()
@@ -162,6 +235,7 @@ function Orchestrator.DeleteAllEntities()
 	return true
 end
 
+
 function Orchestrator.CancelAll()
 	ValidateRequest()
 	-- Snapshot before iterating; Cancel may unregister mid-iteration.
@@ -173,17 +247,19 @@ function Orchestrator.CancelAll()
 	return true
 end
 
+
 function Orchestrator.GetEntities()
 	ValidateRequest()
 	return Core.Factory.Registry.GetAllEntities()
 end
+
 
 function Orchestrator.GetStateMachines()
 	ValidateRequest()
 	return Core.Factory.Registry.GetAllStateMachines()
 end
 
--- Pooling Delegates
+
 function Orchestrator.PoolEntity(entityId: string)
 	ValidateRequest()
 	local entity = Core.Factory.Registry.GetEntity(entityId)
@@ -197,33 +273,35 @@ function Orchestrator.PoolEntity(entityId: string)
 	-- which would then trigger NetworkManager.ValidateRequest("Server") and
 	-- assert. Gate the broadcast to the server side.
 	if RunService:IsServer() then
-		Core.NetworkManager.BroadcastEntityCommand(entityId, "OnEntityPooled")
+		Core.NetworkManager.BroadcastEntityCommand(entityId,"OnEntityPooled")
 	end
 	Core.Factory.Registry.PoolEntity(className, entity)
 	return true
 end
 
--------------------------------------------------------------------------------------------
----------------------------------- REMOTE WRAPPERS ----------------------------------------
--------------------------------------------------------------------------------------------
 
 function Orchestrator.RegisterEntityCommandCallback(entityId: string, command: string, handler: (Player, ...any) -> ())
 	ValidateRequest() -- Allow both contexts
 	Core.NetworkManager.RegisterEntityCommand(entityId, command, handler)
 	return true
 end
-
+--[=[
+	@param ... any — Additional arguments forwarded to the handler.
+]=]
 function Orchestrator.ServerCommandEntity(entityId: string, command: string, ...: any)
 	ValidateRequest("Client")
 	Core.NetworkManager.ServerCommandEntity(entityId, command, ...)
 end
+
 
 function Orchestrator.RegisterServerRequestCallback(requestName: string, handler: (Player, ...any) -> any, aSync: boolean)
 	ValidateRequest("Server")
 	Core.NetworkManager.RegisterServerRequest(requestName, handler, aSync)
 	return true
 end
-
+--[=[
+	@param ... any — Additional arguments forwarded to the handler.
+]=]
 function Orchestrator.ServerRequest(requestName: string, ...: any)
 	ValidateRequest("Client")
 	return Core.NetworkManager.ServerRequest(requestName, ...)
@@ -231,47 +309,56 @@ end
 
 -- Convenience alias used throughout the codebase
 Orchestrator.Request = Orchestrator.ServerRequest
-
+--[=[
+	@param ... any — Additional arguments forwarded to the handler.
+]=]
 function Orchestrator.ServerRequestAsync(requestName: string, ...: any)
 	ValidateRequest("Client")
 	return Core.NetworkManager.ServerRequestAsync(requestName, ...)
 end
-
+--[=[
+	@description Emits a replication intent so other clients can see the effect/action being applied.
+]=]
 function Orchestrator.BroadcastEntityCommand(requestType: string, entityId: string, ...: any)
 	ValidateRequest("Server")
 	Core.NetworkManager.BroadcastEntityCommand(entityId, requestType, ...)
 	return true
 end
 
--------------------------------------------------------------------------------------------
----------------------------------- EVENT BUS ----------------------------------------------
--------------------------------------------------------------------------------------------
 
 function Orchestrator.RegisterEventBus(name: string)
 	ValidateRequest()
 	return Core.NetworkManager.RegisterEventBus(name)
 end
-function Orchestrator.GetEventBus(name: string) 
+
+
+function Orchestrator.GetEventBus(name: string)
 	ValidateRequest()
-	return Core.NetworkManager.GetEventBus(name) 
+	return Core.NetworkManager.GetEventBus(name)
 end
-function Orchestrator.FireEventBus(name: string, ...) 
+--[=[
+	@param ... any — Additional arguments forwarded to the handler.
+]=]
+function Orchestrator.FireEventBus(name: string, ...)
 	ValidateRequest()
-	return Core.NetworkManager.FireEventBus(name, ...) 
+	return Core.NetworkManager.FireEventBus(name, ...)
 end
+
+
 function Orchestrator.AwaitEventBus(name: string, timeout: number?)
 	ValidateRequest()
 	return Core.NetworkManager.AwaitEventBus(name, timeout)
 end
-function Orchestrator.UnregisterEventBus(name: string) 
+
+
+function Orchestrator.UnregisterEventBus(name: string)
 	ValidateRequest()
-	return Core.NetworkManager.UnregisterEventBus(name) 
+	return Core.NetworkManager.UnregisterEventBus(name)
 end
 
 -------------------------------------------------------------------------------------------
 ---------------------------------- CLIENT METHODS -----------------------------------------
 -------------------------------------------------------------------------------------------
-
 
 
 -------------------------------------------------------------------------------------------
@@ -286,7 +373,7 @@ end
 local function SetSharedVariables()
 	local OrchestratorObject = newproxy(true);
 	local Object_mt = getmetatable(OrchestratorObject);
-	
+
 	Object_mt.__index = function(_, key)
 		-- Yield until initialized, with a timeout
 		if not Initialized then
@@ -303,18 +390,18 @@ local function SetSharedVariables()
 		end
 		return Orchestrator[key]
 	end
-	
+
 	Object_mt.__newindex = function() end;
 	Object_mt.__tostring = function()
 		return script.Name
 	end
 	Object_mt.__metatable = script.Name
-	
+
 	shared.fsm = OrchestratorObject
 
-	do 
+	do
 	-- Load the factory and initialize submodules
-		
+
 		InitializeModule(Core.NetworkManager)
 		InitializeModule(Core.Factory)
 		InitializeModule(Core.Scheduler)
@@ -325,17 +412,16 @@ local function SetSharedVariables()
 		Orchestrator.StateMachines = Core.Factory.Registry.GetAllStateMachines()
 		Orchestrator.Entities = Core.Factory.Registry.GetAllEntities()
 
-        -- Initialize New DataStore Entity and Persistence
+		-- Initialize New DataStore Entity and Persistence
 		if Core.Settings.DataStore.PersistenceEnabled and RunService:IsServer() then
-            -- System Entity: DataStore
-            Orchestrator.CreateEntity({
-                EntityClass = "DataStoreEntity",
-                EntityId = "DataStoreSystem",
-                Context = { Orchestrator = Orchestrator }
-            })
+			-- System Entity: DataStore
+			Orchestrator.CreateEntity({
+				EntityClass = "DataStoreEntity",
+				EntityId = "DataStoreSystem",
+				Context = { Orchestrator = Orchestrator }
+			})
 			Orchestrator.Logger:Log({Message = "DataStore/Persistence initialized", Level = "INFO"})
 		end
-
 
 
 	end
@@ -464,14 +550,14 @@ function Initialize()
 		SetSharedVariables()
 		Orchestrator.Logger:Log({Message = "SetSharedVariables completed", Level = "INFO"})
 
-		if Orchestrator.Scheduler then 
-			Orchestrator.Scheduler:Start() 
+		if Orchestrator.Scheduler then
+			Orchestrator.Scheduler:Start()
 
 			-- Hook Global Heartbeat (BaseStateMachine)
 			if Core.Factory.BaseModules.BaseStateMachine then
 				Core.Factory.BaseModules.BaseStateMachine.DisableInternalLoop()
 				Orchestrator.Logger:Log({ Level = "INFO", Message = "BaseStateMachine internal loop disabled. Hooking into Scheduler." })
-				
+
 				local lastUpdate = os.clock()
 				Orchestrator.Scheduler:Schedule({
 					TaskName = "GlobalStateMachineHeartbeat",
@@ -509,7 +595,7 @@ function Initialize()
 				Core.NetworkManager.EntityUpdateEvent.OnClientEvent:Connect(function(entityId, changes)
 					-- Track inbound update for the dashboard's "View Calls" drill-down
 					if Core.NetworkManager.RecordInboundCall then
-						Core.NetworkManager.RecordInboundCall("EntityUpdateEvent", "S→C", entityId, changes)
+						Core.NetworkManager.RecordInboundCall("EntityUpdateEvent","S→C", entityId, changes)
 					end
 					local entity = Core.Factory.Registry.GetEntity(entityId)
 					if not entity then
@@ -538,8 +624,8 @@ function Initialize()
 							-- Discard out-of-order packet
 							return
 						end
-						-- Warn on version gaps (lossy replication detected)
-						if currentVersion > 0 and (newVersion - currentVersion) > 1 then
+						-- Warn on large version gaps (small gaps are expected during rapid combat updates)
+						if currentVersion > 0 and (newVersion - currentVersion) > 5 then
 							Orchestrator.Logger:Log({
 								Level = "WARN",
 								Message = string.format("Entity %s version gap: jumped from v%d to v%d", tostring(entityId), currentVersion, newVersion),

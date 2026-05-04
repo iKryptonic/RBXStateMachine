@@ -1,26 +1,56 @@
 --!strict
--- @Name RetryBehavior
--- @Author iKrypto
--- @Description Behavior Tree definition for DataStore request retry logic.
 
-local BehaviorTree = require(script.Parent.Parent.Factory.BehaviorTree)
+--[=[
+	@module RetryBehavior
+	@description Assembles a reusable BehaviorTree retry strategy for DataStore requests.
+	Resolves `BehaviorTree` from the Factory folder (sibling of the DataStore folder, or
+	from `ReplicatedStorage.Orchestrator.Core.Factory` as a fallback). The tree returned
+	by `Create` drives a `RequestFSM` through four outcomes: success, per-attempt
+	retry with jittered exponential backoff, and permanent failure once retries are
+	exhausted.
+]=]
+
+local BehaviorTree
+do
+	local factoryFolder = script.Parent.Parent:FindFirstChild("Factory")
+	if not factoryFolder then
+		factoryFolder = game:GetService("ReplicatedStorage"):FindFirstChild("Orchestrator")
+		if factoryFolder then
+			factoryFolder = factoryFolder:FindFirstChild("Core")
+			factoryFolder = factoryFolder and factoryFolder:FindFirstChild("Factory")
+		end
+	end
+	BehaviorTree = factoryFolder and require(factoryFolder:FindFirstChild("BehaviorTree"))
+end
 
 local RetryBehavior = {}
 
---[[
-	@description Builds the retry behavior tree used by RequestFSM instances.
-	@param Orchestrator any -- Shared orchestrator facade used by the surrounding FSM context
-	@return (context: any) -> string -- BehaviorTree node that mutates request context and drives FSM transitions
-	@reads BehaviorTree constructors, context.RequestFunction, context.MaxRetries, context.RetryCount, context.FSM
-	@writes context.Result, context.LastError, context.RetryCount, context.FSM.WaitSpan
-]]
+--[=[
+	@description Builds and returns a BehaviorTree Selector that implements the
+	DataStore call-retry-fail strategy. Defines five inner closures operating entirely
+	on the `context` table passed by the BehaviorTree runner:
+	- `AttemptCall`: invokes `context.RequestFunction` via pcall; writes `context.Result`
+	  on success or `context.LastError` on failure.
+	- `CanRetry`: returns Success if `context.RetryCount < context.MaxRetries` (default 3).
+	- `ScheduleRetry`: increments `context.RetryCount`, computes a jittered exponential
+	  backoff delay (2^RetryCount × random[0.75,1.25], capped at 30 s), writes
+	  `context.FSM.WaitSpan`, and transitions `context.FSM.State` to "Retrying".
+	- `FailRequest`: transitions `context.FSM.State` to "Failed".
+	- `CompleteRequest`: transitions `context.FSM.State` to "Success".
+	The `Orchestrator` parameter is accepted for API consistency but is not used inside
+	the returned tree; all state flows through `context`.
+	@param Orchestrator any -- Orchestrator reference (unused inside the tree; accepted for API symmetry).
+	@return BehaviorTree -- Selector tree ready to be ticked by a RequestFSM.
+]=]
 function RetryBehavior.Create(Orchestrator)
 	local BT = BehaviorTree
 
 	-- Action: Attempt the DataStore Call
 	local function AttemptCall(context)
-		if not context.RequestFunction then return BT.BehaviorTreeStatus.Failure end
-		
+		if not context.RequestFunction then
+			return BT.BehaviorTreeStatus.Failure
+		end
+
 		local success, result = pcall(context.RequestFunction)
 		if success then
 			context.Result = result
@@ -42,30 +72,27 @@ function RetryBehavior.Create(Orchestrator)
 	local function ScheduleRetry(context)
 		if context.FSM then
 			context.RetryCount = (context.RetryCount or 0) + 1
-			-- Calculate Backoff with cap and jitter
 			local MAX_DELAY = 30
-			local jitter = math.random() * 0.5 + 0.75  -- 0.75x to 1.25x
+			local jitter = math.random() * 0.5 + 0.75
 			local delay = math.min(math.pow(2, context.RetryCount) * jitter, MAX_DELAY)
-			
-			context.FSM.WaitSpan = delay -- Use FSM's built-in delay capability
-			context.FSM:ChangeState({ Name = "Retrying" })
-			return BT.BehaviorTreeStatus.Success -- We successfully scheduled it
+
+			context.FSM.WaitSpan = delay
+			context.FSM.State = "Retrying"
+			return BT.BehaviorTreeStatus.Success
 		end
 		return BT.BehaviorTreeStatus.Failure
 	end
 
-	-- Action: Fail Permanently
 	local function FailRequest(context)
 		if context.FSM then
-			context.FSM:ChangeState({ Name = "Failed" })
+			context.FSM.State = "Failed"
 		end
 		return BT.BehaviorTreeStatus.Success
 	end
 
-	-- Action: Succeed
 	local function CompleteRequest(context)
 		if context.FSM then
-			context.FSM:ChangeState({ Name = "Success" })
+			context.FSM.State = "Success"
 		end
 		return BT.BehaviorTreeStatus.Success
 	end
@@ -75,17 +102,17 @@ function RetryBehavior.Create(Orchestrator)
 	-- 2. If Fail -> Check Retry.
 	-- 3. If Can Retry -> Schedule Retry.
 	-- 4. If Cannot Retry -> Fail Permanently.
-	
+
 	local Tree = BT.Selector({
 		BT.Sequence({
 			AttemptCall,
-			CompleteRequest
+			CompleteRequest,
 		}),
 		BT.Sequence({
 			CanRetry,
-			ScheduleRetry
+			ScheduleRetry,
 		}),
-		FailRequest
+		FailRequest,
 	})
 
 	return Tree

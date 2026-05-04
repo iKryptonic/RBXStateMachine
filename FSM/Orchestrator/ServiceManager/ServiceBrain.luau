@@ -1,19 +1,18 @@
 --!strict
--- @Name ServiceManager/ServiceBrain.luau
--- @Author iKrypto
--- @Description Top-level Behavior Tree that orchestrates all Nexus subsystem modules.
--- Uses the framework's BehaviorTree to coordinate rendering, data fetching, insights, and animations.
+--[=[
+	@module ServiceBrain
+	@description Declarative behaviour-tree builder for ServiceManager subsystems.
+	Converts a subsystem descriptor table (priorities, transition predicates, and action functions)
+	into an ordered list of behaviour nodes that `ServiceManager` evaluates each tick to decide
+	which subsystem should be active and what side effects to run.
+]=]
 
 local ServiceBrain = {}
 
 local BehaviorTree: any = nil
 local Status: any = nil
 
---[[
-	Cache the framework BehaviorTree references used by the Nexus brain.
-	Must run before Build so the returned tree can construct condition/action
-	nodes against the orchestrator's factory.
-]]
+
 function ServiceBrain.Initialize(Orchestrator: any)
 	BehaviorTree = Orchestrator.Factory.BehaviorTree
 	Status = BehaviorTree.BehaviorTreeStatus
@@ -92,8 +91,8 @@ local function FetchSubsystemData(ctx: any): string
 		local success, err = pcall(module.FetchData, module, nexus)
 		if not success then
 			local logFn = nexus._Log
-			if logFn then logFn("WARN", "FetchData failed for " .. subsystem .. ": " .. tostring(err))
-			else warn("[ServiceManager] FetchData failed for " .. subsystem .. ": " .. tostring(err)) end
+			if logFn then logFn("WARN","FetchData failed for " .. subsystem ..": " .. tostring(err))
+			else warn("[ServiceManager] FetchData failed for " .. subsystem ..": " .. tostring(err)) end
 			return Status.Failure
 		end
 	end
@@ -141,8 +140,8 @@ local function RenderActiveSubsystem(ctx: any): string
 		end)
 		if not success then
 			local logFn = nexus._Log
-			if logFn then logFn("WARN", "RebuildCurrentLayer failed for " .. subsystem .. ": " .. tostring(err))
-			else warn("[ServiceManager] RebuildCurrentLayer failed for " .. subsystem .. ": " .. tostring(err)) end
+			if logFn then logFn("WARN","RebuildCurrentLayer failed for " .. subsystem ..": " .. tostring(err))
+			else warn("[ServiceManager] RebuildCurrentLayer failed for " .. subsystem ..": " .. tostring(err)) end
 			return Status.Failure
 		end
 	end
@@ -178,15 +177,7 @@ local function SyncContextData(ctx: any): string
 	return Status.Success
 end
 
--- ══════════════════════════════════════════════════════════════
--- TREE CONSTRUCTION
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Build the top-level behavior tree tick function.
-	The resulting tree syncs context, refreshes subsystem data when needed,
-	renders dirty UI, and always advances animation work.
-]]
 function ServiceBrain.Build(): (context: any) -> string
 	-- The root tree:
 	-- Sequence: must be initialized

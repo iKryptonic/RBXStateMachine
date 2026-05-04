@@ -1,9 +1,5 @@
 --!strict
--- @Name ServiceManager/Subsystems/ConsoleModule.luau
--- @Author iKrypto
--- @Description Full interactive console / terminal subsystem with command registry,
--- history, autocomplete, and rich output formatting. Feature parity with legacy
--- ServiceManager Console page.
+
 
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -38,11 +34,7 @@ ConsoleModule.__index = ConsoleModule
 local MAX_OUTPUT_LINES = 500
 local MAX_HISTORY = 100
 
---[[
-	Create the CONSOLE subsystem controller.
-	Initializes the terminal buffers, command registry, history state, and
-	autocomplete bookkeeping used by the interactive shell.
-]]
+
 function ConsoleModule.new(): any
 	local self = setmetatable({}, ConsoleModule)
 	self._outputBuffer = {} :: { OutputLine }
@@ -62,34 +54,20 @@ function ConsoleModule.new(): any
 	return self
 end
 
--- ══════════════════════════════════════════════════════════════
--- DATA
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Prime console state for display.
-	The console is event-driven, so this hook only seeds the initial welcome lines
-	when the output buffer is still empty.
-]]
 function ConsoleModule:FetchData(nexus: any)
 	-- Console doesn't poll data; it's event-driven.
 	-- Push a welcome message on first load if buffer is empty.
 	if #self._outputBuffer == 0 then
-		self:_PushLine("SYSTEM", "Nexus Orchestrator Console v1.0", Theme.Colors.Accent)
-		self:_PushLine("SYSTEM", 'Type "help" for available commands.', Theme.Colors.TextMuted)
-		self:_PushLine("SYSTEM", "", Theme.Colors.TextMuted)
+		self:_PushLine("SYSTEM","ServiceManager Console v1.0", Theme.Colors.Accent)
+		self:_PushLine("SYSTEM",'Type "help" for available commands.', Theme.Colors.TextMuted)
+		self:_PushLine("SYSTEM","", Theme.Colors.TextMuted)
 	end
 end
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	CONSOLE rendering is produced by BuildRootLayer and its event handlers.
-]]
+
 function ConsoleModule:Render(nexus: any) end
 
--- ══════════════════════════════════════════════════════════════
--- OUTPUT BUFFER
--- ══════════════════════════════════════════════════════════════
 
 function ConsoleModule:_PushLine(level: string, text: string, color: Color3?)
 	local lineColor = color
@@ -122,20 +100,12 @@ function ConsoleModule:_PushLine(level: string, text: string, color: Color3?)
 	end
 end
 
--- ══════════════════════════════════════════════════════════════
--- COMMAND EXECUTION
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Parse, execute, and echo a user-entered console command.
-	Writes both command input and handler output back into the scrolling terminal
-	buffer so the shell remains self-contained and replayable.
-]]
 function ConsoleModule:ExecuteCommand(rawInput: string, nexus: any)
 	if rawInput == "" then return end
 
 	-- Echo the command
-	self:_PushLine("INFO", "> " .. rawInput, Theme.Colors.TextPrimary)
+	self:_PushLine("INFO","> " .. rawInput, Theme.Colors.TextPrimary)
 
 	-- Add to history
 	table.insert(self._commandHistory, rawInput)
@@ -168,7 +138,7 @@ function ConsoleModule:ExecuteCommand(rawInput: string, nexus: any)
 				end
 			end
 		else
-			self:_PushLine("ERROR", "Error: " .. tostring(result))
+			self:_PushLine("ERROR","Error: " .. tostring(result))
 		end
 	else
 		self:_PushLine("ERROR", string.format('Unknown command "%s". Type "help" for available commands.', cmdName))
@@ -178,16 +148,13 @@ function ConsoleModule:ExecuteCommand(rawInput: string, nexus: any)
 	self:_RenderOutput()
 end
 
--- ══════════════════════════════════════════════════════════════
--- BUILT-IN COMMANDS
--- ══════════════════════════════════════════════════════════════
 
 function ConsoleModule:_RegisterBuiltinCommands()
 	self:RegisterCommand({
 		Name = "help",
 		Description = "List all available commands",
 		Handler = function(args, nexus)
-			local lines = { "Available Commands:", "─────────────────────────────" }
+			local lines = {"Available Commands:","─────────────────────────────" }
 			local sorted = {}
 			for name, cmd in pairs(self._registeredCommands) do
 				table.insert(sorted, cmd)
@@ -197,7 +164,7 @@ function ConsoleModule:_RegisterBuiltinCommands()
 				local usage = cmd.Usage or cmd.Name
 				table.insert(lines, string.format("  %-16s %s", usage, cmd.Description))
 			end
-			return table.concat(lines, "\n")
+			return table.concat(lines,"\n")
 		end,
 	})
 
@@ -206,7 +173,7 @@ function ConsoleModule:_RegisterBuiltinCommands()
 		Description = "Clear the console output",
 		Handler = function(args, nexus)
 			table.clear(self._outputBuffer)
-			self:_PushLine("SYSTEM", "Console cleared.", Theme.Colors.TextMuted)
+			self:_PushLine("SYSTEM","Console cleared.", Theme.Colors.TextMuted)
 			return nil
 		end,
 	})
@@ -216,7 +183,7 @@ function ConsoleModule:_RegisterBuiltinCommands()
 		Description = "Print a message to the console",
 		Usage = "echo <message>",
 		Handler = function(args, nexus)
-			return table.concat(args, " ")
+			return table.concat(args," ")
 		end,
 	})
 
@@ -224,7 +191,7 @@ function ConsoleModule:_RegisterBuiltinCommands()
 		Name = "version",
 		Description = "Show ServiceManager version",
 		Handler = function(args, nexus)
-			return "ServiceManager v1.0.0 | Glass Engine UI"
+			return"ServiceManager v1.0.0 | Glass Engine UI"
 		end,
 	})
 
@@ -234,16 +201,16 @@ function ConsoleModule:_RegisterBuiltinCommands()
 		Usage = "mode [client|server]",
 		Handler = function(args, nexus)
 			if #args == 0 then
-				return "Current mode: " .. (nexus._contextMode or "client")
+				return"Current mode: " .. (nexus._contextMode or "client")
 			end
 			local target = string.lower(args[1])
 			if target == "client" or target == "server" then
 				if nexus.SetContextMode then
 					nexus.SetContextMode(target)
 				end
-				return "Switched to " .. target .. " mode"
+				return"Switched to " .. target .." mode"
 			end
-			return 'Usage: mode [client|server]'
+			return'Usage: mode [client|server]'
 		end,
 	})
 
@@ -254,32 +221,32 @@ function ConsoleModule:_RegisterBuiltinCommands()
 		Handler = function(args, nexus)
 			local orch = nexus._orchestrator
 			if not orch or not orch.Scheduler then
-				return "No scheduler available"
+				return"No scheduler available"
 			end
 
 			local sub = string.lower(args[1] or "list")
 
 			if sub == "list" then
-				local lines = { "Scheduled Tasks:", "─────────────────────────────" }
+				local lines = {"Scheduled Tasks:","─────────────────────────────" }
 				local tasks = orch.Scheduler.Tasks or {}
 				local count = 0
 				for name, taskDef in pairs(tasks) do
 					count += 1
 					local status = taskDef.Status or "idle"
 					local execCount = taskDef.ExecutionCount or 0
-					local statusIcon = if status == "running" then "●" elseif status == "error" then "✕" else "○"
+					local statusIcon = if status == "running" then"●" elseif status == "error" then"✕" else"○"
 					table.insert(lines, string.format("  %s %-24s %s (×%d)", statusIcon, name, status, execCount))
 				end
 				if count == 0 then
-					table.insert(lines, "  (no tasks registered)")
+					table.insert(lines,"  (no tasks registered)")
 				end
-				return table.concat(lines, "\n")
+				return table.concat(lines,"\n")
 
 			elseif sub == "info" then
 				local taskName = args[2]
-				if not taskName then return "Usage: tasks info <name>" end
+				if not taskName then return"Usage: tasks info <name>" end
 				local taskDef = (orch.Scheduler.Tasks or {})[taskName]
-				if not taskDef then return "Task not found: " .. taskName end
+				if not taskDef then return"Task not found: " .. taskName end
 				local lines = {
 					"Task: " .. taskName,
 					"─────────────────────────────",
@@ -294,32 +261,32 @@ function ConsoleModule:_RegisterBuiltinCommands()
 					table.insert(lines, string.format("  Avg Time:    %.3fms", (taskDef.Perf.AvgExecutionTime or 0) * 1000))
 					table.insert(lines, string.format("  Max Time:    %.3fms", (taskDef.Perf.MaxExecutionTime or 0) * 1000))
 				end
-				return table.concat(lines, "\n")
+				return table.concat(lines,"\n")
 
 			elseif sub == "run" then
 				local taskName = args[2]
-				if not taskName then return "Usage: tasks run <name>" end
+				if not taskName then return"Usage: tasks run <name>" end
 				local taskDef = (orch.Scheduler.Tasks or {})[taskName]
-				if not taskDef then return "Task not found: " .. taskName end
+				if not taskDef then return"Task not found: " .. taskName end
 				if taskDef.TaskAction then
 					local ok, err = pcall(taskDef.TaskAction)
-					if ok then return "Task executed: " .. taskName
-					else return "Task failed: " .. tostring(err)
+					if ok then return"Task executed: " .. taskName
+					else return"Task failed: " .. tostring(err)
 					end
 				end
-				return "Task has no action handler"
+				return"Task has no action handler"
 
 			elseif sub == "kill" then
 				local taskName = args[2]
-				if not taskName then return "Usage: tasks kill <name>" end
+				if not taskName then return"Usage: tasks kill <name>" end
 				if orch.Scheduler.Unschedule then
 					pcall(orch.Scheduler.Unschedule, orch.Scheduler, taskName)
-					return "Task killed: " .. taskName
+					return"Task killed: " .. taskName
 				end
-				return "Unschedule not available"
+				return"Unschedule not available"
 			end
 
-			return "Usage: tasks [list|info|run|kill] <name>"
+			return"Usage: tasks [list|info|run|kill] <name>"
 		end,
 	})
 
@@ -329,30 +296,30 @@ function ConsoleModule:_RegisterBuiltinCommands()
 		Usage = "fsm [list|info <id>|cancel <id>]",
 		Handler = function(args, nexus)
 			local orch = nexus._orchestrator
-			if not orch then return "No orchestrator available" end
+			if not orch then return"No orchestrator available" end
 
 			local machines = orch.StateMachines or {}
 			local sub = string.lower(args[1] or "list")
 
 			if sub == "list" then
-				local lines = { "State Machines:", "─────────────────────────────" }
+				local lines = {"State Machines:","─────────────────────────────" }
 				local count = 0
 				for id, fsm in pairs(machines) do
 					count += 1
-					local active = if fsm.IsActive then "●" else "○"
+					local active = if fsm.IsActive then"●" else"○"
 					table.insert(lines, string.format("  %s %-20s [%s] P%d",
 						active, fsm.Name or id, fsm.State or "none", fsm.Priority or 1))
 				end
 				if count == 0 then
-					table.insert(lines, "  (no state machines registered)")
+					table.insert(lines,"  (no state machines registered)")
 				end
-				return table.concat(lines, "\n")
+				return table.concat(lines,"\n")
 
 			elseif sub == "info" then
 				local fsmId = args[2]
-				if not fsmId then return "Usage: fsm info <id>" end
+				if not fsmId then return"Usage: fsm info <id>" end
 				local fsm = machines[fsmId]
-				if not fsm then return "FSM not found: " .. fsmId end
+				if not fsm then return"FSM not found: " .. fsmId end
 				local lines = {
 					"FSM: " .. (fsm.Name or fsmId),
 					"─────────────────────────────",
@@ -362,21 +329,21 @@ function ConsoleModule:_RegisterBuiltinCommands()
 					"  Duration:    " .. string.format("%.2fs", fsm.StateDuration or 0),
 					"  Transitions: " .. tostring(fsm.TransitionCount or 0),
 				}
-				return table.concat(lines, "\n")
+				return table.concat(lines,"\n")
 
 			elseif sub == "cancel" then
 				local fsmId = args[2]
-				if not fsmId then return "Usage: fsm cancel <id>" end
+				if not fsmId then return"Usage: fsm cancel <id>" end
 				local fsm = machines[fsmId]
-				if not fsm then return "FSM not found: " .. fsmId end
+				if not fsm then return"FSM not found: " .. fsmId end
 				if fsm.Cancel then
 					pcall(fsm.Cancel, fsm)
-					return "FSM cancelled: " .. fsmId
+					return"FSM cancelled: " .. fsmId
 				end
-				return "FSM does not support cancel"
+				return"FSM does not support cancel"
 			end
 
-			return "Usage: fsm [list|info|cancel] <id>"
+			return"Usage: fsm [list|info|cancel] <id>"
 		end,
 	})
 
@@ -386,13 +353,13 @@ function ConsoleModule:_RegisterBuiltinCommands()
 		Usage = "entities [list|info <id>]",
 		Handler = function(args, nexus)
 			local orch = nexus._orchestrator
-			if not orch then return "No orchestrator available" end
+			if not orch then return"No orchestrator available" end
 
 			local entities = orch.Entities or {}
 			local sub = string.lower(args[1] or "list")
 
 			if sub == "list" then
-				local lines = { "Entities:", "─────────────────────────────" }
+				local lines = {"Entities:","─────────────────────────────" }
 				local count = 0
 				for id, entity in pairs(entities) do
 					count += 1
@@ -404,19 +371,19 @@ function ConsoleModule:_RegisterBuiltinCommands()
 							valid = entity._privateProperties.IsValid or false
 						end
 					end)
-					local icon = if valid then "●" else "✕"
+					local icon = if valid then"●" else"✕"
 					table.insert(lines, string.format("  %s %-20s [%s]", icon, id, name))
 				end
 				if count == 0 then
-					table.insert(lines, "  (no entities registered)")
+					table.insert(lines,"  (no entities registered)")
 				end
-				return table.concat(lines, "\n")
+				return table.concat(lines,"\n")
 
 			elseif sub == "info" then
 				local entId = args[2]
-				if not entId then return "Usage: entities info <id>" end
+				if not entId then return"Usage: entities info <id>" end
 				local entity = entities[entId]
-				if not entity then return "Entity not found: " .. entId end
+				if not entity then return"Entity not found: " .. entId end
 				local pp = {}
 				pcall(function() pp = entity._privateProperties or {} end)
 				local lines = {
@@ -429,12 +396,12 @@ function ConsoleModule:_RegisterBuiltinCommands()
 				if pp.Schema then
 					local schemaCount = 0
 					for _ in pairs(pp.Schema) do schemaCount += 1 end
-					table.insert(lines, "  Schema:   " .. tostring(schemaCount) .. " fields")
+					table.insert(lines,"  Schema:   " .. tostring(schemaCount) .." fields")
 				end
-				return table.concat(lines, "\n")
+				return table.concat(lines,"\n")
 			end
 
-			return "Usage: entities [list|info] <id>"
+			return"Usage: entities [list|info] <id>"
 		end,
 	})
 
@@ -444,10 +411,10 @@ function ConsoleModule:_RegisterBuiltinCommands()
 		Handler = function(args, nexus)
 			local orch = nexus._orchestrator
 			if not orch or not orch.NetworkManager then
-				return "No NetworkManager available"
+				return"No NetworkManager available"
 			end
 			local nm = orch.NetworkManager
-			local lines = { "Network Status:", "─────────────────────────────" }
+			local lines = {"Network Status:","─────────────────────────────" }
 
 			local busCount = 0
 			if nm.EventBuses then
@@ -469,11 +436,11 @@ function ConsoleModule:_RegisterBuiltinCommands()
 				for _ in pairs(nm.RemoteEvents) do remoteCount += 1 end
 			end
 
-			table.insert(lines, "  Event Buses:     " .. tostring(busCount))
-			table.insert(lines, "  Commands:        " .. tostring(cmdCount))
-			table.insert(lines, "  Entity Commands: " .. tostring(entCmdCount))
-			table.insert(lines, "  Remote Events:   " .. tostring(remoteCount))
-			return table.concat(lines, "\n")
+			table.insert(lines,"  Event Buses:     " .. tostring(busCount))
+			table.insert(lines,"  Commands:        " .. tostring(cmdCount))
+			table.insert(lines,"  Entity Commands: " .. tostring(entCmdCount))
+			table.insert(lines,"  Remote Events:   " .. tostring(remoteCount))
+			return table.concat(lines,"\n")
 		end,
 	})
 
@@ -482,9 +449,9 @@ function ConsoleModule:_RegisterBuiltinCommands()
 		Description = "Show datastore status",
 		Handler = function(args, nexus)
 			local orch = nexus._orchestrator
-			if not orch then return "No orchestrator available" end
+			if not orch then return"No orchestrator available" end
 			local entities = orch.Entities or {}
-			local lines = { "Persistent Entities:", "─────────────────────────────" }
+			local lines = {"Persistent Entities:","─────────────────────────────" }
 			local count = 0
 			for id, entity in pairs(entities) do
 				pcall(function()
@@ -493,7 +460,7 @@ function ConsoleModule:_RegisterBuiltinCommands()
 						for _, def in pairs(schema) do
 							if def.Persist then
 								count += 1
-								table.insert(lines, "  " .. id)
+								table.insert(lines,"  " .. id)
 								break
 							end
 						end
@@ -501,9 +468,9 @@ function ConsoleModule:_RegisterBuiltinCommands()
 				end)
 			end
 			if count == 0 then
-				table.insert(lines, "  (no persistent entities)")
+				table.insert(lines,"  (no persistent entities)")
 			end
-			return table.concat(lines, "\n")
+			return table.concat(lines,"\n")
 		end,
 	})
 
@@ -512,7 +479,7 @@ function ConsoleModule:_RegisterBuiltinCommands()
 		Description = "Show performance metrics",
 		Handler = function(args, nexus)
 			local orch = nexus._orchestrator
-			local lines = { "Performance Metrics:", "─────────────────────────────" }
+			local lines = {"Performance Metrics:","─────────────────────────────" }
 			lines[#lines+1] = string.format("  Memory:    %.2f MB", collectgarbage("count") / 1024)
 			if orch and orch.Scheduler and orch.Scheduler.PerformanceManager then
 				local pm = orch.Scheduler.PerformanceManager
@@ -520,7 +487,7 @@ function ConsoleModule:_RegisterBuiltinCommands()
 				lines[#lines+1] = string.format("  Budget:    %.2fms", (pm.FrameBudget or 0) * 1000)
 				lines[#lines+1] = string.format("  Tasks/F:   %.1f", pm.TasksPerFrame or 0)
 			end
-			return table.concat(lines, "\n")
+			return table.concat(lines,"\n")
 		end,
 	})
 
@@ -530,24 +497,22 @@ function ConsoleModule:_RegisterBuiltinCommands()
 		Usage = "switch <subsystem>",
 		Handler = function(args, nexus)
 			if #args == 0 then
-				return "Usage: switch <tasks|fsm|entity|network|datastore|insights|console|logs>"
+				return"Usage: switch <tasks|fsm|entity|network|datastore|insights|console|logs>"
 			end
 			local target = string.upper(args[1])
-			local valid = { TASKS=true, FSM=true, ENTITY=true, NETWORK=true, DATASTORE=true, INSIGHTS=true, CONSOLE=true, LOGS=true }
+			local valid = { TASKS = true, FSM = true, ENTITY = true, NETWORK = true, DATASTORE = true, INSIGHTS = true, CONSOLE = true, LOGS = true }
 			if valid[target] then
 				if nexus.SwitchSubsystem then
 					nexus.SwitchSubsystem(target)
 				end
-				return "Switched to " .. target
+				return"Switched to " .. target
 			end
-			return "Unknown subsystem: " .. args[1] .. ". Valid: tasks, fsm, entity, network, datastore, insights, console, logs"
+			return"Unknown subsystem: " .. args[1] ..". Valid: tasks, fsm, entity, network, datastore, insights, console, logs"
 		end,
 	})
 end
 
---[[
-	Register a console command definition under its lowercase command name.
-]]
+
 function ConsoleModule:RegisterCommand(def: CommandDef)
 	self._registeredCommands[string.lower(def.Name)] = def
 end
@@ -566,11 +531,11 @@ end
 	Token 3+ (args) → dynamic providers (task names, fsm ids, etc.)
 ]=]
 ConsoleModule._subcommands = {
-	tasks = { "list", "info", "run", "kill" },
-	fsm = { "list", "info", "cancel" },
-	entities = { "list", "info" },
-	mode = { "client", "server" },
-	switch = { "tasks", "fsm", "entity", "network", "datastore", "insights", "console", "logs" },
+	tasks = {"list","info","run","kill" },
+	fsm = {"list","info","cancel" },
+	entities = {"list","info" },
+	mode = {"client","server" },
+	switch = {"tasks","fsm","entity","network","datastore","insights","console","logs" },
 }
 
 --[=[
@@ -642,13 +607,7 @@ local function scoreMatch(query: string, candidate: string): number
 	return -1
 end
 
---[=[
-	Compute completions for the current input. Returns a list of suggestions
-	with (text, hint) pairs for richer rendering.
-	@param input string — the full text in the input box
-	@param nexus any — current nexus context (for dynamic providers)
-	@return { { text: string, hint: string?, score: number } }
-]=]
+
 function ConsoleModule:_GetSmartCompletions(input: string, nexus: any): { { text: string, hint: string?, score: number } }
 	-- Tokenize on whitespace; track whether input ends with space (next token starts)
 	local tokens = {}
@@ -657,7 +616,7 @@ function ConsoleModule:_GetSmartCompletions(input: string, nexus: any): { { text
 
 	-- Determine current token (the one being typed) and prefix tokens
 	local currTokenIdx = if trailingSpace then #tokens + 1 else #tokens
-	local currQuery = if trailingSpace then "" else (tokens[#tokens] or "")
+	local currQuery = if trailingSpace then"" else (tokens[#tokens] or "")
 
 	local results = {} :: { { text: string, hint: string?, score: number } }
 
@@ -685,7 +644,7 @@ function ConsoleModule:_GetSmartCompletions(input: string, nexus: any): { { text
 		-- Token 3+: use dynamic provider keyed by command.subcommand
 		local cmdName = string.lower(tokens[1] or "")
 		local subName = string.lower(tokens[2] or "")
-		local providerKey = cmdName .. "." .. subName
+		local providerKey = cmdName .."." .. subName
 		local provider = (ConsoleModule :: any)._dynamicProviders[providerKey]
 		if provider then
 			local ok, candidates = pcall(provider, nexus)
@@ -705,6 +664,7 @@ function ConsoleModule:_GetSmartCompletions(input: string, nexus: any): { { text
 	return results
 end
 
+
 function ConsoleModule:_GetCompletions(partial: string): { string }
 	-- Legacy API kept for compatibility — returns only command names matching prefix
 	if partial == "" then return {} end
@@ -719,12 +679,7 @@ function ConsoleModule:_GetCompletions(partial: string): { string }
 	return matches
 end
 
---[=[
-	Highlight the matching prefix or substring within a candidate using RichText.
-	@param candidate string
-	@param query string
-	@return string — RichText-formatted candidate with the match highlighted
-]=]
+
 function ConsoleModule:_HighlightMatch(candidate: string, query: string): string
 	if query == "" then return candidate end
 	local lowerC = string.lower(candidate)
@@ -740,14 +695,7 @@ function ConsoleModule:_HighlightMatch(candidate: string, query: string): string
 	)
 end
 
--- ══════════════════════════════════════════════════════════════
--- Z-AXIS LAYER BUILDERS
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Build or rebuild the CONSOLE root layer inside the supplied navigator frame.
-	Creates the terminal output region, input box, and in-place autocomplete UI.
-]]
 function ConsoleModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -898,7 +846,7 @@ function ConsoleModule:BuildRootLayer(frame: Frame, context: any)
 			-- the box right after the previous command's Enter — which then
 			-- messes up tokenization and autocomplete on the NEXT input.
 			-- We never want leading whitespace in a CLI prompt, so strip it.
-			local text = inputBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
+			local text = inputBox.Text:gsub("^%s+",""):gsub("%s+$","")
 			inputBox.Text = ""
 			self:ExecuteCommand(text, nexus)
 			-- Mark that the next focus is the post-Enter recapture, so the
@@ -930,7 +878,7 @@ function ConsoleModule:BuildRootLayer(frame: Frame, context: any)
 		-- silently shows no/wrong suggestions until the user notices and
 		-- backspaces. Strip silently so the user never sees the glitch.
 		if inputBox.Text:sub(1, 1) == " " then
-			local cleaned = inputBox.Text:gsub("^%s+", "")
+			local cleaned = inputBox.Text:gsub("^%s+","")
 			if cleaned ~= inputBox.Text then
 				inputBox.Text = cleaned
 				return -- re-fires the signal with the cleaned text; let that pass handle AC
@@ -977,7 +925,7 @@ function ConsoleModule:BuildRootLayer(frame: Frame, context: any)
 			if acVisible and self._acSelectedIndex > 0 and self._acSelectedIndex <= #self._acSuggestions then
 				-- Select current autocomplete suggestion
 				local selected = self._acSuggestions[self._acSelectedIndex]
-				inputBox.Text = selected .. " "
+				inputBox.Text = selected .." "
 				inputBox.CursorPosition = #inputBox.Text + 1
 				if self._autocompleteFrame then self._autocompleteFrame.Visible = false end
 				self._acSelectedIndex = 0
@@ -986,14 +934,14 @@ function ConsoleModule:BuildRootLayer(frame: Frame, context: any)
 			-- Tab completion (single match)
 			if acVisible and self._acSelectedIndex > 0 and self._acSelectedIndex <= #self._acSuggestions then
 				local selected = self._acSuggestions[self._acSelectedIndex]
-				inputBox.Text = selected .. " "
+				inputBox.Text = selected .." "
 				inputBox.CursorPosition = #inputBox.Text + 1
 				if self._autocompleteFrame then self._autocompleteFrame.Visible = false end
 				self._acSelectedIndex = 0
 			else
 				local completions = self:_GetCompletions(inputBox.Text)
 				if #completions == 1 then
-					inputBox.Text = completions[1] .. " "
+					inputBox.Text = completions[1] .." "
 					inputBox.CursorPosition = #inputBox.Text + 1
 				end
 			end
@@ -1022,7 +970,7 @@ function ConsoleModule:BuildRootLayer(frame: Frame, context: any)
 			task.delay(0, function()
 				task.delay(0, function()
 					if inputBox and inputBox.Parent and inputBox.Text:match("^%s") then
-						inputBox.Text = inputBox.Text:gsub("^%s+", "")
+						inputBox.Text = inputBox.Text:gsub("^%s+","")
 					end
 				end)
 			end)
@@ -1035,6 +983,7 @@ function ConsoleModule:BuildRootLayer(frame: Frame, context: any)
 	-- Render existing output
 	self:_RenderOutput()
 end
+
 
 function ConsoleModule:_UpdateAutocomplete(text: string, nexus: any)
 	local acFrame = self._autocompleteFrame
@@ -1073,7 +1022,7 @@ function ConsoleModule:_UpdateAutocomplete(text: string, nexus: any)
 	local tokens = {}
 	for word in text:gmatch("%S+") do table.insert(tokens, word) end
 	local trailingSpace = text:sub(-1) == " "
-	local currQuery = if trailingSpace then "" else (tokens[#tokens] or "")
+	local currQuery = if trailingSpace then"" else (tokens[#tokens] or "")
 
 	self._acSuggestions = completions
 	self._acSelectedIndex = 0
@@ -1101,7 +1050,7 @@ function ConsoleModule:_UpdateAutocomplete(text: string, nexus: any)
 	for i, item in ipairs(rich) do
 		if i > 6 then break end
 		local highlighted = self:_HighlightMatch(item.text, currQuery)
-		local hint = item.hint and ("  <font color=\"#666\">— " .. item.hint .. "</font>") or ""
+		local hint = item.hint and ("  <font color=\"#666\">— " .. item.hint .."</font>") or ""
 
 		local acBtn = Instance.new("TextButton")
 		acBtn.Size = UDim2.new(1, 0, 0, 24)
@@ -1130,15 +1079,15 @@ function ConsoleModule:_UpdateAutocomplete(text: string, nexus: any)
 				if not trailingSpace and #tokens > 0 then
 					-- Keep all tokens except last
 					for ti = 1, #tokens - 1 do
-						before = before .. tokens[ti] .. " "
+						before = before .. tokens[ti] .." "
 					end
 				else
 					-- Keep all tokens
 					for _, tok in ipairs(tokens) do
-						before = before .. tok .. " "
+						before = before .. tok .." "
 					end
 				end
-				self._inputBox.Text = before .. capturedText .. " "
+				self._inputBox.Text = before .. capturedText .." "
 				self._inputBox.CursorPosition = #self._inputBox.Text + 1
 				self._inputBox:CaptureFocus()
 			end
@@ -1156,6 +1105,7 @@ function ConsoleModule:_UpdateAutocomplete(text: string, nexus: any)
 		end)
 	end
 end
+
 
 function ConsoleModule:_AcNavigate(direction: number)
 	local count = math.min(#self._acSuggestions, 6)
@@ -1175,6 +1125,7 @@ function ConsoleModule:_AcNavigate(direction: number)
 	self:_AcHighlight(newIndex, true)
 end
 
+
 function ConsoleModule:_AcHighlight(index: number, highlighted: boolean)
 	local btn = self._acButtons[index]
 	if not btn then return end
@@ -1187,6 +1138,7 @@ function ConsoleModule:_AcHighlight(index: number, highlighted: boolean)
 		btn.TextColor3 = Theme.Colors.TextSecondary
 	end
 end
+
 
 function ConsoleModule:_RenderOutput()
 	local scroll = self._scrollFrame
@@ -1237,9 +1189,7 @@ function ConsoleModule:_RenderOutput()
 	end)
 end
 
---[[
-	Disconnect console input listeners and clear terminal state.
-]]
+
 function ConsoleModule:Destroy()
 	if self._inputConnection then
 		self._inputConnection:Disconnect()

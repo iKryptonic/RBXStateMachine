@@ -1,9 +1,5 @@
 --!strict
--- @Name ServiceManager/Subsystems/DataStoreModule.luau
--- @Author iKrypto
--- @Description Enhanced DATASTORE subsystem with detailed store properties (LastSync,
--- PendingOps, RateLimit, Config), operations log, store status indicators, cached keys
--- display, field inspector with type/value badges, version tracking, and search.
+
 
 local Theme = require(script.Parent.Parent.Theme)
 local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
@@ -11,13 +7,9 @@ local SearchAutocomplete = require(script.Parent.Parent.SearchAutocomplete)
 local DataStoreModule = {}
 DataStoreModule.__index = DataStoreModule
 
-local SORT_MODES = { "Name", "Keys", "Ops", "LastSync" }
+local SORT_MODES = {"Name","Keys","Ops","LastSync" }
 
---[[
-	Create the DATASTORE subsystem controller.
-	Tracks the normalized store cache plus filter and selection state for the root
-	list and per-store inspector layers.
-]]
+
 function DataStoreModule.new(): any
 	local self = setmetatable({}, DataStoreModule)
 	self._storeCache = {} :: { [string]: any }
@@ -27,10 +19,7 @@ function DataStoreModule.new(): any
 	return self
 end
 
---[[
-	Refresh datastore snapshots for the active context and normalize whatever
-	backing persistence surface is available into the module cache.
-]]
+
 function DataStoreModule:FetchData(nexus: any)
 	local orchestrator = nexus._orchestrator
 	if not orchestrator then return end
@@ -44,7 +33,7 @@ function DataStoreModule:FetchData(nexus: any)
 			if registry then
 				local dsEntity = nil
 				if type(registry.GetEntity) == "function" then
-					local ok, result = pcall(registry.GetEntity, "DataStoreSystem")
+					local ok, result = pcall(registry.GetEntity,"DataStoreSystem")
 					if ok then dsEntity = result end
 				end
 				if dsEntity then
@@ -104,6 +93,7 @@ function DataStoreModule:FetchData(nexus: any)
 		nexus.Store:Set("datastore.list", self._storeCache)
 	end)
 end
+
 
 function DataStoreModule:_ExtractStoreData(name: string, store: any): any
 	if type(store) ~= "table" then
@@ -179,15 +169,9 @@ function DataStoreModule:_ExtractStoreData(name: string, store: any): any
 	}
 end
 
---[[
-	Legacy subsystem hook retained for interface parity.
-	DATASTORE rendering is performed by BuildRootLayer and detail-layer builders.
-]]
+
 function DataStoreModule:Render(_nexus: any) end
 
--- ══════════════════════════════════════════════════════════════
--- SORTING / FILTERING
--- ══════════════════════════════════════════════════════════════
 
 function DataStoreModule:_GetSorted(): { { Name: string, Data: any } }
 	local result = {}
@@ -214,15 +198,7 @@ function DataStoreModule:_GetSorted(): { { Name: string, Data: any } }
 	return result
 end
 
--- ══════════════════════════════════════════════════════════════
--- ROOT LAYER
--- ══════════════════════════════════════════════════════════════
 
---[[
-	Build or rebuild the DATASTORE root layer inside the supplied navigator frame.
-	Creates the summary strip, search/sort controls, and store rows that drill
-	into key/value, config, and operations-log details.
-]]
 function DataStoreModule:BuildRootLayer(frame: Frame, context: any)
 	local nexus = context.Nexus
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -275,6 +251,7 @@ function DataStoreModule:BuildRootLayer(frame: Frame, context: any)
 		)
 	end
 end
+
 
 function DataStoreModule:_BuildSummaryStrip(parent: Frame)
 	local strip = Instance.new("Frame")
@@ -342,6 +319,7 @@ function DataStoreModule:_BuildSummaryStrip(parent: Frame)
 		})
 	end
 end
+
 
 function DataStoreModule:_BuildToolbar(parent: Frame, nexus: any)
 	local toolbar = Instance.new("Frame")
@@ -443,9 +421,6 @@ function DataStoreModule:_BuildToolbar(parent: Frame, nexus: any)
 	end)
 end
 
--- ══════════════════════════════════════════════════════════════
--- STORE ROW
--- ══════════════════════════════════════════════════════════════
 
 function DataStoreModule:_BuildStoreRow(parent: Frame, name: string, storeData: any, nexus: any, order: number): Frame
 	local statusColor = if storeData.Status == "syncing" then Theme.Colors.Warning
@@ -503,7 +478,7 @@ function DataStoreModule:_BuildStoreRow(parent: Frame, name: string, storeData: 
 	-- Pulse status dot when syncing
 	local dot = row:FindFirstChild("StatusDot")
 	if dot and storeData.Status == "syncing" and nexus._animationController then
-		nexus._animationController:StartPulse("ds_" .. name, dot, "BackgroundTransparency", 0.6)
+		nexus._animationController:StartPulse("ds_" .. name, dot,"BackgroundTransparency", 0.6)
 	end
 
 	-- Hover glow
@@ -515,9 +490,6 @@ function DataStoreModule:_BuildStoreRow(parent: Frame, name: string, storeData: 
 	return row
 end
 
--- ══════════════════════════════════════════════════════════════
--- STORE DETAIL LAYER
--- ══════════════════════════════════════════════════════════════
 
 function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 	local contentFrame = frame:FindFirstChild("Content") :: Frame
@@ -654,7 +626,7 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 	local opProps = {
 		{ Key = "Total Ops", Value = tostring(storeData.TotalOps or 0), Color = Theme.Colors.Success },
 		{ Key = "Pending Ops", Value = tostring(storeData.PendingOps or 0), Color = if (storeData.PendingOps or 0) > 0 then Theme.Colors.Warning else Theme.Colors.TextMuted },
-		{ Key = "Last Sync", Value = if (storeData.LastSync or 0) > 0 then string.format("%.1fs ago", os.clock() - storeData.LastSync) else "never", Color = Theme.Colors.TextSecondary },
+		{ Key = "Last Sync", Value = if (storeData.LastSync or 0) > 0 then string.format("%.1fs ago", os.clock() - storeData.LastSync) else"never", Color = Theme.Colors.TextSecondary },
 		{ Key = "Errors", Value = tostring(storeData.Errors or 0), Color = if (storeData.Errors or 0) > 0 then Theme.Colors.Danger else Theme.Colors.TextMuted },
 	}
 	for i, p in ipairs(opProps) do
@@ -756,28 +728,26 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 					elseif opType == "GET" then Theme.Colors.Cyan
 					elseif opType == "DELETE" then Theme.Colors.Danger
 					else Theme.Colors.TextSecondary
-				self:_BuildPropRow(contentFrame, opType .. " " .. opKey, entry.Time and string.format("%.2fs", entry.Time) or "", opColor, 120 + j)
+				self:_BuildPropRow(contentFrame, opType .." " .. opKey, entry.Time and string.format("%.2fs", entry.Time) or "", opColor, 120 + j)
 			end
 		end
 	end
 end
 
--- ══════════════════════════════════════════════════════════════
--- HELPERS
--- ══════════════════════════════════════════════════════════════
 
 function DataStoreModule:_Stringify(value: any): string
 	local t = type(value)
-	if t == "string" then return '"' .. value .. '"'
+	if t == "string" then return'"' .. value ..'"'
 	elseif t == "number" then return tostring(value)
 	elseif t == "boolean" then return tostring(value)
 	elseif t == "table" then
 		local count = 0
 		for _ in pairs(value) do count += 1 end
 		return string.format("{%d}", count)
-	elseif t == "nil" then return "nil"
+	elseif t == "nil" then return"nil"
 	else return tostring(value) end
 end
+
 
 function DataStoreModule:_TypeColor(value: any): Color3
 	local t = type(value)
@@ -787,6 +757,7 @@ function DataStoreModule:_TypeColor(value: any): Color3
 	elseif t == "table" then return Theme.Colors.Purple
 	else return Theme.Colors.TextMuted end
 end
+
 
 function DataStoreModule:_BuildPropRow(parent: Frame, key: string, value: string, color: Color3, order: number)
 	local propRow = Instance.new("Frame")
@@ -807,9 +778,7 @@ function DataStoreModule:_BuildPropRow(parent: Frame, key: string, value: string
 	Theme.CreateLabel({ Text = value, Size = UDim2.new(0.5, 0, 1, 0), Position = UDim2.new(0.48, 0, 0, 0), Color = color, FontSize = Theme.TextSize.Body, FontFace = Theme.Font.Mono, Alignment = Enum.TextXAlignment.Right, Parent = propRow })
 end
 
---[[
-	Release autocomplete resources and clear cached store data.
-]]
+
 function DataStoreModule:Destroy()
 	if self._searchAC then self._searchAC:Destroy(); self._searchAC = nil end
 	table.clear(self._storeCache)
