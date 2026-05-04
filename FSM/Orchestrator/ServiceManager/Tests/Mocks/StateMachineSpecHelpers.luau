@@ -41,8 +41,10 @@ end
 
 function StateMachineSpecHelpers.requireStateMachine(moduleName: string): any
 	local _, result = requireNamedModule(moduleName, {
+		{ "StateMachine" },
 		{ "StateMachines" },
 		{ "StateMachines", "FSM" },
+		{ "StateMachine", "FSM" },
 		{ "StateMachines", "RBXStateMachine" },
 		{ "StateMachines", "FSM", "RBXStateMachine" },
 	})
