@@ -37,6 +37,11 @@ local EquipHelpers = require(Shared:WaitForChild("EquipHelpers"))
 local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
 local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
 
+--[=[
+	@module DamageJob
+	@description Applies validated combat damage to a victim, replicates the hit reaction, and dispatches downstream combat effects.
+]=]
+
 local DamageJob = {
 	Name = "DamageJob",
 	className = "DamageJob",
@@ -96,7 +101,7 @@ local function boundNonceMap(attackerUserId: number)
 	local oldestNonce: string? = nil
 	local oldestExpiry = math.huge
 	for nonce, expiry in pairs(nonceMap) do
-		count + = 1
+		count += 1
 		if expiry < oldestExpiry then
 			oldestExpiry = expiry
 			oldestNonce = nonce
@@ -190,7 +195,7 @@ local function getDamageReduction(orchestrator: any, entity: any): number
 		local effectReduction = tonumber(def and def.DamageReduction)
 		local stacks = math.max(tonumber(entry.Stacks) or 1, 1)
 		if effectReduction and effectReduction > 0 then
-			reduction + = effectReduction * stacks
+			reduction += effectReduction * stacks
 		end
 	end
 	return math.clamp(reduction, 0, 0.9)
@@ -301,8 +306,22 @@ local function showDamageText(position: Vector3, damage: number)
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `DamageJob`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function DamageJob:RegisterStates()
 
+
+--[=[
+	@state Validate
+	@description Validates the required runtime context and prerequisites.
+		Transitions:
+		- `CheckHitNonce` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: stores `Context.AttackName`, stores `Context._attackerEntity`, stores `Context._attackerUserId`, stores `Context._nonce`, sets `AttackName`.
+]=]
 
 self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -347,6 +366,15 @@ self:AddState("Validate", {
 	}, {"CheckHitNonce","Failed" })
 
 
+--[=[
+	@state CheckHitNonce
+	@description Runs the `check hit nonce` stage of `DamageJob`.
+		Transitions:
+		- `ResolveVictim` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: none.
+]=]
+
 self:AddState("CheckHitNonce", {
 		OnEnter = function(_, fsm)
 			cleanExpiredNonces()
@@ -368,6 +396,15 @@ self:AddState("CheckHitNonce", {
 		end,
 	}, {"ResolveVictim","Failed" })
 
+
+--[=[
+	@state ResolveVictim
+	@description Resolves the data needed for the `ResolveVictim` step.
+		Transitions:
+		- `ComputeDamage` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: stores `Context._victimEntity`, stores `Context._victimEntityId`, stores `Context._victimCharacter`, stores `Context._victimHumanoid`, stores `Context._victimRoot`.
+]=]
 
 self:AddState("ResolveVictim", {
 		OnEnter = function(_, fsm)
@@ -406,6 +443,15 @@ self:AddState("ResolveVictim", {
 	}, {"ComputeDamage","Failed" })
 
 
+--[=[
+	@state ComputeDamage
+	@description On enter, stores `Context._isVictimBlocking`, stores `Context._computedDamage`, sets `_isVictimBlocking`.
+		Transitions:
+		- `ApplyDamage` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: stores `Context._isVictimBlocking`, stores `Context._computedDamage`, sets `_isVictimBlocking`, sets `_computedDamage`.
+]=]
+
 self:AddState("ComputeDamage", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -426,6 +472,15 @@ self:AddState("ComputeDamage", {
 		end,
 	}, {"ApplyDamage","Failed" })
 
+
+--[=[
+	@state ApplyDamage
+	@description On enter, sets `Health`, replicates entity changes.
+		Transitions:
+		- `EmitHitReact` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: sets `Health`, replicates entity changes.
+]=]
 
 self:AddState("ApplyDamage", {
 		OnEnter = function(_, fsm)
@@ -448,6 +503,15 @@ self:AddState("ApplyDamage", {
 		end,
 	}, {"EmitHitReact","Failed" })
 
+
+--[=[
+	@state EmitHitReact
+	@description On enter, emits an intent.
+		Transitions:
+		- `EmitDamageText` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: emits an intent.
+]=]
 
 self:AddState("EmitHitReact", {
 		OnEnter = function(_, fsm)
@@ -476,6 +540,14 @@ self:AddState("EmitHitReact", {
 	}, {"EmitDamageText","Failed" })
 
 
+--[=[
+	@state EmitDamageText
+	@description Runs the `emit damage text` stage of `DamageJob`.
+		Transitions:
+		- `FireEventBus` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: none.
+]=]
+
 self:AddState("EmitDamageText", {
 		OnEnter = function(_, fsm)
 			local root = fsm.Context._victimRoot
@@ -487,6 +559,15 @@ self:AddState("EmitDamageText", {
 		end,
 	}, {"FireEventBus","Failed" })
 
+
+--[=[
+	@state FireEventBus
+	@description Runs the `fire event bus` stage of `DamageJob`.
+		Transitions:
+		- `ApplyOnHitEffects` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: none.
+]=]
 
 self:AddState("FireEventBus", {
 		OnEnter = function(_, fsm)
@@ -521,6 +602,14 @@ self:AddState("FireEventBus", {
 		end,
 	}, {"ApplyOnHitEffects","Failed" })
 
+
+--[=[
+	@state ApplyOnHitEffects
+	@description Runs the `apply on hit effects` stage of `DamageJob`.
+		Transitions:
+		- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: none.
+]=]
 
 self:AddState("ApplyOnHitEffects", {
 		OnEnter = function(_, fsm)
@@ -560,6 +649,11 @@ self:AddState("Completed", function() end, {})
 self:AddState("Failed", function() end, {})
 end
 
+
+--[=[
+	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
 
 function DamageJob:OnCleanup() end
 

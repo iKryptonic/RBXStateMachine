@@ -1,6 +1,11 @@
 --!strict
 
 
+--[=[
+	@module SpawnCharacterJob
+	@description Spawns or reuses a player character model, positions it, and links it to the runtime character entity.
+]=]
+
 local SpawnCharacterJob = {
 	Name = "SpawnCharacterJob",
 	className = "SpawnCharacterJob",
@@ -8,6 +13,11 @@ local SpawnCharacterJob = {
 	terminalStates = {"Completed","Failed" },
 	initialState = "Validate",
 }
+
+--[=[
+	@description Helper for the create and start state machine step used by this state machine.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function createAndStartStateMachine(
 	orchestrator: any,
@@ -30,8 +40,22 @@ local function createAndStartStateMachine(
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `SpawnCharacterJob`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function SpawnCharacterJob:RegisterStates()
 
+
+	--[=[
+		@state Validate
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `BindEntity` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -51,6 +75,15 @@ function SpawnCharacterJob:RegisterStates()
 		end,
 	}, {"BindEntity","Failed" })
 
+
+	--[=[
+		@state BindEntity
+		@description On enter, sets `IsBlocking`, sets `CanAnimate`, sets `IsStunned`.
+			Transitions:
+			- `ApplyLoadout` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: sets `IsBlocking`, sets `CanAnimate`, sets `IsStunned`, sets `IsKnocked`, sets `CanMove`.
+	]=]
 
 	self:AddState("BindEntity", {
 		OnEnter = function(_, fsm)
@@ -82,6 +115,14 @@ function SpawnCharacterJob:RegisterStates()
 		end,
 	}, {"ApplyLoadout","Failed" })
 
+
+	--[=[
+		@state ApplyLoadout
+		@description On enter, writes to the log.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: writes to the log.
+	]=]
 
 	self:AddState("ApplyLoadout", {
 		OnEnter = function(_, fsm)

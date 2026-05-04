@@ -11,6 +11,11 @@ local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
 local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
 
+--[=[
+	@module MeleeAttackJob
+	@description Executes unarmed combo attacks by spending stamina, playing attack phases, scanning victims, and spawning per-target damage jobs.
+]=]
+
 local MeleeAttackJob = {
 	Name = "MeleeAttackJob",
 	className = "MeleeAttackJob",
@@ -81,9 +86,25 @@ local MELEE_SEQUENCES = {
 	},
 }
 
+--[=[
+	@description Helper for the append animation intent step used by this state machine.
+	@param orchestrator any -- Input consumed by `appendAnimationIntent`.
+	@param charEntity any -- Input consumed by `appendAnimationIntent`.
+	@param fsm any -- Input consumed by `appendAnimationIntent`.
+	@param phase any -- Input consumed by `appendAnimationIntent`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function appendAnimationIntent(orchestrator: any, charEntity: any, fsm: any, phase: any)
 	IntentHelpers.appendIntent(orchestrator, charEntity,"Animation", { Name = phase.Name, Speed = phase.Speed, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
 end
+
+--[=[
+	@description Helper for the emit due animation phases step used by this state machine.
+	@param fsm any -- Input consumed by `emitDueAnimationPhases`.
+	@param elapsed any -- Input consumed by `emitDueAnimationPhases`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function emitDueAnimationPhases(fsm: any, elapsed: number)
 	local phases = fsm.Context._phases
@@ -104,15 +125,30 @@ local function emitDueAnimationPhases(fsm: any, elapsed: number)
 		if typeof(phase) == "table" then
 			appendAnimationIntent(fsm:GetOrchestrator(), charEntity, fsm, phase)
 		end
-		nextPhaseIndex + = 1
+		nextPhaseIndex += 1
 	end
 
 	fsm.Context._nextPhaseIndex = nextPhaseIndex
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `MeleeAttackJob`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function MeleeAttackJob:RegisterStates()
 
+
+	--[=[
+		@state Validate
+		@description Validates the required runtime context and prerequisites, then captures the lock or blocking state needed for the next step.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			- `AcquireLock` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context._charEntity`, stores `Context._staminaCost`, stores `Context._character`, stores `Context._humanoid`, stores `Context._root`.
+	]=]
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -173,6 +209,15 @@ function MeleeAttackJob:RegisterStates()
 	}, {"AcquireLock","Completed","Failed" })
 
 
+	--[=[
+		@state AcquireLock
+		@description Captures the lock or blocking state needed for the next step.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			- `ValidateStamina` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._lockHeld`, sets `_lockHeld`.
+	]=]
+
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
@@ -185,6 +230,14 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"ValidateStamina","Completed","Failed" })
 
+
+	--[=[
+		@state ValidateStamina
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `DeductStamina` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
 
 	self:AddState("ValidateStamina", {
 		OnEnter = function(_, fsm)
@@ -199,6 +252,14 @@ function MeleeAttackJob:RegisterStates()
 	}, {"DeductStamina","ReleaseLock" })
 
 
+	--[=[
+		@state DeductStamina
+		@description On enter, replicates entity changes.
+			Transitions:
+			- `ResolveSequence` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: replicates entity changes.
+	]=]
+
 	self:AddState("DeductStamina", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
@@ -212,6 +273,14 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"ResolveSequence" })
 
+
+	--[=[
+		@state ResolveSequence
+		@description Resolves the data needed for the `ResolveSequence` step.
+			Transitions:
+			- `EmitPhaseAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._damage`, stores `Context._phases`, stores `Context._phaseStartTimes`, stores `Context._nextPhaseIndex`, stores `Context._attackDuration`.
+	]=]
 
 	self:AddState("ResolveSequence", {
 		OnEnter = function(_, fsm)
@@ -245,7 +314,7 @@ function MeleeAttackJob:RegisterStates()
 			local totalDuration = 0
 			for index, phase in ipairs(phases) do
 				phaseStartTimes[index] = totalDuration
-				totalDuration + = phase.Duration
+				totalDuration += phase.Duration
 			end
 
 			fsm.Context._damage = damage
@@ -258,6 +327,14 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"EmitPhaseAnimation","ReleaseLock" })
 
+
+	--[=[
+		@state EmitPhaseAnimation
+		@description On enter, stores `Context._nextPhaseIndex`, sets `_nextPhaseIndex`.
+			Transitions:
+			- `ScheduleDamageWindow` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._nextPhaseIndex`, sets `_nextPhaseIndex`.
+	]=]
 
 	self:AddState("EmitPhaseAnimation", {
 		OnEnter = function(_, fsm)
@@ -275,6 +352,16 @@ function MeleeAttackJob:RegisterStates()
 	}, {"ScheduleDamageWindow","ReleaseLock" })
 
 
+	--[=[
+		@state ScheduleDamageWindow
+		@description Runs the `schedule damage window` stage of `MeleeAttackJob`.
+			Transitions:
+			- `ScanVictims` when the scheduled transition completes.
+			- `WaitForDamageWindow` when this stage finishes its immediate work or falls through its guard checks.
+			- `ScanVictims` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("ScheduleDamageWindow", {
 		OnEnter = function(_, fsm)
 			local damageScanOffset = fsm.Context._damageScanOffset or 0
@@ -288,12 +375,29 @@ function MeleeAttackJob:RegisterStates()
 	}, {"WaitForDamageWindow","ScanVictims" })
 
 
+	--[=[
+		@state WaitForDamageWindow
+		@description Waits until its scheduled completion or transition condition is met.
+			Transitions:
+			- External transitions allow: `ScanVictims`, `Failed`.
+			Writes: none.
+	]=]
+
 	self:AddState("WaitForDamageWindow", {
 		OnHeartbeat = function(_, fsm)
 			emitDueAnimationPhases(fsm, fsm.StateDuration)
 		end,
 	}, {"ScanVictims","Failed" })
 
+
+	--[=[
+		@state ScanVictims
+		@description On enter, clears `Context._currentVictim`, stores `Context._knockbackDirection`, stores `Context._victims`.
+			Transitions:
+			- `ProcessVictim` when this stage finishes its immediate work or falls through its guard checks.
+			- `WaitForRecovery` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: clears `Context._currentVictim`, stores `Context._knockbackDirection`, stores `Context._victims`, stores `Context._victimIndex`, stores `Context._currentVictim`.
+	]=]
 
 	self:AddState("ScanVictims", {
 		OnEnter = function(_, fsm)
@@ -315,6 +419,15 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"ProcessVictim","WaitForRecovery" })
 
+
+	--[=[
+		@state ProcessVictim
+		@description On enter, stores `Context._currentVictim`, stores `Context._victimIndex`, sets `_currentVictim`.
+			Transitions:
+			- `WaitForRecovery` when this stage finishes its immediate work or falls through its guard checks.
+			- `ApplyKnockback` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._currentVictim`, stores `Context._victimIndex`, sets `_currentVictim`, sets `_victimIndex`.
+	]=]
 
 	self:AddState("ProcessVictim", {
 		OnEnter = function(_, fsm)
@@ -355,6 +468,15 @@ function MeleeAttackJob:RegisterStates()
 	}, {"ApplyKnockback","WaitForRecovery" })
 
 
+	--[=[
+		@state ApplyKnockback
+		@description On enter, sets `AssemblyLinearVelocity`.
+			Transitions:
+			- `ProcessVictim` when this stage finishes its immediate work or falls through its guard checks.
+			- `WaitForRecovery` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: sets `AssemblyLinearVelocity`.
+	]=]
+
 	self:AddState("ApplyKnockback", {
 		OnEnter = function(_, fsm)
 			local victim = fsm.Context._currentVictim
@@ -376,6 +498,15 @@ function MeleeAttackJob:RegisterStates()
 	}, {"ProcessVictim","WaitForRecovery" })
 
 
+	--[=[
+		@state WaitForRecovery
+		@description Waits until its scheduled completion or transition condition is met.
+			Transitions:
+			- `ReleaseLock` when the scheduled transition completes.
+			- `ReleaseLock` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("WaitForRecovery", {
 		OnEnter = function(_, fsm)
 			local totalDuration = fsm.Context._attackDuration or 0
@@ -393,6 +524,15 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"ReleaseLock","Failed" })
 
+
+	--[=[
+		@state ReleaseLock
+		@description On enter, stores `Context._lockHeld`, stores `Context._releaseTargetState`, sets `_lockHeld`.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context._lockHeld`, stores `Context._releaseTargetState`, sets `_lockHeld`, sets `_releaseTargetState`.
+	]=]
 
 	self:AddState("ReleaseLock", {
 		OnEnter = function(_, fsm)

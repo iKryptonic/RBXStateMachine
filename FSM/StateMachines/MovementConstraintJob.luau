@@ -6,6 +6,11 @@ local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Par
 assert(Helpers,"Helpers folder not found")
 local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
 
+--[=[
+	@module MovementConstraintJob
+	@description Applies a temporary movement patch to a character entity and restores the prior values when the duration expires or cleanup runs.
+]=]
+
 local MovementConstraintJob = {
 	Name = "MovementConstraintJob",
 	className = "MovementConstraintJob",
@@ -15,8 +20,22 @@ local MovementConstraintJob = {
 }
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `MovementConstraintJob`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function MovementConstraintJob:RegisterStates()
 
+
+	--[=[
+		@state Validate
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `SnapshotPrior` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -41,6 +60,14 @@ function MovementConstraintJob:RegisterStates()
 	}, {"SnapshotPrior","Failed" })
 
 
+	--[=[
+		@state SnapshotPrior
+		@description Runs the `snapshot prior` stage of `MovementConstraintJob`.
+			Transitions:
+			- `ApplyPatch` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("SnapshotPrior", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
@@ -53,6 +80,14 @@ function MovementConstraintJob:RegisterStates()
 		end,
 	}, {"ApplyPatch","Failed" })
 
+
+	--[=[
+		@state ApplyPatch
+		@description On enter, sets `CanMove`, sets `MoveSpeedCap`, sets `MouseLocked`.
+			Transitions:
+			- `WaitDuration` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: sets `CanMove`, sets `MoveSpeedCap`, sets `MouseLocked`, replicates entity changes, writes to the log.
+	]=]
 
 	self:AddState("ApplyPatch", {
 		OnEnter = function(_, fsm)
@@ -81,12 +116,28 @@ function MovementConstraintJob:RegisterStates()
 	}, {"WaitDuration","Failed" })
 
 
+	--[=[
+		@state WaitDuration
+		@description Waits until its scheduled completion or transition condition is met.
+			Transitions:
+			- External transitions allow: `RevertPatch`, `Failed`.
+			Writes: none.
+	]=]
+
 	self:AddState("WaitDuration", {
 		OnEnter = function(_, fsm)
 			StateTransitionHelpers.scheduleTransitionCompat(fsm, fsm.Duration,"RevertPatch","WaitDuration")
 		end,
 	}, {"RevertPatch","Failed" })
 
+
+	--[=[
+		@state RevertPatch
+		@description On enter, sets `CanMove`, sets `MoveSpeedCap`, sets `MouseLocked`.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: sets `CanMove`, sets `MoveSpeedCap`, sets `MouseLocked`, replicates entity changes.
+	]=]
 
 	self:AddState("RevertPatch", {
 		OnEnter = function(_, fsm)
@@ -108,6 +159,11 @@ function MovementConstraintJob:RegisterStates()
 	}, {"Completed","Failed" })
 end
 
+
+--[=[
+	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
 
 function MovementConstraintJob:OnCleanup()
 	if not self._patchApplied then

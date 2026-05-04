@@ -30,7 +30,7 @@ local EntityRegistry = require(findModule("EntityRegistry", {"FSM","RBXStateMach
 local function countKeys(tbl)
 	local count = 0
 	for _ in pairs(tbl) do
-		count + = 1
+		count += 1
 	end
 	return count
 end

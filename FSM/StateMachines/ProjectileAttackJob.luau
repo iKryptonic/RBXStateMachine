@@ -14,6 +14,11 @@ local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
 local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
 
+--[=[
+	@module ProjectileAttackJob
+	@description Validates projectile attack requests, spawns projectile state, and routes impacts into downstream damage handling.
+]=]
+
 local ProjectileAttackJob = {
 	Name = "ProjectileAttackJob",
 	className = "ProjectileAttackJob",
@@ -47,6 +52,12 @@ local DEFAULT_PROJECTILE_DAMAGE = 20
 local DEFAULT_CHARGE_TIME = 0.3
 local DEFAULT_GRAVITY = Vector3.new(0, -30, 0)
 
+--[=[
+	@description Returns the item data used by this state machine when it can be resolved.
+	@param weaponId any -- Input consumed by `getItemData`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getItemData(weaponId: string): any?
 	local RS = game:GetService("ReplicatedStorage")
 	local assets = RS:FindFirstChild("Assets")
@@ -65,6 +76,12 @@ local function getItemData(weaponId: string): any?
 	return if ok then data else nil
 end
 
+--[=[
+	@description Returns the projectile template used by this state machine when it can be resolved.
+	@param weaponId any -- Input consumed by `getProjectileTemplate`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getProjectileTemplate(weaponId: string): BasePart?
 	local RS = game:GetService("ReplicatedStorage")
 	local assets = RS:FindFirstChild("Assets")
@@ -80,6 +97,12 @@ local function getProjectileTemplate(weaponId: string): BasePart?
 	end
 	return nil
 end
+
+--[=[
+	@description Helper for the cleanup projectile step used by this state machine.
+	@param fsm any -- Input consumed by `cleanupProjectile`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function cleanupProjectile(fsm: any)
 	local hitConn = fsm.Context._hitConn
@@ -99,6 +122,13 @@ local function cleanupProjectile(fsm: any)
 	fsm.Context._impactResolved = false
 end
 
+--[=[
+	@description Returns the victim entity used by this state machine when it can be resolved.
+	@param orchestrator any -- Input consumed by `getVictimEntity`.
+	@param targetModel any -- Input consumed by `getVictimEntity`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getVictimEntity(orchestrator: any, targetModel: Model): any?
 	local entities = orchestrator.GetEntities and orchestrator.GetEntities() or {}
 	for _, entity in pairs(entities) do
@@ -110,8 +140,22 @@ local function getVictimEntity(orchestrator: any, targetModel: Model): any?
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `ProjectileAttackJob`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function ProjectileAttackJob:RegisterStates()
 
+
+	--[=[
+		@state Validate
+		@description Validates the required runtime context and prerequisites, then captures the lock or blocking state needed for the next step.
+			Transitions:
+			- `AcquireLock` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context._manaCost`, stores `Context._charEntity`, stores `Context._character`, stores `Context._humanoid`, stores `Context._rootPart`.
+	]=]
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -183,6 +227,15 @@ function ProjectileAttackJob:RegisterStates()
 	}, {"AcquireLock","Failed" })
 
 
+	--[=[
+		@state AcquireLock
+		@description Captures the lock or blocking state needed for the next step.
+			Transitions:
+			- `ValidateMana` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context._lockHeld`, sets `_lockHeld`.
+	]=]
+
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
@@ -196,6 +249,14 @@ function ProjectileAttackJob:RegisterStates()
 	}, {"ValidateMana","Failed" })
 
 
+	--[=[
+		@state ValidateMana
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `DeductMana` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("ValidateMana", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
@@ -208,6 +269,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"DeductMana","ReleaseLock" })
 
+
+	--[=[
+		@state DeductMana
+		@description On enter, replicates entity changes.
+			Transitions:
+			- `EmitChargeAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: replicates entity changes.
+	]=]
 
 	self:AddState("DeductMana", {
 		OnEnter = function(_, fsm)
@@ -223,6 +292,14 @@ function ProjectileAttackJob:RegisterStates()
 	}, {"EmitChargeAnimation" })
 
 
+	--[=[
+		@state EmitChargeAnimation
+		@description On enter, emits an intent.
+			Transitions:
+			- `WaitCharge` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: emits an intent.
+	]=]
+
 	self:AddState("EmitChargeAnimation", {
 		OnEnter = function(_, fsm)
 			IntentHelpers.appendIntent(fsm:GetOrchestrator(), fsm.Context._charEntity,"Animation", { Name = "Charge1", Speed = 0.25, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
@@ -230,6 +307,15 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"WaitCharge" })
 
+
+	--[=[
+		@state WaitCharge
+		@description Waits until its scheduled completion or transition condition is met.
+			Transitions:
+			- `ValidateForFire` when the scheduled transition completes.
+			- `ValidateForFire` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
 
 	self:AddState("WaitCharge", {
 		OnEnter = function(_, fsm)
@@ -243,6 +329,14 @@ function ProjectileAttackJob:RegisterStates()
 	}, {"ValidateForFire","Failed" })
 
 
+	--[=[
+		@state ValidateForFire
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `EmitFireAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("ValidateForFire", {
 		OnEnter = function(_, fsm)
 			local rootPart = fsm.Context._rootPart
@@ -255,6 +349,14 @@ function ProjectileAttackJob:RegisterStates()
 	}, {"EmitFireAnimation","ReleaseLock" })
 
 
+	--[=[
+		@state EmitFireAnimation
+		@description On enter, emits an intent.
+			Transitions:
+			- `SpawnProjectile` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: emits an intent.
+	]=]
+
 	self:AddState("EmitFireAnimation", {
 		OnEnter = function(_, fsm)
 			IntentHelpers.appendIntent(fsm:GetOrchestrator(), fsm.Context._charEntity,"Animation", { Name = "Charge2", Speed = 0.5, FadeTime = 0.1 }, fsm.CharacterEntityId, fsm.CharacterEntityId, fsm.Id)
@@ -262,6 +364,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"SpawnProjectile" })
 
+
+	--[=[
+		@state SpawnProjectile
+		@description On enter, stores `Context._projectile`, sets `Shape`, sets `Size`.
+			Transitions:
+			- `ConfigurePhysics` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._projectile`, sets `Shape`, sets `Size`, sets `Color`, sets `Material`.
+	]=]
 
 	self:AddState("SpawnProjectile", {
 		OnEnter = function(_, fsm)
@@ -282,6 +392,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"ConfigurePhysics" })
 
+
+	--[=[
+		@state ConfigurePhysics
+		@description On enter, sets `CFrame`, sets `Anchored`, sets `CanCollide`.
+			Transitions:
+			- `RegisterHitDetection` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: sets `CFrame`, sets `Anchored`, sets `CanCollide`, sets `CanQuery`, sets `CanTouch`.
+	]=]
 
 	self:AddState("ConfigurePhysics", {
 		OnEnter = function(_, fsm)
@@ -304,6 +422,15 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"RegisterHitDetection","ReleaseLock" })
 
+
+	--[=[
+		@state RegisterHitDetection
+		@description On enter, stores `Context._impactResolved`, stores `Context._hitData`, stores `Context._hitConn`.
+			Transitions:
+			- `ProcessHit` when this stage finishes its immediate work or falls through its guard checks.
+			- `WaitForImpact` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._impactResolved`, stores `Context._hitData`, stores `Context._hitConn`, sets `_impactResolved`, sets `_hitData`.
+	]=]
 
 	self:AddState("RegisterHitDetection", {
 		OnEnter = function(_, fsm)
@@ -347,12 +474,28 @@ function ProjectileAttackJob:RegisterStates()
 	}, {"WaitForImpact","ReleaseLock","ProcessHit" })
 
 
+	--[=[
+		@state WaitForImpact
+		@description Waits until its scheduled completion or transition condition is met.
+			Transitions:
+			- `DestroyProjectile` when the scheduled transition completes.
+			Writes: none.
+	]=]
+
 	self:AddState("WaitForImpact", {
 		OnEnter = function(_, fsm)
 			fsm:ScheduleTransition(fsm.Context._lifetime or DEFAULT_PROJECTILE_LIFETIME,"DestroyProjectile")
 		end,
 	}, {"DestroyProjectile","ProcessHit" })
 
+
+	--[=[
+		@state ProcessHit
+		@description Runs the `process hit` stage of `ProjectileAttackJob`.
+			Transitions:
+			- `ApplyProjectileKnockback` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
 
 	self:AddState("ProcessHit", {
 		OnEnter = function(_, fsm)
@@ -373,6 +516,14 @@ function ProjectileAttackJob:RegisterStates()
 	}, {"ApplyProjectileKnockback" })
 
 
+	--[=[
+		@state ApplyProjectileKnockback
+		@description Runs the `apply projectile knockback` stage of `ProjectileAttackJob`.
+			Transitions:
+			- `DestroyProjectile` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("ApplyProjectileKnockback", {
 		OnEnter = function(_, fsm)
 			local hitData = fsm.Context._hitData
@@ -389,12 +540,20 @@ function ProjectileAttackJob:RegisterStates()
 						knockDir = rootPart.CFrame.LookVector
 					end
 				end
-				victimRoot.AssemblyLinearVelocity + = knockDir * 30 + Vector3.new(0, 10, 0)
+				victimRoot.AssemblyLinearVelocity += knockDir * 30 + Vector3.new(0, 10, 0)
 			end
 			fsm.State = "DestroyProjectile"
 		end,
 	}, {"DestroyProjectile" })
 
+
+	--[=[
+		@state DestroyProjectile
+		@description Runs the `destroy projectile` stage of `ProjectileAttackJob`.
+			Transitions:
+			- `ReleaseLock` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
 
 	self:AddState("DestroyProjectile", {
 		OnEnter = function(_, fsm)
@@ -403,6 +562,15 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"ReleaseLock" })
 
+
+	--[=[
+		@state ReleaseLock
+		@description On enter, stores `Context._lockHeld`, stores `Context._releaseTargetState`, sets `_lockHeld`.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context._lockHeld`, stores `Context._releaseTargetState`, sets `_lockHeld`, sets `_releaseTargetState`.
+	]=]
 
 	self:AddState("ReleaseLock", {
 		OnEnter = function(_, fsm)
@@ -437,6 +605,11 @@ function ProjectileAttackJob:RegisterStates()
 	self:AddState("Failed", function() end, {})
 end
 
+
+--[=[
+	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
 
 function ProjectileAttackJob:OnCleanup()
 	cleanupProjectile(self)

@@ -7,6 +7,11 @@ local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Par
 assert(Helpers,"Helpers folder not found")
 local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 
+--[=[
+	@module DashFSM
+	@description Executes the local dash flow from validation and stamina spend through impulse, animation, overlay, active frames, and cooldown.
+]=]
+
 local DashFSM = {
 	Name = "DashFSM",
 	className = "DashFSM",
@@ -43,9 +48,21 @@ local DIRECTION_MAP = {
 	D = "DashRight",
 }
 
+--[=[
+	@description Returns the character entity used by this state machine when it can be resolved.
+	@param fsm any -- Input consumed by `getCharacterEntity`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getCharacterEntity(fsm: any): any?
 	return fsm:GetEntity(fsm.CharacterEntityId)
 end
+
+--[=[
+	@description Returns the root part used by this state machine when it can be resolved.
+	@param fsm any -- Input consumed by `getRootPart`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function getRootPart(fsm: any): BasePart?
 	local charEntity = getCharacterEntity(fsm)
@@ -61,6 +78,13 @@ local function getRootPart(fsm: any): BasePart?
 	end
 	return nil
 end
+
+--[=[
+	@description Returns the impulse direction used by this state machine when it can be resolved.
+	@param rootPart any -- Input consumed by `getImpulseDirection`.
+	@param direction any -- Input consumed by `getImpulseDirection`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function getImpulseDirection(rootPart: BasePart, direction: string): Vector3?
 	local lookVector = rootPart.CFrame.LookVector
@@ -78,8 +102,21 @@ local function getImpulseDirection(rootPart: BasePart, direction: string): Vecto
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `DashFSM`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function DashFSM:RegisterStates()
 
+
+	--[=[
+		@state Ready
+		@description On enter, clears `Context._dashDirection`, clears `Context._charEntity`, clears `Context._rootPart`.
+			Transitions:
+			- External transitions allow: `ValidateDash`.
+			Writes: clears `Context._dashDirection`, clears `Context._charEntity`, clears `Context._rootPart`, stores `Context._dashDirection`, stores `Context._charEntity`.
+	]=]
 
 	self:AddState("Ready", {
 		OnEnter = function(_, fsm)
@@ -89,6 +126,15 @@ function DashFSM:RegisterStates()
 		end,
 	}, {"ValidateDash" })
 
+
+	--[=[
+		@state ValidateDash
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `Ready` when this stage finishes its immediate work or falls through its guard checks.
+			- `ValidateStamina` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._charEntity`, stores `Context._rootPart`, sets `_charEntity`, sets `_rootPart`.
+	]=]
 
 	self:AddState("ValidateDash", {
 		OnEnter = function(_, fsm)
@@ -107,6 +153,15 @@ function DashFSM:RegisterStates()
 	}, {"ValidateStamina","Ready" })
 
 
+	--[=[
+		@state ValidateStamina
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `Ready` when this stage finishes its immediate work or falls through its guard checks.
+			- `DeductStamina` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("ValidateStamina", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity or getCharacterEntity(fsm)
@@ -119,6 +174,15 @@ function DashFSM:RegisterStates()
 		end,
 	}, {"DeductStamina","Ready" })
 
+
+	--[=[
+		@state DeductStamina
+		@description On enter, replicates entity changes.
+			Transitions:
+			- `Ready` when this stage finishes its immediate work or falls through its guard checks.
+			- `ApplyImpulse` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: replicates entity changes.
+	]=]
 
 	self:AddState("DeductStamina", {
 		OnEnter = function(_, fsm)
@@ -139,6 +203,15 @@ function DashFSM:RegisterStates()
 		end,
 	}, {"ApplyImpulse","Ready" })
 
+
+	--[=[
+		@state ApplyImpulse
+		@description Runs the `apply impulse` stage of `DashFSM`.
+			Transitions:
+			- `Ready` when this stage finishes its immediate work or falls through its guard checks.
+			- `PlaySound` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
 
 	self:AddState("ApplyImpulse", {
 		OnEnter = function(_, fsm)
@@ -166,6 +239,14 @@ function DashFSM:RegisterStates()
 	}, {"PlaySound","Ready" })
 
 
+	--[=[
+		@state PlaySound
+		@description Runs the `play sound` stage of `DashFSM`.
+			Transitions:
+			- `TriggerAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("PlaySound", {
 		OnEnter = function(_, fsm)
 			local rootPart = fsm.Context._rootPart
@@ -182,6 +263,14 @@ function DashFSM:RegisterStates()
 	}, {"TriggerAnimation" })
 
 
+	--[=[
+		@state TriggerAnimation
+		@description Runs the `trigger animation` stage of `DashFSM`.
+			Transitions:
+			- `WriteOverlay` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("TriggerAnimation", {
 		OnEnter = function(_, fsm)
 			local direction = fsm.Context._dashDirection
@@ -194,6 +283,15 @@ function DashFSM:RegisterStates()
 		end,
 	}, {"WriteOverlay" })
 
+
+	--[=[
+		@state WriteOverlay
+		@description On enter, sets `ActionOverlay`.
+			Transitions:
+			- `Ready` when this stage finishes its immediate work or falls through its guard checks.
+			- `DashActive` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: sets `ActionOverlay`.
+	]=]
 
 	self:AddState("WriteOverlay", {
 		OnEnter = function(_, fsm)
@@ -210,12 +308,28 @@ function DashFSM:RegisterStates()
 	}, {"DashActive","Ready" })
 
 
+	--[=[
+		@state DashActive
+		@description Runs the `dash active` stage of `DashFSM`.
+			Transitions:
+			- `ClearOverlay` when the scheduled transition completes.
+			Writes: none.
+	]=]
+
 	self:AddState("DashActive", {
 		OnEnter = function(_, fsm)
 			fsm:ScheduleTransition(ACTIVE_DURATION,"ClearOverlay")
 		end,
 	}, {"ClearOverlay" })
 
+
+	--[=[
+		@state ClearOverlay
+		@description On enter, sets `ActionOverlay`.
+			Transitions:
+			- `Cooldown` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: sets `ActionOverlay`.
+	]=]
 
 	self:AddState("ClearOverlay", {
 		OnEnter = function(_, fsm)
@@ -227,6 +341,14 @@ function DashFSM:RegisterStates()
 		end,
 	}, {"Cooldown" })
 
+
+	--[=[
+		@state Cooldown
+		@description Arms the cooldown window before returning control.
+			Transitions:
+			- `Ready` when the scheduled transition completes.
+			Writes: none.
+	]=]
 
 	self:AddState("Cooldown", {
 		OnEnter = function(_, fsm)
@@ -251,6 +373,13 @@ function DashFSM:RegisterStates()
 	self:AddState("Failed", function() end, {})
 end
 
+
+--[=[
+	@description Public helper for `DashFSM.TryDash`.
+	@param fsm any -- Value consumed by `TryDash`.
+	@param direction any -- Value consumed by `TryDash`.
+	@return boolean -- True when the requested transition or action was accepted.
+]=]
 
 function DashFSM.TryDash(fsm: any, direction: string): boolean
 	if fsm.State ~= "Ready" then

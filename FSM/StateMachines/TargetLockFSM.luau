@@ -7,6 +7,11 @@ local Workspace = game:GetService("Workspace")
 local MAX_LOCK_DISTANCE = 50
 local BREAK_LOCK_DISTANCE = 60
 
+--[=[
+	@module TargetLockFSM
+	@description Controls target-lock acquisition, maintenance, and release for character combat targeting.
+]=]
+
 local TargetLockFSM = {
 	Name = "TargetLockFSM",
 	className = "TargetLockFSM",
@@ -20,6 +25,12 @@ local TargetLockFSM = {
 	terminalStates = {"Completed","Failed" },
 	initialState = "Idle",
 }
+
+--[=[
+	@description Returns the entity id used by this state machine when it can be resolved.
+	@param entity any -- Input consumed by `getEntityId`.
+	@return string -- Resolved string value used by the FSM.
+]=]
 
 local function getEntityId(entity: any): string?
 	local entityId = entity and entity.EntityId
@@ -35,6 +46,15 @@ local function getEntityId(entity: any): string?
 	return nil
 end
 
+--[=[
+	@description Returns the target parts used by this state machine when it can be resolved.
+	@param player any -- Input consumed by `getTargetParts`.
+	@param entity any -- Input consumed by `getTargetParts`.
+	@param Humanoid? any -- Input consumed by `getTargetParts`.
+	@param BasePart? any -- Input consumed by `getTargetParts`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getTargetParts(player: Player, entity: any): (Model?, Humanoid?, BasePart?)
 	local character = entity and entity.Instance
 	if not character or character == player.Character or not character:IsA("Model") or not character.Parent then
@@ -49,6 +69,12 @@ local function getTargetParts(player: Player, entity: any): (Model?, Humanoid?, 
 end
 
 -- Indicator management (module-level helpers operating on FSM context)
+--[=[
+	@description Helper for the destroy indicator step used by this state machine.
+	@param fsm any -- Input consumed by `destroyIndicator`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function destroyIndicator(fsm: any)
 	local indicator = fsm.Context._indicator
 	if indicator then
@@ -58,6 +84,13 @@ local function destroyIndicator(fsm: any)
 		fsm.Context._indicatorAdornee = nil
 	end
 end
+
+--[=[
+	@description Helper for the ensure indicator step used by this state machine.
+	@param fsm any -- Input consumed by `ensureIndicator`.
+	@param targetCharacter any -- Input consumed by `ensureIndicator`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function ensureIndicator(fsm: any, targetCharacter: Model)
 	local adornPart = targetCharacter:FindFirstChild("Head")
@@ -100,8 +133,21 @@ local function ensureIndicator(fsm: any, targetCharacter: Model)
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `TargetLockFSM`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function TargetLockFSM:RegisterStates()
 
+
+	--[=[
+		@state Idle
+		@description On enter, stores `Context._targetEntityId`, sets `TargetEntityId`, sets `_targetEntityId`.
+			Transitions:
+			- External transitions allow: `Scanning`, `Completed`.
+			Writes: stores `Context._targetEntityId`, sets `TargetEntityId`, sets `_targetEntityId`.
+	]=]
 
 	self:AddState("Idle", {
 		OnEnter = function(_, fsm)
@@ -117,6 +163,15 @@ function TargetLockFSM:RegisterStates()
 		end,
 	}, {"Scanning","Completed" })
 
+
+	--[=[
+		@state Scanning
+		@description On enter, stores `Context._targetEntityId`, sets `_targetEntityId`, sets `TargetEntityId`.
+			Transitions:
+			- `Idle` when this stage finishes its immediate work or falls through its guard checks.
+			- `Locked` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._targetEntityId`, sets `_targetEntityId`, sets `TargetEntityId`.
+	]=]
 
 	self:AddState("Scanning", {
 		OnEnter = function(_, fsm)
@@ -192,6 +247,14 @@ function TargetLockFSM:RegisterStates()
 	}, {"Locked","Idle" })
 
 
+	--[=[
+		@state Locked
+		@description Runs the `locked` stage of `TargetLockFSM`.
+			Transitions:
+			- `Idle` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("Locked", {
 		OnEnter = function(_, _fsm)
 			-- Target is set, indicator is showing. OnHeartbeat handles validation.
@@ -256,6 +319,12 @@ function TargetLockFSM:RegisterStates()
 end
 
 
+--[=[
+	@description Flips between the two supported runtime modes and returns the resulting state name.
+	@param fsm any -- Value consumed by `ToggleLock`.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
+
 function TargetLockFSM.ToggleLock(fsm: any)
 	if fsm.State == "Locked" then
 		fsm.State = "Idle"
@@ -264,6 +333,12 @@ function TargetLockFSM.ToggleLock(fsm: any)
 	end
 end
 
+
+--[=[
+	@description Public helper for `TargetLockFSM.GetTarget`.
+	@param fsm any -- Value consumed by `GetTarget`.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
 
 function TargetLockFSM.GetTarget(fsm: any): any?
 	local targetEntityId = fsm.Context._targetEntityId
@@ -275,6 +350,12 @@ function TargetLockFSM.GetTarget(fsm: any): any?
 	return orchestrator.GetEntity(targetEntityId)
 end
 
+
+--[=[
+	@description Returns whether the FSM is currently in the `Locked` branch.
+	@param fsm any -- Value consumed by `IsLocked`.
+	@return boolean -- True when the requested transition or action was accepted.
+]=]
 
 function TargetLockFSM.IsLocked(fsm: any): boolean
 	return fsm.State == "Locked"

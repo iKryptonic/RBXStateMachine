@@ -3,6 +3,11 @@
 
 local HttpService = game:GetService("HttpService")
 
+--[=[
+	@module ToggleWeaponJob
+	@description Routes a weapon toggle request to the appropriate equip or unequip workflow based on current character state.
+]=]
+
 local ToggleWeaponJob = {
 	Name = "ToggleWeaponJob",
 	className = "ToggleWeaponJob",
@@ -10,6 +15,11 @@ local ToggleWeaponJob = {
 	terminalStates = {"Completed","Failed" },
 	initialState = "Validate",
 }
+
+--[=[
+	@description Helper for the begin child job step used by this state machine.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function beginChildJob(
 	fsm: any,
@@ -68,8 +78,22 @@ local function beginChildJob(
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `ToggleWeaponJob`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function ToggleWeaponJob:RegisterStates()
 
+
+	--[=[
+		@state Validate
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `ResolveCurrentState` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -107,6 +131,14 @@ function ToggleWeaponJob:RegisterStates()
 		end,
 	}, {"ResolveCurrentState","Failed" })
 
+
+	--[=[
+		@state ResolveCurrentState
+		@description Resolves the data needed for the `ResolveCurrentState` step.
+			Transitions:
+			- `ChooseBranch` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
 
 	self:AddState("ResolveCurrentState", {
 		OnEnter = function(_, fsm)
@@ -146,6 +178,16 @@ function ToggleWeaponJob:RegisterStates()
 	}, {"ChooseBranch","Failed" })
 
 
+	--[=[
+		@state ChooseBranch
+		@description Runs the `choose branch` stage of `ToggleWeaponJob`.
+			Transitions:
+			- `RunUnEquip` when this stage finishes its immediate work or falls through its guard checks.
+			- `RunEquip` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
+
 	self:AddState("ChooseBranch", {
 		OnEnter = function(_, fsm)
 			if fsm.IsEquipped then
@@ -171,6 +213,14 @@ function ToggleWeaponJob:RegisterStates()
 	}, {"RunEquip","RunUnEquip","Failed" })
 
 
+	--[=[
+		@state RunEquip
+		@description Runs the `run equip` stage of `ToggleWeaponJob`.
+			Transitions:
+			- External transitions allow: `Completed`, `Failed`.
+			Writes: none.
+	]=]
+
 	self:AddState("RunEquip", {
 		OnEnter = function(_, fsm)
 			beginChildJob(fsm, fsm:GetOrchestrator(),"RunEquip","EquipJob","ValidateRequest", {
@@ -182,6 +232,14 @@ function ToggleWeaponJob:RegisterStates()
 		end,
 	}, {"Completed","Failed" })
 
+
+	--[=[
+		@state RunUnEquip
+		@description Runs the `run un equip` stage of `ToggleWeaponJob`.
+			Transitions:
+			- External transitions allow: `Completed`, `Failed`.
+			Writes: none.
+	]=]
 
 	self:AddState("RunUnEquip", {
 		OnEnter = function(_, fsm)

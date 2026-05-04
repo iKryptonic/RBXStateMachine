@@ -11,6 +11,11 @@ local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
 local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
 local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 
+--[=[
+	@module AbilityComboFSM
+	@description Validates and executes multi-step ability combos, spending mana, emitting animation intents, advancing combo steps, and recording cooldowns.
+]=]
+
 local AbilityComboFSM = {
 	Name = "AbilityComboFSM",
 	className = "AbilityComboFSM",
@@ -30,9 +35,22 @@ local AbilityComboFSM = {
 	initialState = "ValidateAbility",
 }
 
+--[=[
+	@description Returns the ability combos defs used by this state machine when it can be resolved.
+	@param orchestrator any -- Input consumed by `getAbilityCombosDefs`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getAbilityCombosDefs(orchestrator: any)
 	return ModuleLoader.requireSharedModule(orchestrator,"AbilityCombosDefs")
 end
+
+--[=[
+	@description Returns the entities used by this state machine when it can be resolved.
+	@param fsm any -- Input consumed by `getEntities`.
+	@param any? any -- Input consumed by `getEntities`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function getEntities(fsm: any): (any?, any?)
 	local orchestrator = fsm:GetOrchestrator()
@@ -41,6 +59,13 @@ local function getEntities(fsm: any): (any?, any?)
 	end
 	return orchestrator.GetEntity(fsm.CharacterEntityId), orchestrator.GetEntity(fsm.PlayerEntityId)
 end
+
+--[=[
+	@description Helper for the table contains ability step used by this state machine.
+	@param container any -- Input consumed by `tableContainsAbility`.
+	@param abilityId any -- Input consumed by `tableContainsAbility`.
+	@return boolean -- Whether the helper completed successfully.
+]=]
 
 local function tableContainsAbility(container: any, abilityId: string): boolean
 	if typeof(container) ~= "table" then
@@ -56,6 +81,12 @@ local function tableContainsAbility(container: any, abilityId: string): boolean
 	end
 	return false
 end
+
+--[=[
+	@description Resolves weapon type from the current FSM context and available runtime data.
+	@param itemId any -- Input consumed by `resolveWeaponType`.
+	@return string -- Resolved string value used by the FSM.
+]=]
 
 local function resolveWeaponType(itemId: string?): string?
 	if typeof(itemId) ~= "string" or itemId == "" then
@@ -80,6 +111,13 @@ local function resolveWeaponType(itemId: string?): string?
 	return nil
 end
 
+--[=[
+	@description Resolves mana entity from the current FSM context and available runtime data.
+	@param playerEntity any -- Input consumed by `resolveManaEntity`.
+	@param charEntity any -- Input consumed by `resolveManaEntity`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function resolveManaEntity(playerEntity: any, charEntity: any): any?
 	if playerEntity and tonumber(playerEntity.Mana) ~= nil then
 		return playerEntity
@@ -89,6 +127,12 @@ local function resolveManaEntity(playerEntity: any, charEntity: any): any?
 	end
 	return charEntity or playerEntity
 end
+
+--[=[
+	@description Returns the ability def used by this state machine when it can be resolved.
+	@param fsm any -- Input consumed by `getAbilityDef`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function getAbilityDef(fsm: any): any?
 	local cached = fsm.Context._abilityDef
@@ -107,6 +151,13 @@ local function getAbilityDef(fsm: any): any?
 	end
 	return abilityDef
 end
+
+--[=[
+	@description Returns the combo step used by this state machine when it can be resolved.
+	@param fsm any -- Input consumed by `getComboStep`.
+	@param number any -- Input consumed by `getComboStep`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function getComboStep(fsm: any): (any?, number)
 	local abilityDef = getAbilityDef(fsm)
@@ -143,11 +194,32 @@ local function recordCooldown(entity: any, abilityId: string, cooldownEnd: numbe
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `AbilityComboFSM`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function AbilityComboFSM:RegisterStates()
 
 
+	--[=[
+		@state Idle
+		@description Runs the `idle` stage of `AbilityComboFSM`.
+			Transitions:
+			Writes: none.
+	]=]
+
 	self:AddState("Idle", function() end, {"ValidateAbility" })
 
+
+	--[=[
+		@state ValidateAbility
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `CheckMana` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context._abilityDef`, stores `Context._comboStepIndex`, sets `ComboSequence`, sets `_abilityDef`, sets `_comboStepIndex`.
+	]=]
 
 	self:AddState("ValidateAbility", {
 		OnEnter = function(_, fsm)
@@ -214,6 +286,15 @@ function AbilityComboFSM:RegisterStates()
 	}, {"CheckMana","Failed" })
 
 
+	--[=[
+		@state CheckMana
+		@description Runs the `check mana` stage of `AbilityComboFSM`.
+			Transitions:
+			- `DeductMana` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
+
 	self:AddState("CheckMana", {
 		OnEnter = function(_, fsm)
 			local abilityDef = getAbilityDef(fsm)
@@ -237,6 +318,15 @@ function AbilityComboFSM:RegisterStates()
 	}, {"DeductMana","Failed" })
 
 
+	--[=[
+		@state DeductMana
+		@description On enter, replicates entity changes.
+			Transitions:
+			- `PlayComboStep` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: replicates entity changes.
+	]=]
+
 	self:AddState("DeductMana", {
 		OnEnter = function(_, fsm)
 			local abilityDef = getAbilityDef(fsm)
@@ -258,6 +348,15 @@ function AbilityComboFSM:RegisterStates()
 		end,
 	}, {"PlayComboStep","Failed" })
 
+
+	--[=[
+		@state PlayComboStep
+		@description On enter, stores `Context._currentStep`, stores `Context._currentStepIndex`, sets `_currentStep`.
+			Transitions:
+			- `ProcessComboEvents` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context._currentStep`, stores `Context._currentStepIndex`, sets `_currentStep`, sets `_currentStepIndex`, emits an intent.
+	]=]
 
 	self:AddState("PlayComboStep", {
 		OnEnter = function(_, fsm)
@@ -299,6 +398,15 @@ function AbilityComboFSM:RegisterStates()
 	}, {"ProcessComboEvents","Failed" })
 
 
+	--[=[
+		@state ProcessComboEvents
+		@description On enter, writes to the log.
+			Transitions:
+			- `AdvanceStep` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: writes to the log.
+	]=]
+
 	self:AddState("ProcessComboEvents", {
 		OnEnter = function(_, fsm)
 			local step = fsm.Context._currentStep
@@ -326,6 +434,16 @@ function AbilityComboFSM:RegisterStates()
 	}, {"AdvanceStep","Failed" })
 
 
+	--[=[
+		@state AdvanceStep
+		@description On enter, stores `Context._comboStepIndex`, sets `_comboStepIndex`.
+			Transitions:
+			- `PlayComboStep` when this stage finishes its immediate work or falls through its guard checks.
+			- `Cooldown` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context._comboStepIndex`, sets `_comboStepIndex`.
+	]=]
+
 	self:AddState("AdvanceStep", {
 		OnEnter = function(_, fsm)
 			local abilityDef = getAbilityDef(fsm)
@@ -343,6 +461,15 @@ function AbilityComboFSM:RegisterStates()
 		end,
 	}, {"PlayComboStep","Cooldown","Failed" })
 
+
+	--[=[
+		@state Cooldown
+		@description Arms the cooldown window before returning control.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
 
 	self:AddState("Cooldown", {
 		OnEnter = function(_, fsm)

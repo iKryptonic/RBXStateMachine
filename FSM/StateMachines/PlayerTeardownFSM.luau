@@ -1,6 +1,11 @@
 --!strict
 
 
+--[=[
+	@module PlayerTeardownFSM
+	@description Cleans up character-side systems, child FSMs, and entity links when a player character is removed or torn down.
+]=]
+
 local PlayerTeardownFSM = {
 	Name = "PlayerTeardownFSM",
 	className = "PlayerTeardownFSM",
@@ -8,6 +13,12 @@ local PlayerTeardownFSM = {
 	terminalStates = {"Completed","Failed" },
 	initialState = "CancelSMs",
 }
+
+--[=[
+	@description Returns the state machines used by this state machine when it can be resolved.
+	@param orchestrator any -- Input consumed by `getStateMachines`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function getStateMachines(orchestrator: any): { [string]: any }
 	if type(orchestrator.GetStateMachines) == "function" then
@@ -21,6 +32,13 @@ local function getStateMachines(orchestrator: any): { [string]: any }
 
 	return {}
 end
+
+--[=[
+	@description Returns the state machine field used by this state machine when it can be resolved.
+	@param stateMachine any -- Input consumed by `getStateMachineField`.
+	@param key any -- Input consumed by `getStateMachineField`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function getStateMachineField(stateMachine: any, key: string): any
 	local context = stateMachine and stateMachine.Context
@@ -37,6 +55,14 @@ local function getStateMachineField(stateMachine: any, key: string): any
 
 	return nil
 end
+
+--[=[
+	@description Helper for the state machine matches player step used by this state machine.
+	@param fsm any -- Input consumed by `stateMachineMatchesPlayer`.
+	@param candidateId any -- Input consumed by `stateMachineMatchesPlayer`.
+	@param stateMachine any -- Input consumed by `stateMachineMatchesPlayer`.
+	@return boolean -- Whether the helper completed successfully.
+]=]
 
 local function stateMachineMatchesPlayer(fsm: any, candidateId: string, stateMachine: any): boolean
 	if stateMachine == nil then
@@ -82,6 +108,13 @@ local function stateMachineMatchesPlayer(fsm: any, candidateId: string, stateMac
 	return false
 end
 
+--[=[
+	@description Helper for the flush persistent entity step used by this state machine.
+	@param orchestrator any -- Input consumed by `flushPersistentEntity`.
+	@param entity any -- Input consumed by `flushPersistentEntity`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function flushPersistentEntity(orchestrator: any, entity: any)
 	if not entity or not entity._privateProperties then
 		return false
@@ -113,8 +146,21 @@ local function flushPersistentEntity(orchestrator: any, entity: any)
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `PlayerTeardownFSM`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function PlayerTeardownFSM:RegisterStates()
 
+
+	--[=[
+		@state CancelSMs
+		@description On enter, stores `Context._cancelledStateMachineIds`, sets `_cancelledStateMachineIds`, writes to the log.
+			Transitions:
+			- `FlushEntities` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._cancelledStateMachineIds`, sets `_cancelledStateMachineIds`, writes to the log.
+	]=]
 
 	self:AddState("CancelSMs", {
 		OnEnter = function(_, fsm)
@@ -132,7 +178,7 @@ function PlayerTeardownFSM:RegisterStates()
 						end
 					end)
 					if ok then
-						cancelled + = 1
+						cancelled += 1
 						table.insert(cancelledIds, stateMachineId)
 					end
 				end
@@ -153,6 +199,14 @@ function PlayerTeardownFSM:RegisterStates()
 	}, {"FlushEntities","Failed" })
 
 
+	--[=[
+		@state FlushEntities
+		@description On enter, writes to the log.
+			Transitions:
+			- `DeleteEntities` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: writes to the log.
+	]=]
+
 	self:AddState("FlushEntities", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
@@ -163,7 +217,7 @@ function PlayerTeardownFSM:RegisterStates()
 				if typeof(entityId) == "string" and entityId ~= "" then
 					local entity = orchestrator.GetEntity(entityId)
 					if flushPersistentEntity(orchestrator, entity) then
-						flushedCount + = 1
+						flushedCount += 1
 					end
 				end
 			end
@@ -180,6 +234,14 @@ function PlayerTeardownFSM:RegisterStates()
 		end,
 	}, {"DeleteEntities","Failed" })
 
+
+	--[=[
+		@state DeleteEntities
+		@description On enter, writes to the log.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: writes to the log.
+	]=]
 
 	self:AddState("DeleteEntities", {
 		OnEnter = function(_, fsm)

@@ -14,6 +14,11 @@ type RouteConfig = {
 	logPrefix: string,
 }
 
+--[=[
+	@module CrowdControlFSM
+	@description Applies timed crowd-control effects such as stun or knockdown, emits the matching intent, and restores movement when the effect ends.
+]=]
+
 local CrowdControlFSM = {
 	Name = "CrowdControlFSM",
 	className = "CrowdControlFSM",
@@ -33,6 +38,12 @@ local CrowdControlFSM = {
 	initialState = "Validate",
 }
 
+--[=[
+	@description Resolves route config from the current FSM context and available runtime data.
+	@param operation any -- Input consumed by `resolveRouteConfig`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function resolveRouteConfig(operation: string?): RouteConfig?
 	if operation == "Stun" then
 		return {
@@ -51,6 +62,12 @@ local function resolveRouteConfig(operation: string?): RouteConfig?
 	return nil
 end
 
+--[=[
+	@description Returns the route config used by this state machine when it can be resolved.
+	@param fsm any -- Input consumed by `getRouteConfig`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getRouteConfig(fsm: any): RouteConfig?
 	local context = fsm.Context
 	if typeof(context) == "table" then
@@ -68,13 +85,33 @@ local function getRouteConfig(fsm: any): RouteConfig?
 	return resolveRouteConfig(fsm.Operation)
 end
 
+--[=[
+	@description Returns the operation label used by this state machine when it can be resolved.
+	@param routeConfig any -- Input consumed by `getOperationLabel`.
+	@return string -- Resolved string value used by the FSM.
+]=]
+
 local function getOperationLabel(routeConfig: RouteConfig): string
 	return string.lower(routeConfig.logPrefix)
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `CrowdControlFSM`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function CrowdControlFSM:RegisterStates()
 
+
+	--[=[
+		@state Validate
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `RouteBranch` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -107,6 +144,15 @@ function CrowdControlFSM:RegisterStates()
 	}, {"RouteBranch","Failed" })
 
 
+	--[=[
+		@state RouteBranch
+		@description Runs the `route branch` stage of `CrowdControlFSM`.
+			Transitions:
+			- `AcquireCCLock` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
+
 	self:AddState("RouteBranch", {
 		OnEnter = function(_, fsm)
 			local routeConfig = resolveRouteConfig(fsm.Operation)
@@ -124,6 +170,16 @@ function CrowdControlFSM:RegisterStates()
 		end,
 	}, {"AcquireCCLock","Failed" })
 
+
+	--[=[
+		@state AcquireCCLock
+		@description Runs the `acquire cclock` stage of `CrowdControlFSM`.
+			Transitions:
+			- `ReleaseCCLock` when this stage finishes its immediate work or falls through its guard checks.
+			- `ApplyFlags` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
 
 	self:AddState("AcquireCCLock", {
 		OnEnter = function(_, fsm)
@@ -144,6 +200,14 @@ function CrowdControlFSM:RegisterStates()
 		end,
 	}, {"ApplyFlags","ReleaseCCLock","Failed" })
 
+
+	--[=[
+		@state ApplyFlags
+		@description Runs the `apply flags` stage of `CrowdControlFSM`.
+			Transitions:
+			- `EmitIntent` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
 
 	self:AddState("ApplyFlags", {
 		OnEnter = function(_, fsm)
@@ -167,6 +231,14 @@ function CrowdControlFSM:RegisterStates()
 		end,
 	}, {"EmitIntent","ReleaseCCLock","Failed" })
 
+
+	--[=[
+		@state EmitIntent
+		@description On enter, emits an intent.
+			Transitions:
+			- `WaitDuration` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: emits an intent.
+	]=]
 
 	self:AddState("EmitIntent", {
 		OnEnter = function(_, fsm)
@@ -201,12 +273,28 @@ function CrowdControlFSM:RegisterStates()
 	}, {"WaitDuration","ReleaseCCLock","Failed" })
 
 
+	--[=[
+		@state WaitDuration
+		@description Waits until its scheduled completion or transition condition is met.
+			Transitions:
+			- External transitions allow: `ClearFlags`, `ReleaseCCLock`, `Failed`.
+			Writes: none.
+	]=]
+
 	self:AddState("WaitDuration", {
 		OnEnter = function(_, fsm)
 			StateTransitionHelpers.scheduleTransitionCompat(fsm, fsm.Duration,"ClearFlags","WaitDuration")
 		end,
 	}, {"ClearFlags","ReleaseCCLock","Failed" })
 
+
+	--[=[
+		@state ClearFlags
+		@description Runs the `clear flags` stage of `CrowdControlFSM`.
+			Transitions:
+			- `ReleaseCCLock` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
 
 	self:AddState("ClearFlags", {
 		OnEnter = function(_, fsm)
@@ -231,6 +319,15 @@ function CrowdControlFSM:RegisterStates()
 	}, {"ReleaseCCLock","Failed" })
 
 
+	--[=[
+		@state ReleaseCCLock
+		@description Runs the `release cclock` stage of `CrowdControlFSM`.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
+
 	self:AddState("ReleaseCCLock", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
@@ -250,6 +347,11 @@ function CrowdControlFSM:RegisterStates()
 	}, {"Completed","Failed" })
 end
 
+
+--[=[
+	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
 
 function CrowdControlFSM:OnCleanup()
 	local charEntity = self.CharacterEntity

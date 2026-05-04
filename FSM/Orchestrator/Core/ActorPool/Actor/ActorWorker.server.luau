@@ -44,8 +44,8 @@ Jobs.AggregatePerf = function(input)
 	local sum = 0
 	local n = 0
 	for _, v in ipairs(input.samples) do
-		sum + = v
-		n + = 1
+		sum += v
+		n += 1
 	end
 	return {
 		count = n,

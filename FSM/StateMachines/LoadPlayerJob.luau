@@ -10,6 +10,11 @@ local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
 -- @Author iKrypto
 -- @Description Handles player initialization: creates PlayerEntity (persistent), waits for character, creates CharacterEntity, registers command handlers
 
+--[=[
+	@module LoadPlayerJob
+	@description Creates and initializes player and character entities for a joining player, seeds defaults, and registers gameplay commands.
+]=]
+
 local LoadPlayerJob = {
 	Name = "LoadPlayerJob",
 	className = "LoadPlayerJob",
@@ -45,6 +50,12 @@ local DEFAULT_INVENTORY = {
 local COMMAND_COOLDOWN = 0.4 -- 400ms between commands per player
 local lastCommandTime: { [number]: number } = {} -- userId → os.clock()
 
+--[=[
+	@description Helper for the is rate limited step used by this state machine.
+	@param userId any -- Input consumed by `isRateLimited`.
+	@return boolean -- Whether the helper completed successfully.
+]=]
+
 local function isRateLimited(userId: number): boolean
 	local now = os.clock()
 	local last = lastCommandTime[userId]
@@ -54,6 +65,11 @@ local function isRateLimited(userId: number): boolean
 	lastCommandTime[userId] = now
 	return false
 end
+
+--[=[
+	@description Helper for the register entity command step used by this state machine.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function registerEntityCommand(
 	orchestrator: any,
@@ -66,6 +82,11 @@ local function registerEntityCommand(
 	assert(type(registerCallback) == "function","Orchestrator command registration API is unavailable")
 	registerCallback(entityId, command, handler)
 end
+
+--[=[
+	@description Helper for the create and start state machine step used by this state machine.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function createAndStartStateMachine(
 	orchestrator: any,
@@ -88,6 +109,15 @@ local function createAndStartStateMachine(
 end
 
 -- Initialization helper only: seeds persistent player defaults before behavioral states run.
+--[=[
+	@description Applies the player defaults work needed by the surrounding state flow.
+	@param orchestrator any -- Input consumed by `applyPlayerDefaults`.
+	@param playerEntity any -- Input consumed by `applyPlayerDefaults`.
+	@param player any -- Input consumed by `applyPlayerDefaults`.
+	@param userId any -- Input consumed by `applyPlayerDefaults`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player: Player, userId: number)
 	playerEntity:SetContext("Instance", player)
 	playerEntity:SetContext("OwnerId", tostring(userId))
@@ -211,6 +241,15 @@ local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player:
 end
 
 -- Initialization helper only: seeds character defaults before command registration begins.
+--[=[
+	@description Applies the character defaults work needed by the surrounding state flow.
+	@param charEntity any -- Input consumed by `applyCharacterDefaults`.
+	@param character any -- Input consumed by `applyCharacterDefaults`.
+	@param userId any -- Input consumed by `applyCharacterDefaults`.
+	@param playerEntityId any -- Input consumed by `applyCharacterDefaults`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function applyCharacterDefaults(charEntity: any, character: Model, userId: number, playerEntityId: string)
 	charEntity:SetContext("Instance", character)
 	charEntity:SetContext("OwnerId", tostring(userId))
@@ -318,6 +357,15 @@ local function applyCharacterDefaults(charEntity: any, character: Model, userId:
 	end
 end
 
+--[=[
+	@description Applies the derived character stats work needed by the surrounding state flow.
+	@param orchestrator any -- Input consumed by `applyDerivedCharacterStats`.
+	@param playerEntity any -- Input consumed by `applyDerivedCharacterStats`.
+	@param charEntity any -- Input consumed by `applyDerivedCharacterStats`.
+	@param refillResources any -- Input consumed by `applyDerivedCharacterStats`.
+	@return boolean -- Whether the helper completed successfully.
+]=]
+
 local function applyDerivedCharacterStats(orchestrator: any, playerEntity: any, charEntity: any, refillResources: boolean?): boolean
 	if not playerEntity or not charEntity then
 		return false
@@ -367,11 +415,23 @@ local function applyDerivedCharacterStats(orchestrator: any, playerEntity: any, 
 	return dirty
 end
 
+--[=[
+	@description Returns the command registration context used by this state machine when it can be resolved.
+	@param fsm any -- Input consumed by `getCommandRegistrationContext`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getCommandRegistrationContext(fsm: any)
 	local orchestrator = fsm:GetOrchestrator()
 	local charEntityId = fsm.CharacterEntityId :: string
 	local playerEntityId = fsm.PlayerEntityId :: string
 	local ownerUserId = fsm.UserId :: number
+
+	--[=[
+		@description Helper for the is authorized step used by this state machine.
+		@param player any -- Input consumed by `isAuthorized`.
+		@return boolean -- Whether the helper completed successfully.
+	]=]
 
 	local function isAuthorized(player: Player?): boolean
 		return player ~= nil and player.UserId == ownerUserId
@@ -381,8 +441,21 @@ local function getCommandRegistrationContext(fsm: any)
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `LoadPlayerJob`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function LoadPlayerJob:RegisterStates()
 
+
+	--[=[
+		@state Start
+		@description On enter, writes to the log.
+			Transitions:
+			- `ValidatePlayer` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: writes to the log.
+	]=]
 
 	self:AddState("Start", {
 		OnEnter = function(_, fsm)
@@ -396,6 +469,15 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"ValidatePlayer","Failed" })
 
+
+	--[=[
+		@state ValidatePlayer
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `CreatePlayerEntity` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context.UserId`, sets `UserId`.
+	]=]
 
 	self:AddState("ValidatePlayer", {
 		OnEnter = function(_, fsm)
@@ -415,6 +497,15 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"CreatePlayerEntity","Failed" })
 
+
+	--[=[
+		@state CreatePlayerEntity
+		@description On enter, stores `Context.PlayerEntityId`, sets `PlayerEntityId`.
+			Transitions:
+			- `LoadData` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context.PlayerEntityId`, sets `PlayerEntityId`.
+	]=]
 
 	self:AddState("CreatePlayerEntity", {
 		OnEnter = function(_, fsm)
@@ -450,12 +541,29 @@ function LoadPlayerJob:RegisterStates()
 	}, {"LoadData","Failed" })
 
 
+	--[=[
+		@state LoadData
+		@description Runs the `load data` stage of `LoadPlayerJob`.
+			Transitions:
+			- `AwaitCharacter` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("LoadData", {
 		OnEnter = function(_, fsm)
 			fsm.State = "AwaitCharacter"
 		end,
 	}, {"AwaitCharacter","Failed" })
 
+
+	--[=[
+		@state AwaitCharacter
+		@description On enter, stores `Context.Character`, stores `Context._awaitStart`, sets `Character`.
+			Transitions:
+			- `CreateCharacterEntity` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context.Character`, stores `Context._awaitStart`, sets `Character`, sets `_awaitStart`.
+	]=]
 
 	self:AddState("AwaitCharacter", {
 		OnEnter = function(_, fsm)
@@ -488,6 +596,15 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"CreateCharacterEntity","Failed" })
 
+
+	--[=[
+		@state CreateCharacterEntity
+		@description On enter, stores `Context.CharacterEntityId`, sets `Instance`, sets `CharacterEntityId`.
+			Transitions:
+			- `RegisterCommands` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context.CharacterEntityId`, sets `Instance`, sets `CharacterEntityId`, replicates entity changes.
+	]=]
 
 	self:AddState("CreateCharacterEntity", {
 		OnEnter = function(_, fsm)
@@ -550,12 +667,28 @@ function LoadPlayerJob:RegisterStates()
 	}, {"RegisterCommands","Failed" })
 
 
+	--[=[
+		@state RegisterCommands
+		@description Runs the `register commands` stage of `LoadPlayerJob`.
+			Transitions:
+			- `RegisterCombatCommands` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("RegisterCommands", {
 		OnEnter = function(_, fsm)
 			fsm.State = "RegisterCombatCommands"
 		end,
 	}, {"RegisterCombatCommands","Failed" })
 
+
+	--[=[
+		@state RegisterCombatCommands
+		@description On enter, sets `IsBlocking`, replicates entity changes.
+			Transitions:
+			- `RegisterEquipCommands` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: sets `IsBlocking`, replicates entity changes.
+	]=]
 
 	self:AddState("RegisterCombatCommands", {
 		OnEnter = function(_, fsm)
@@ -664,6 +797,14 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"RegisterEquipCommands","Failed" })
 
+
+	--[=[
+		@state RegisterEquipCommands
+		@description Runs the `register equip commands` stage of `LoadPlayerJob`.
+			Transitions:
+			- `RegisterAbilityCommands` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
 
 	self:AddState("RegisterEquipCommands", {
 		OnEnter = function(_, fsm)
@@ -813,6 +954,14 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"RegisterAbilityCommands","Failed" })
 
+
+	--[=[
+		@state RegisterAbilityCommands
+		@description On enter, sets `Id`, sets `TalentSelections`, sets `UnlockedAbilities`.
+			Transitions:
+			- `RegisterUtilityCommands` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: sets `Id`, sets `TalentSelections`, sets `UnlockedAbilities`, sets `LearnedAbilities`, sets `SkillPoints`.
+	]=]
 
 	self:AddState("RegisterAbilityCommands", {
 		OnEnter = function(_, fsm)
@@ -1044,6 +1193,14 @@ function LoadPlayerJob:RegisterStates()
 	}, {"RegisterUtilityCommands","Failed" })
 
 
+	--[=[
+		@state RegisterUtilityCommands
+		@description Captures the lock or blocking state needed for the next step.
+			Transitions:
+			- `PublishLoaded` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: sets `StatPoints`, sets `SprintIntent`, replicates entity changes.
+	]=]
+
 	self:AddState("RegisterUtilityCommands", {
 		OnEnter = function(_, fsm)
 			local orchestrator, charEntityId, playerEntityId, _, isAuthorized = getCommandRegistrationContext(fsm)
@@ -1182,6 +1339,14 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"PublishLoaded","Failed" })
 
+
+	--[=[
+		@state PublishLoaded
+		@description On enter, writes to the log.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: writes to the log.
+	]=]
 
 	self:AddState("PublishLoaded", {
 		OnEnter = function(_, fsm)

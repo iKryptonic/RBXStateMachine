@@ -1,6 +1,11 @@
 --!strict
 
 
+--[=[
+	@module AnimationStateFSM
+	@description Observes the animation player and mirrors whether the character is idle, on a base loop, playing an action overlay, or blending.
+]=]
+
 local AnimationStateFSM = {
 	Name = "AnimationStateFSM",
 	className = "AnimationStateFSM",
@@ -9,9 +14,22 @@ local AnimationStateFSM = {
 	initialState = "Idle",
 }
 
+--[=[
+	@description Returns the character entity used by this state machine when it can be resolved.
+	@param fsm any -- Input consumed by `getCharacterEntity`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getCharacterEntity(fsm: any): any?
 	return fsm:GetEntity(fsm.CharacterEntityId)
 end
+
+--[=[
+	@description Writes the derived observed state data back onto the active entity or FSM context.
+	@param fsm any -- Input consumed by `writeObservedState`.
+	@param state any -- Input consumed by `writeObservedState`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function writeObservedState(fsm: any, state: string)
 	local charEntity = getCharacterEntity(fsm)
@@ -20,6 +38,12 @@ local function writeObservedState(fsm: any, state: string)
 	end
 	fsm.Context._observedState = state
 end
+
+--[=[
+	@description Resolves observed state from the current FSM context and available runtime data.
+	@param fsm any -- Input consumed by `resolveObservedState`.
+	@return string -- Resolved string value used by the FSM.
+]=]
 
 local function resolveObservedState(fsm: any): string
 	local animationPlayer = fsm.Context.AnimationPlayer
@@ -41,6 +65,12 @@ local function resolveObservedState(fsm: any): string
 	return"Idle"
 end
 
+--[=[
+	@description Synchronizes observed state with the latest derived runtime state.
+	@param fsm any -- Input consumed by `syncObservedState`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function syncObservedState(fsm: any)
 	local desiredState = resolveObservedState(fsm)
 	if desiredState ~= fsm.State then
@@ -49,8 +79,21 @@ local function syncObservedState(fsm: any)
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `AnimationStateFSM`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function AnimationStateFSM:RegisterStates()
 
+
+	--[=[
+		@state Idle
+		@description Writes the observed animation state as `Idle`.
+			Transitions:
+			- External transitions allow: `BaseAnimation`, `ActionOverlay`, `Blending`.
+			Writes: none.
+	]=]
 
 	self:AddState("Idle", {
 		OnEnter = function(_, fsm)
@@ -62,6 +105,14 @@ function AnimationStateFSM:RegisterStates()
 	}, {"BaseAnimation","ActionOverlay","Blending" })
 
 
+	--[=[
+		@state BaseAnimation
+		@description Writes the observed animation state as `BaseAnimation`.
+			Transitions:
+			- External transitions allow: `Idle`, `ActionOverlay`, `Blending`.
+			Writes: none.
+	]=]
+
 	self:AddState("BaseAnimation", {
 		OnEnter = function(_, fsm)
 			writeObservedState(fsm,"BaseAnimation")
@@ -72,6 +123,14 @@ function AnimationStateFSM:RegisterStates()
 	}, {"Idle","ActionOverlay","Blending" })
 
 
+	--[=[
+		@state ActionOverlay
+		@description Writes the observed animation state as `ActionOverlay`.
+			Transitions:
+			- External transitions allow: `Idle`, `BaseAnimation`, `Blending`.
+			Writes: none.
+	]=]
+
 	self:AddState("ActionOverlay", {
 		OnEnter = function(_, fsm)
 			writeObservedState(fsm,"ActionOverlay")
@@ -81,6 +140,14 @@ function AnimationStateFSM:RegisterStates()
 		end,
 	}, {"Idle","BaseAnimation","Blending" })
 
+
+	--[=[
+		@state Blending
+		@description Writes the observed animation state as `Blending`.
+			Transitions:
+			- External transitions allow: `Idle`, `BaseAnimation`, `ActionOverlay`.
+			Writes: none.
+	]=]
 
 	self:AddState("Blending", {
 		OnEnter = function(_, fsm)
@@ -127,6 +194,13 @@ function AnimationStateFSM:RegisterStates()
 	}, {})
 end
 
+
+--[=[
+	@description Marks transient runtime state needed by later heartbeat-driven transitions.
+	@param fsm any -- Value consumed by `MarkBlend`.
+	@param duration any -- Value consumed by `MarkBlend`.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
 
 function AnimationStateFSM.MarkBlend(fsm: any, duration: number?)
 	local seconds = if typeof(duration) == "number" and duration >= 0 then duration else 0.15

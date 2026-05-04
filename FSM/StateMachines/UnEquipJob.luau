@@ -36,6 +36,11 @@ assert(Helpers,"Helpers folder not found")
 local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
 local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
 
+--[=[
+	@module UnEquipJob
+	@description Unequips an item from a character hand, clears attachments, and updates the backing inventory and character state.
+]=]
+
 local UnEquipJob = {
 	Name = "UnEquipJob",
 	className = "UnEquipJob",
@@ -136,8 +141,22 @@ local function ensureEntitiesAlive(fsm): (any?, any?, any?)
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `UnEquipJob`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function UnEquipJob:RegisterStates()
 
+
+--[=[
+	@state ValidateRequest
+	@description Validates the required runtime context and prerequisites.
+		Transitions:
+		- `AcquireEquipLock` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: stores `Context.Hand`, sets `Hand`.
+]=]
 
 self:AddState("ValidateRequest", {
 		OnEnter = function(_, fsm)
@@ -159,6 +178,16 @@ self:AddState("ValidateRequest", {
 		end,
 	}, {"AcquireEquipLock","Failed" })
 
+
+--[=[
+	@state AcquireEquipLock
+	@description On enter, stores `Context._equipLockRetryCount`, stores `Context._equipLockHeld`, sets `_equipLockRetryCount`.
+		Transitions:
+		- `AcquireEquipLock` when this stage finishes its immediate work or falls through its guard checks.
+		- `ResolveExistingItem` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: stores `Context._equipLockRetryCount`, stores `Context._equipLockHeld`, sets `_equipLockRetryCount`, sets `_equipLockHeld`, sets `EquipLock`.
+]=]
 
 self:AddState("AcquireEquipLock", {
 		OnEnter = function(_, fsm)
@@ -192,6 +221,14 @@ self:AddState("AcquireEquipLock", {
 		end,
 	}, {"ResolveExistingItem","Rollback","Failed" })
 
+
+--[=[
+	@state ResolveExistingItem
+	@description Resolves the data needed for the `ResolveExistingItem` step.
+		Transitions:
+		- `DoUnEquip` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: stores `Context._resolvedHandPart`, stores `Context._resolvedWeld`, stores `Context._resolvedItem`, stores `Context._resolvedItemData`, stores `Context._resolvedItemId`.
+]=]
 
 self:AddState("ResolveExistingItem", {
 		OnEnter = function(_, fsm)
@@ -227,6 +264,14 @@ self:AddState("ResolveExistingItem", {
 		end,
 	}, {"DoUnEquip","Rollback","Failed" })
 
+
+--[=[
+	@state DoUnEquip
+	@description On enter, stores `Context._wasStowed`, sets `_wasStowed`, writes to the log.
+		Transitions:
+		- `CommitState` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: stores `Context._wasStowed`, sets `_wasStowed`, writes to the log.
+]=]
 
 self:AddState("DoUnEquip", {
 		OnEnter = function(_, fsm)
@@ -268,6 +313,14 @@ self:AddState("DoUnEquip", {
 		end,
 	}, {"CommitState","Rollback","Failed" })
 
+
+--[=[
+	@state CommitState
+	@description On enter, sets `Equipped`, sets `WeaponEqp`, sets `Inventory`.
+		Transitions:
+		- `EmitIntent` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: sets `Equipped`, sets `WeaponEqp`, sets `Inventory`, replicates entity changes.
+]=]
 
 self:AddState("CommitState", {
 		OnEnter = function(_, fsm)
@@ -315,6 +368,14 @@ self:AddState("CommitState", {
 	}, {"EmitIntent","Rollback","Failed" })
 
 
+--[=[
+	@state EmitIntent
+	@description On enter, emits an intent.
+		Transitions:
+		- `ReleaseEquipLock` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: emits an intent.
+]=]
+
 self:AddState("EmitIntent", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
@@ -337,6 +398,15 @@ self:AddState("EmitIntent", {
 		end,
 	}, {"ReleaseEquipLock","Rollback","Failed" })
 
+
+--[=[
+	@state ReleaseEquipLock
+	@description On enter, stores `Context._equipLockHeld`, sets `EquipLock`, sets `_equipLockHeld`.
+		Transitions:
+		- `Failed` when this stage finishes its immediate work or falls through its guard checks.
+		- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: stores `Context._equipLockHeld`, sets `EquipLock`, sets `_equipLockHeld`, replicates entity changes, writes to the log.
+]=]
 
 self:AddState("ReleaseEquipLock", {
 		OnEnter = function(_, fsm)
@@ -361,6 +431,14 @@ self:AddState("ReleaseEquipLock", {
 		end,
 	}, {"Completed","Failed" })
 
+
+--[=[
+	@state Rollback
+	@description Runs the `rollback` stage of `UnEquipJob`.
+		Transitions:
+		- `ReleaseEquipLock` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: none.
+]=]
 
 self:AddState("Rollback", {
 		OnEnter = function(_, fsm)

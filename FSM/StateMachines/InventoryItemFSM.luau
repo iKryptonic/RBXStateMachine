@@ -7,6 +7,11 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local MAX_INVENTORY_SIZE = 100
 
+--[=[
+	@module InventoryItemFSM
+	@description Handles inventory add, remove, move, and drop flows, including optional unequip work before committing player inventory changes.
+]=]
+
 local InventoryItemFSM = {
 	Name = "InventoryItemFSM",
 	className = "InventoryItemFSM",
@@ -27,6 +32,12 @@ local InventoryItemFSM = {
 -- @reads container
 -- @writes none
 -- Returns a cloned inventory-like container when possible.
+--[=[
+	@description Helper for the clone container step used by this state machine.
+	@param container any -- Input consumed by `cloneContainer`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function cloneContainer(container: any): { any }
 	if typeof(container) == "table" then
 		return table.clone(container)
@@ -40,6 +51,13 @@ end
 -- @reads container
 -- @writes none
 -- Resolves an item id from primitive or table-backed inventory entries.
+--[=[
+	@description Helper for the find item index step used by this state machine.
+	@param container any -- Input consumed by `findItemIndex`.
+	@param itemId any -- Input consumed by `findItemIndex`.
+	@return number -- Numeric value derived for downstream logic.
+]=]
+
 local function findItemIndex(container: any, itemId: string): number?
 	if typeof(container) ~= "table" then
 		return nil
@@ -65,6 +83,12 @@ end
 -- @reads character.PrimaryPart, character descendants
 -- @writes none
 -- Returns the best available root part for item drop positioning.
+--[=[
+	@description Returns the root part used by this state machine when it can be resolved.
+	@param character any -- Input consumed by `getRootPart`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getRootPart(character: Model): BasePart?
 	local rootPart = character:FindFirstChild("HumanoidRootPart")
 	if rootPart and rootPart:IsA("BasePart") then
@@ -78,6 +102,12 @@ end
 -- @reads character root part transform
 -- @writes none
 -- Computes a forward-biased drop position in front of the character.
+--[=[
+	@description Returns the drop cframe used by this state machine when it can be resolved.
+	@param character any -- Input consumed by `getDropCFrame`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getDropCFrame(character: Model): CFrame?
 	local rootPart = getRootPart(character)
 	if not rootPart then
@@ -100,6 +130,12 @@ end
 -- @reads instance descendants
 -- @writes BasePart.CanCollide
 -- Enables collisions on dropped world items.
+--[=[
+	@description Helper for the enable collision step used by this state machine.
+	@param instance any -- Input consumed by `enableCollision`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function enableCollision(instance: Instance)
 	if instance:IsA("BasePart") then
 		instance.CanCollide = true
@@ -117,6 +153,13 @@ end
 -- @reads item hierarchy
 -- @writes item transform
 -- Positions a cloned dropped item using the first viable transform target.
+--[=[
+	@description Helper for the position dropped item step used by this state machine.
+	@param item any -- Input consumed by `positionDroppedItem`.
+	@param targetCFrame any -- Input consumed by `positionDroppedItem`.
+	@return boolean -- Whether the helper completed successfully.
+]=]
+
 local function positionDroppedItem(item: Instance, targetCFrame: CFrame): boolean
 	if item:IsA("Model") then
 		item:PivotTo(targetCFrame)
@@ -142,6 +185,13 @@ end
 -- @reads fsm.Context, orchestrator state machine factory
 -- @writes fsm.Context._activeUnEquipJob, fsm managed cleanup
 -- Spawns and manages the drop-flow UnEquipJob child FSM.
+--[=[
+	@description Helper for the begin unequip job step used by this state machine.
+	@param fsm any -- Input consumed by `beginUnequipJob`.
+	@param hand any -- Input consumed by `beginUnequipJob`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function beginUnequipJob(fsm: any, hand: string)
 	local orchestrator = fsm:GetOrchestrator()
 	local childJob = orchestrator.CreateStateMachine({
@@ -190,8 +240,22 @@ local function beginUnequipJob(fsm: any, hand: string)
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `InventoryItemFSM`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function InventoryItemFSM:RegisterStates()
 
+
+	--[=[
+		@state Validate
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `RouteBranch` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -251,6 +315,17 @@ function InventoryItemFSM:RegisterStates()
 	}, {"RouteBranch","Failed" })
 
 
+	--[=[
+		@state RouteBranch
+		@description Runs the `route branch` stage of `InventoryItemFSM`.
+			Transitions:
+			- `CheckCapacity` when this stage finishes its immediate work or falls through its guard checks.
+			- `FindItem` when this stage finishes its immediate work or falls through its guard checks.
+			- `CheckIfEquipped` when this stage finishes its immediate work or falls through its guard checks.
+			- `ResolveSource` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("RouteBranch", {
 		OnEnter = function(_, fsm)
 			local op = tostring(fsm.Operation or "")
@@ -268,6 +343,15 @@ function InventoryItemFSM:RegisterStates()
 		end,
 	}, {"CheckCapacity","FindItem","CheckIfEquipped","ResolveSource","Failed" })
 
+
+	--[=[
+		@state CheckCapacity
+		@description Runs the `check capacity` stage of `InventoryItemFSM`.
+			Transitions:
+			- `AddToInventory` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
 
 	self:AddState("CheckCapacity", {
 		OnEnter = function(_, fsm)
@@ -290,6 +374,15 @@ function InventoryItemFSM:RegisterStates()
 	}, {"AddToInventory","Failed" })
 
 
+	--[=[
+		@state AddToInventory
+		@description On enter, sets `Inventory`.
+			Transitions:
+			- `Commit` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: sets `Inventory`.
+	]=]
+
 	self:AddState("AddToInventory", {
 		OnEnter = function(_, fsm)
 			local context = fsm.Context
@@ -307,6 +400,15 @@ function InventoryItemFSM:RegisterStates()
 		end,
 	}, {"Commit","Failed" })
 
+
+	--[=[
+		@state FindItem
+		@description Runs the `find item` stage of `InventoryItemFSM`.
+			Transitions:
+			- `RemoveFromInventory` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
 
 	self:AddState("FindItem", {
 		OnEnter = function(_, fsm)
@@ -337,6 +439,16 @@ function InventoryItemFSM:RegisterStates()
 		end,
 	}, {"RemoveFromInventory","Failed" })
 
+
+	--[=[
+		@state RemoveFromInventory
+		@description Runs the `remove from inventory` stage of `InventoryItemFSM`.
+			Transitions:
+			- `SpawnWorldItem` when this stage finishes its immediate work or falls through its guard checks.
+			- `Commit` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
 
 	self:AddState("RemoveFromInventory", {
 		OnEnter = function(_, fsm)
@@ -373,6 +485,15 @@ function InventoryItemFSM:RegisterStates()
 	}, {"Commit","SpawnWorldItem","Failed" })
 
 
+	--[=[
+		@state CheckIfEquipped
+		@description On enter, sets `EquippedRight`, sets `EquippedLeft`.
+			Transitions:
+			- `UnequipIfNeeded` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: sets `EquippedRight`, sets `EquippedLeft`.
+	]=]
+
 	self:AddState("CheckIfEquipped", {
 		OnEnter = function(_, fsm)
 			local context = fsm.Context
@@ -397,6 +518,15 @@ function InventoryItemFSM:RegisterStates()
 	}, {"UnequipIfNeeded","Failed" })
 
 
+	--[=[
+		@state UnequipIfNeeded
+		@description Runs the `unequip if needed` stage of `InventoryItemFSM`.
+			Transitions:
+			- `FindItem` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
+
 	self:AddState("UnequipIfNeeded", {
 		OnEnter = function(_, fsm)
 			local context = fsm.Context
@@ -415,6 +545,15 @@ function InventoryItemFSM:RegisterStates()
 		end,
 	}, {"FindItem","Failed" })
 
+
+	--[=[
+		@state SpawnWorldItem
+		@description On enter, sets `Parent`.
+			Transitions:
+			- `Commit` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: sets `Parent`.
+	]=]
 
 	self:AddState("SpawnWorldItem", {
 		OnEnter = function(_, fsm)
@@ -465,6 +604,15 @@ function InventoryItemFSM:RegisterStates()
 	}, {"Commit","Failed" })
 
 
+	--[=[
+		@state ResolveSource
+		@description Resolves the data needed for the `ResolveSource` step.
+			Transitions:
+			- `MoveItem` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
+
 	self:AddState("ResolveSource", {
 		OnEnter = function(_, fsm)
 			local context = fsm.Context
@@ -497,6 +645,15 @@ function InventoryItemFSM:RegisterStates()
 		end,
 	}, {"MoveItem","Failed" })
 
+
+	--[=[
+		@state MoveItem
+		@description Runs the `move item` stage of `InventoryItemFSM`.
+			Transitions:
+			- `Commit` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
 
 	self:AddState("MoveItem", {
 		OnEnter = function(_, fsm)
@@ -533,6 +690,15 @@ function InventoryItemFSM:RegisterStates()
 		end,
 	}, {"Commit","Failed" })
 
+
+	--[=[
+		@state Commit
+		@description On enter, replicates entity changes, writes to the log.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: replicates entity changes, writes to the log.
+	]=]
 
 	self:AddState("Commit", {
 		OnEnter = function(_, fsm)

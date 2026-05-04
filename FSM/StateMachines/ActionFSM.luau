@@ -1,6 +1,11 @@
 --!strict
 
 
+--[=[
+	@module ActionFSM
+	@description Tracks transient action overlays for a character, including melee phases, dashes, flips, and hit reactions.
+]=]
+
 local ActionFSM = {
 	Name = "ActionFSM",
 	className = "ActionFSM",
@@ -19,6 +24,12 @@ local ActionFSM = {
 	initialState = "None",
 }
 
+--[=[
+	@description Returns the char entity used by this state machine when it can be resolved.
+	@param fsm any -- Input consumed by `getCharEntity`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getCharEntity(fsm: any): any?
 	local orchestrator = (shared :: any).fsm
 	if not orchestrator then
@@ -26,6 +37,13 @@ local function getCharEntity(fsm: any): any?
 	end
 	return orchestrator.GetEntity(fsm.CharacterEntityId)
 end
+
+--[=[
+	@description Writes the derived action overlay data back onto the active entity or FSM context.
+	@param fsm any -- Input consumed by `writeActionOverlay`.
+	@param overlay any -- Input consumed by `writeActionOverlay`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function writeActionOverlay(fsm: any, overlay: string)
 	local charEntity = getCharEntity(fsm)
@@ -35,8 +53,21 @@ local function writeActionOverlay(fsm: any, overlay: string)
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `ActionFSM`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function ActionFSM:RegisterStates()
 
+
+	--[=[
+		@state None
+		@description Writes `ActionOverlay` as `None`.
+			Transitions:
+			- External transitions allow: `MeleeWindup`, `Dashing`, `Flipping`, `HitReact`.
+			Writes: clears `Context._currentMove`, clears `Context._movePhases`, clears `Context._phaseIndex`, stores `Context._currentMove`, stores `Context._movePhases`.
+	]=]
 
 	self:AddState("None", {
 		OnEnter = function(_, fsm)
@@ -47,6 +78,15 @@ function ActionFSM:RegisterStates()
 		end,
 	}, {"MeleeWindup","Dashing","Flipping","HitReact" })
 
+
+	--[=[
+		@state MeleeWindup
+		@description Updates the action overlay.
+			Transitions:
+			- `MeleeStrike` when the nil-second timeout expires.
+			- `None` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._phaseIndex`, sets `_phaseIndex`.
+	]=]
 
 	self:AddState("MeleeWindup", {
 		OnEnter = function(_, fsm)
@@ -69,6 +109,14 @@ function ActionFSM:RegisterStates()
 		OnTimeout = "MeleeStrike",
 	}, {"MeleeStrike","None" })
 
+
+	--[=[
+		@state MeleeStrike
+		@description Updates the action overlay.
+			Transitions:
+			- `MeleeRecovery` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._phaseIndex`, sets `_phaseIndex`.
+	]=]
 
 	self:AddState("MeleeStrike", {
 		OnEnter = function(_, fsm)
@@ -93,6 +141,14 @@ function ActionFSM:RegisterStates()
 	}, {"MeleeRecovery","None" })
 
 
+	--[=[
+		@state MeleeRecovery
+		@description Writes `ActionOverlay` as `Recovery`.
+			Transitions:
+			- `None` when the 0.1-second timeout expires.
+			Writes: none.
+	]=]
+
 	self:AddState("MeleeRecovery", {
 		OnEnter = function(_, fsm)
 			writeActionOverlay(fsm,"Recovery")
@@ -101,6 +157,14 @@ function ActionFSM:RegisterStates()
 		OnTimeout = "None",
 	}, {"None" })
 
+
+	--[=[
+		@state Dashing
+		@description Writes `ActionOverlay` as `Dash_`.
+			Transitions:
+			- `None` when the 0.25-second timeout expires.
+			Writes: none.
+	]=]
 
 	self:AddState("Dashing", {
 		OnEnter = function(_, fsm)
@@ -112,6 +176,14 @@ function ActionFSM:RegisterStates()
 	}, {"None" })
 
 
+	--[=[
+		@state Flipping
+		@description Writes `ActionOverlay` as `Flipping`.
+			Transitions:
+			- `None` when the 0.4-second timeout expires.
+			Writes: none.
+	]=]
+
 	self:AddState("Flipping", {
 		OnEnter = function(_, fsm)
 			writeActionOverlay(fsm,"Flipping")
@@ -120,6 +192,14 @@ function ActionFSM:RegisterStates()
 		OnTimeout = "None",
 	}, {"None" })
 
+
+	--[=[
+		@state HitReact
+		@description Writes `ActionOverlay` as `HitReact`.
+			Transitions:
+			- `None` when the 0.2-second timeout expires.
+			Writes: none.
+	]=]
 
 	self:AddState("HitReact", {
 		OnEnter = function(_, fsm)
@@ -168,6 +248,11 @@ function ActionFSM:RegisterStates()
 end
 
 
+--[=[
+	@description Attempts to start the `Melee` path when the FSM is in a compatible state.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
+
 function ActionFSM.RequestMelee(
 	fsm: any,
 	phases: { { Name: string, Speed: number, Duration: number } },
@@ -188,6 +273,13 @@ function ActionFSM.RequestMelee(
 end
 
 
+--[=[
+	@description Attempts to start the `Dash` path when the FSM is in a compatible state.
+	@param fsm any -- Value consumed by `RequestDash`.
+	@param direction any -- Value consumed by `RequestDash`.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
+
 function ActionFSM.RequestDash(fsm: any, direction: string)
 	if fsm.State ~= "None" then
 		return false
@@ -198,6 +290,12 @@ function ActionFSM.RequestDash(fsm: any, direction: string)
 end
 
 
+--[=[
+	@description Attempts to start the `Flip` path when the FSM is in a compatible state.
+	@param fsm any -- Value consumed by `RequestFlip`.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
+
 function ActionFSM.RequestFlip(fsm: any)
 	if fsm.State ~= "None" then
 		return false
@@ -206,6 +304,12 @@ function ActionFSM.RequestFlip(fsm: any)
 	return true
 end
 
+
+--[=[
+	@description Attempts to start the `HitReact` path when the FSM is in a compatible state.
+	@param fsm any -- Value consumed by `RequestHitReact`.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
 
 function ActionFSM.RequestHitReact(fsm: any)
 	fsm.State = "HitReact"

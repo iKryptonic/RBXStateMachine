@@ -48,6 +48,11 @@ local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
 local CombatHelpers = require(Helpers:WaitForChild("CombatHelpers"))
 local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
 
+--[=[
+	@module AttackJob
+	@description Validates attack prerequisites, resolves combo timelines, applies temporary combat locks and movement constraints, and drives damage windows for weapon attacks.
+]=]
+
 local AttackJob = {
 	Name = "AttackJob",
 	className = "AttackJob",
@@ -419,8 +424,21 @@ local function processTimelineEntry(fsm: any, entry: { any })
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `AttackJob`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function AttackJob:RegisterStates()
 
+
+--[=[
+	@state Validate
+	@description Validates the required runtime context and prerequisites.
+		Transitions:
+		- `AcquireCombatLock` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: stores `Context._characterEntity`, stores `Context._character`, stores `Context._humanoid`, stores `Context._root`, stores `Context._playerEntity`.
+]=]
 
 self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -497,6 +515,14 @@ self:AddState("Validate", {
 	}, {"AcquireCombatLock","RollbackConstraints" })
 
 
+--[=[
+	@state AcquireCombatLock
+	@description Captures the lock or blocking state needed for the next step.
+		Transitions:
+		- `ResolveAttackDef` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: stores `Context._entityLockHeld`, stores `Context._combatLockApplied`, sets `_entityLockHeld`, sets `CombatLock`, sets `_combatLockApplied`.
+]=]
+
 self:AddState("AcquireCombatLock", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
@@ -524,6 +550,14 @@ self:AddState("AcquireCombatLock", {
 		end,
 	}, {"ResolveAttackDef","RollbackConstraints" })
 
+
+--[=[
+	@state ResolveAttackDef
+	@description Resolves the data needed for the `ResolveAttackDef` step.
+		Transitions:
+		- `ApplyMovementConstraints` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: stores `Context._itemData`, stores `Context._comboDef`, stores `Context._selectedCombo`, stores `Context._comboPointer`, stores `Context._comboTotalFrames`.
+]=]
 
 self:AddState("ResolveAttackDef", {
 		OnEnter = function(_, fsm)
@@ -579,6 +613,14 @@ self:AddState("ResolveAttackDef", {
 	}, {"ApplyMovementConstraints","RollbackConstraints" })
 
 
+--[=[
+	@state ApplyMovementConstraints
+	@description On enter, stores `Context._priorConstraints`, stores `Context._constraintsApplied`, sets `_priorConstraints`.
+		Transitions:
+		- `EmitWindupIntent` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: stores `Context._priorConstraints`, stores `Context._constraintsApplied`, sets `_priorConstraints`, sets `CanMove`, sets `MouseLocked`.
+]=]
+
 self:AddState("ApplyMovementConstraints", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
@@ -620,6 +662,14 @@ self:AddState("ApplyMovementConstraints", {
 	}, {"EmitWindupIntent","RollbackConstraints" })
 
 
+--[=[
+	@state EmitWindupIntent
+	@description Runs the `emit windup intent` stage of `AttackJob`.
+		Transitions:
+		- `PlayTimeline` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: none.
+]=]
+
 self:AddState("EmitWindupIntent", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
@@ -637,6 +687,14 @@ self:AddState("EmitWindupIntent", {
 		end,
 	}, {"PlayTimeline","RollbackConstraints" })
 
+
+--[=[
+	@state PlayTimeline
+	@description On enter, stores `Context._timelineElapsed`, stores `Context._timelineFrame`, stores `Context._timelineFired`.
+		Transitions:
+		- `EmitRecoveryIntent` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: stores `Context._timelineElapsed`, stores `Context._timelineFrame`, stores `Context._timelineFired`, stores `Context._hitDebounces`, sets `_timelineElapsed`.
+]=]
 
 self:AddState("PlayTimeline", {
 		OnEnter = function(_, fsm)
@@ -693,6 +751,14 @@ self:AddState("PlayTimeline", {
 	}, {"EmitRecoveryIntent","RollbackConstraints" })
 
 
+--[=[
+	@state EmitRecoveryIntent
+	@description Runs the `emit recovery intent` stage of `AttackJob`.
+		Transitions:
+		- `RollbackConstraints` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: none.
+]=]
+
 self:AddState("EmitRecoveryIntent", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
@@ -711,6 +777,14 @@ self:AddState("EmitRecoveryIntent", {
 	}, {"RollbackConstraints" })
 
 
+--[=[
+	@state RollbackConstraints
+	@description On enter, stores `Context._constraintsApplied`, sets `_constraintsApplied`, sets `CanMove`.
+		Transitions:
+		- `ReleaseCombatLock` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: stores `Context._constraintsApplied`, sets `_constraintsApplied`, sets `CanMove`, sets `MoveSpeedCap`, sets `MouseLocked`.
+]=]
+
 self:AddState("RollbackConstraints", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
@@ -728,6 +802,15 @@ self:AddState("RollbackConstraints", {
 		end,
 	}, {"ReleaseCombatLock" })
 
+
+--[=[
+	@state ReleaseCombatLock
+	@description On enter, stores `Context._combatLockApplied`, stores `Context._entityLockHeld`, sets `_combatLockApplied`.
+		Transitions:
+		- `Failed` when this stage finishes its immediate work or falls through its guard checks.
+		- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+		Writes: stores `Context._combatLockApplied`, stores `Context._entityLockHeld`, sets `_combatLockApplied`, sets `CombatLock`, sets `_entityLockHeld`.
+]=]
 
 self:AddState("ReleaseCombatLock", {
 		OnEnter = function(_, fsm)
@@ -775,6 +858,11 @@ self:AddState("Failed", function(fsm)
 	end, {})
 end
 
+
+--[=[
+	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
 
 function AttackJob:OnCleanup() end
 

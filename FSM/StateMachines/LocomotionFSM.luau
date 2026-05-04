@@ -1,6 +1,11 @@
 --!strict
 
 
+--[=[
+	@module LocomotionFSM
+	@description Observes movement speed and humanoid state to mirror idle, walking, running, or airborne locomotion onto the character entity.
+]=]
+
 local LocomotionFSM = {
 	Name = "LocomotionFSM",
 	className = "LocomotionFSM",
@@ -11,6 +16,14 @@ local LocomotionFSM = {
 
 local WALK_THRESHOLD = 2
 local RUN_THRESHOLD = 22
+
+--[=[
+	@description Returns the character parts used by this state machine when it can be resolved.
+	@param fsm any -- Input consumed by `getCharacterParts`.
+	@param any? any -- Input consumed by `getCharacterParts`.
+	@param any? any -- Input consumed by `getCharacterParts`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function getCharacterParts(fsm: any): (any?, any?, any?)
 	local orchestrator = (shared :: any).fsm
@@ -33,6 +46,12 @@ local function getCharacterParts(fsm: any): (any?, any?, any?)
 	return charEntity, character:FindFirstChildOfClass("Humanoid"), character:FindFirstChild("HumanoidRootPart")
 end
 
+--[=[
+	@description Helper for the is airborne step used by this state machine.
+	@param humanoid any -- Input consumed by `isAirborne`.
+	@return boolean -- Whether the helper completed successfully.
+]=]
+
 local function isAirborne(humanoid: any): boolean
 	local state = humanoid:GetState()
 	return state == Enum.HumanoidStateType.Jumping
@@ -40,9 +59,22 @@ local function isAirborne(humanoid: any): boolean
 		or state == Enum.HumanoidStateType.FallingDown
 end
 
+--[=[
+	@description Returns the horizontal speed used by this state machine when it can be resolved.
+	@param rootPart any -- Input consumed by `getHorizontalSpeed`.
+	@return number -- Numeric value derived for downstream logic.
+]=]
+
 local function getHorizontalSpeed(rootPart: any): number
 	return (rootPart.AssemblyLinearVelocity * Vector3.new(1, 0, 1)).Magnitude
 end
+
+--[=[
+	@description Writes the derived state data back onto the active entity or FSM context.
+	@param fsm any -- Input consumed by `writeState`.
+	@param state any -- Input consumed by `writeState`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function writeState(fsm: any, state: string)
 	local orchestrator = (shared :: any).fsm
@@ -56,8 +88,23 @@ local function writeState(fsm: any, state: string)
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `LocomotionFSM`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function LocomotionFSM:RegisterStates()
 
+
+	--[=[
+		@state Idle
+		@description Writes locomotion state `Idle`.
+			Transitions:
+			- `Airborne` when this state's transition condition passes.
+			- `Running` when this state's transition condition passes.
+			- `Walking` when this state's transition condition passes.
+			Writes: none.
+	]=]
 
 	self:AddState("Idle", {
 		OnEnter = function(_, fsm)
@@ -89,6 +136,16 @@ function LocomotionFSM:RegisterStates()
 	}, {"Walking","Running","Airborne" })
 
 
+	--[=[
+		@state Walking
+		@description Writes locomotion state `Walking`.
+			Transitions:
+			- `Airborne` when this state's transition condition passes.
+			- `Running` when this state's transition condition passes.
+			- `Idle` when this state's transition condition passes.
+			Writes: none.
+	]=]
+
 	self:AddState("Walking", {
 		OnEnter = function(_, fsm)
 			writeState(fsm,"Walking")
@@ -118,6 +175,16 @@ function LocomotionFSM:RegisterStates()
 		},
 	}, {"Idle","Running","Airborne" })
 
+
+	--[=[
+		@state Running
+		@description Writes locomotion state `Running`.
+			Transitions:
+			- `Airborne` when this state's transition condition passes.
+			- `Idle` when this state's transition condition passes.
+			- `Walking` when this state's transition condition passes.
+			Writes: none.
+	]=]
 
 	self:AddState("Running", {
 		OnEnter = function(_, fsm)
@@ -152,6 +219,16 @@ function LocomotionFSM:RegisterStates()
 		},
 	}, {"Idle","Walking","Airborne" })
 
+
+	--[=[
+		@state Airborne
+		@description Writes locomotion state `Airborne`.
+			Transitions:
+			- `Running` when this state's transition condition passes.
+			- `Walking` when this state's transition condition passes.
+			- `Idle` when this state's transition condition passes.
+			Writes: none.
+	]=]
 
 	self:AddState("Airborne", {
 		OnEnter = function(_, fsm)

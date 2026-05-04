@@ -21,6 +21,11 @@ local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Par
 assert(Helpers,"Helpers folder not found")
 local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
 
+--[=[
+	@module BlockJob
+	@description Enters and maintains a blocking stance, replicates the state change, and restores movement when blocking is released.
+]=]
+
 local BlockJob = {
 	Name = "BlockJob",
 	className = "BlockJob",
@@ -42,8 +47,22 @@ local BlockJob = {
 }
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `BlockJob`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function BlockJob:RegisterStates()
 
+
+--[=[
+	@state Validate
+	@description Validates the required runtime context and prerequisites.
+		Transitions:
+		- `AcquireBlockState` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: none.
+]=]
 
 self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -64,6 +83,15 @@ self:AddState("Validate", {
 	}, {"AcquireBlockState","Failed" })
 
 
+--[=[
+	@state AcquireBlockState
+	@description Captures the lock or blocking state needed for the next step.
+		Transitions:
+		- `ApplyMovementRestriction` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: sets `IsBlocking`.
+]=]
+
 self:AddState("AcquireBlockState", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
@@ -77,6 +105,15 @@ self:AddState("AcquireBlockState", {
 	}, {"ApplyMovementRestriction","Failed" })
 
 
+--[=[
+	@state ApplyMovementRestriction
+	@description On enter, sets `MoveSpeedCap`.
+		Transitions:
+		- `BroadcastBlockUpdate` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: sets `MoveSpeedCap`.
+]=]
+
 self:AddState("ApplyMovementRestriction", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
@@ -89,6 +126,15 @@ self:AddState("ApplyMovementRestriction", {
 		end,
 	}, {"BroadcastBlockUpdate","Failed" })
 
+
+--[=[
+	@state BroadcastBlockUpdate
+	@description On enter, replicates entity changes, writes to the log.
+		Transitions:
+		- `EmitBlockIntent` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: replicates entity changes, writes to the log.
+]=]
 
 self:AddState("BroadcastBlockUpdate", {
 		OnEnter = function(_, fsm)
@@ -107,6 +153,15 @@ self:AddState("BroadcastBlockUpdate", {
 	}, {"EmitBlockIntent","Failed" })
 
 
+--[=[
+	@state EmitBlockIntent
+	@description On enter, emits an intent.
+		Transitions:
+		- `WaitForRelease` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: emits an intent.
+]=]
+
 self:AddState("EmitBlockIntent", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
@@ -122,6 +177,15 @@ self:AddState("EmitBlockIntent", {
 	}, {"WaitForRelease","Failed" })
 
 
+--[=[
+	@state WaitForRelease
+	@description Waits until its scheduled completion or transition condition is met.
+		Transitions:
+		- `ReleaseBlockState` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: sets `IsBlocking`.
+]=]
+
 self:AddState("WaitForRelease", {
 		OnHeartbeat = function(_, fsm, _dt)
 			local charEntity = fsm.CharacterEntity
@@ -136,6 +200,15 @@ self:AddState("WaitForRelease", {
 	}, {"ReleaseBlockState","Failed" })
 
 
+--[=[
+	@state ReleaseBlockState
+	@description On enter, sets `IsBlocking`.
+		Transitions:
+		- `RestoreMovement` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: sets `IsBlocking`.
+]=]
+
 self:AddState("ReleaseBlockState", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
@@ -149,6 +222,15 @@ self:AddState("ReleaseBlockState", {
 	}, {"RestoreMovement","Failed" })
 
 
+--[=[
+	@state RestoreMovement
+	@description On enter, sets `MoveSpeedCap`.
+		Transitions:
+		- `BroadcastUnblockUpdate` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: sets `MoveSpeedCap`.
+]=]
+
 self:AddState("RestoreMovement", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
@@ -161,6 +243,15 @@ self:AddState("RestoreMovement", {
 		end,
 	}, {"BroadcastUnblockUpdate","Failed" })
 
+
+--[=[
+	@state BroadcastUnblockUpdate
+	@description On enter, replicates entity changes, writes to the log.
+		Transitions:
+		- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: replicates entity changes, writes to the log.
+]=]
 
 self:AddState("BroadcastUnblockUpdate", {
 		OnEnter = function(_, fsm)
@@ -195,6 +286,11 @@ self:AddState("Completed", function() end, {})
 self:AddState("Failed", function() end, {})
 end
 
+
+--[=[
+	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
 
 function BlockJob:OnCleanup()
 	if not self._startedBlocking then

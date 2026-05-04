@@ -1,6 +1,11 @@
 --!strict
 
 
+--[=[
+	@module InputFSM
+	@description Tracks short-lived combat input modes such as combo buffering and held attacks.
+]=]
+
 local InputFSM = {
 	Name = "InputFSM",
 	className = "InputFSM",
@@ -10,6 +15,13 @@ local InputFSM = {
 }
 
 local KEYSTROKE_TIMEOUT = 1.75
+
+--[=[
+	@description Writes the derived input mode data back onto the active entity or FSM context.
+	@param fsm any -- Input consumed by `writeInputMode`.
+	@param mode any -- Input consumed by `writeInputMode`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function writeInputMode(fsm: any, mode: string)
 	local orchestrator = (shared :: any).fsm
@@ -23,8 +35,21 @@ local function writeInputMode(fsm: any, mode: string)
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `InputFSM`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function InputFSM:RegisterStates()
 
+
+	--[=[
+		@state Normal
+		@description Runs the `normal` stage of `InputFSM`.
+			Transitions:
+			- External transitions allow: `ComboMode`, `HeldAttack`.
+			Writes: none.
+	]=]
 
 	self:AddState("Normal", {
 		OnEnter = function(_, _fsm)
@@ -32,6 +57,14 @@ function InputFSM:RegisterStates()
 		end,
 	}, {"ComboMode","HeldAttack" })
 
+
+	--[=[
+		@state ComboMode
+		@description On enter, stores `Context._comboBuffer`, stores `Context._comboPointer`, sets `_comboBuffer`.
+			Transitions:
+			- `Normal` when the KEYSTROKE_TIMEOUT-second timeout expires.
+			Writes: stores `Context._comboBuffer`, stores `Context._comboPointer`, sets `_comboBuffer`, sets `_comboPointer`.
+	]=]
 
 	self:AddState("ComboMode", {
 		OnEnter = function(_, fsm)
@@ -47,6 +80,14 @@ function InputFSM:RegisterStates()
 		OnTimeout = "Normal",
 	}, {"Normal" })
 
+
+	--[=[
+		@state HeldAttack
+		@description Runs the `held attack` stage of `InputFSM`.
+			Transitions:
+			- External transitions allow: `Normal`.
+			Writes: none.
+	]=]
 
 	self:AddState("HeldAttack", {
 		OnEnter = function(_, fsm)
@@ -75,6 +116,12 @@ function InputFSM:RegisterStates()
 end
 
 
+--[=[
+	@description Switches the FSM into `ComboMode` when its current state allows the change.
+	@param fsm any -- Value consumed by `EnterComboMode`.
+	@return boolean -- True when the requested transition or action was accepted.
+]=]
+
 function InputFSM.EnterComboMode(fsm: any): boolean
 	if fsm.State == "ComboMode" then
 		fsm.State = "Normal"
@@ -85,6 +132,12 @@ function InputFSM.EnterComboMode(fsm: any): boolean
 end
 
 
+--[=[
+	@description Switches the FSM into `HeldAttack` when its current state allows the change.
+	@param fsm any -- Value consumed by `EnterHeldAttack`.
+	@return boolean -- True when the requested transition or action was accepted.
+]=]
+
 function InputFSM.EnterHeldAttack(fsm: any): boolean
 	if fsm.State ~= "Normal" then
 		return false
@@ -94,6 +147,12 @@ function InputFSM.EnterHeldAttack(fsm: any): boolean
 end
 
 
+--[=[
+	@description Releases the active `held attack` mode and returns control to the default path when applicable.
+	@param fsm any -- Value consumed by `ReleaseHeldAttack`.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
+
 function InputFSM.ReleaseHeldAttack(fsm: any)
 	if fsm.State == "HeldAttack" then
 		fsm.State = "Normal"
@@ -101,10 +160,22 @@ function InputFSM.ReleaseHeldAttack(fsm: any)
 end
 
 
+--[=[
+	@description Returns whether the FSM is currently in the `ComboMode` branch.
+	@param fsm any -- Value consumed by `IsComboMode`.
+	@return boolean -- True when the requested transition or action was accepted.
+]=]
+
 function InputFSM.IsComboMode(fsm: any): boolean
 	return fsm.State == "ComboMode"
 end
 
+
+--[=[
+	@description Returns whether the FSM is currently in the `HeldAttack` branch.
+	@param fsm any -- Value consumed by `IsHeldAttack`.
+	@return boolean -- True when the requested transition or action was accepted.
+]=]
 
 function InputFSM.IsHeldAttack(fsm: any): boolean
 	return fsm.State == "HeldAttack"

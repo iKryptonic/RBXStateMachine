@@ -1,6 +1,11 @@
 --!strict
 
 
+--[=[
+	@module CharacterSetupFSM
+	@description Prepares a spawned character for runtime use by disabling default Roblox systems, wiring controllers and child FSMs, then tearing them down safely.
+]=]
+
 local CharacterSetupFSM = {
 	Name = "CharacterSetupFSM",
 	className = "CharacterSetupFSM",
@@ -19,6 +24,12 @@ local CharacterSetupFSM = {
 	terminalStates = {"Completed","Failed" },
 	initialState = "Validating",
 }
+
+--[=[
+	@description Helper for the destroy managed step used by this state machine.
+	@param value any -- Input consumed by `destroyManaged`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function destroyManaged(value: any)
 	if value == nil then
@@ -51,6 +62,12 @@ local function destroyManaged(value: any)
 	end
 end
 
+--[=[
+	@description Helper for the restore defaults step used by this state machine.
+	@param fsm any -- Input consumed by `restoreDefaults`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function restoreDefaults(fsm: any)
 	local defaultAnimate = fsm.Context._defaultAnimate
 	if defaultAnimate and defaultAnimate.Parent and fsm.Context._defaultAnimateWasDisabled == false then
@@ -64,6 +81,12 @@ local function restoreDefaults(fsm: any)
 	end
 end
 
+--[=[
+	@description Returns the character model used by this state machine when it can be resolved.
+	@param fsm any -- Input consumed by `getCharacterModel`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getCharacterModel(fsm: any): Model?
 	local character = fsm.Context.Character or fsm.Context.Instance
 	if character and character:IsA("Model") then
@@ -71,6 +94,12 @@ local function getCharacterModel(fsm: any): Model?
 	end
 	return nil
 end
+
+--[=[
+	@description Returns the required parts used by this state machine when it can be resolved.
+	@param character any -- Input consumed by `getRequiredParts`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function getRequiredParts(character: Model)
 	local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
@@ -90,6 +119,13 @@ local function getRequiredParts(character: Model)
 	}
 end
 
+--[=[
+	@description Helper for the safe invoke step used by this state machine.
+	@param factory any -- Input consumed by `safeInvoke`.
+	@param fsm any -- Input consumed by `safeInvoke`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function safeInvoke(factory: any, fsm: any, ...: any): any
 	if type(factory) ~= "function" then
 		return nil
@@ -104,8 +140,22 @@ local function safeInvoke(factory: any, fsm: any, ...: any): any
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `CharacterSetupFSM`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function CharacterSetupFSM:RegisterStates()
 
+
+	--[=[
+		@state Validating
+		@description On enter, stores `Context.Character`, stores `Context.Humanoid`, stores `Context.RootPart`.
+			Transitions:
+			- `DisablingDefaults` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context.Character`, stores `Context.Humanoid`, stores `Context.RootPart`, stores `Context.Torso`, stores `Context.Head`.
+	]=]
 
 	self:AddState("Validating", {
 		OnEnter = function(_, fsm)
@@ -155,6 +205,14 @@ function CharacterSetupFSM:RegisterStates()
 	}, {"DisablingDefaults","Failed" })
 
 
+	--[=[
+		@state DisablingDefaults
+		@description On enter, stores `Context._defaultAnimate`, stores `Context._defaultAnimateWasDisabled`, stores `Context._removedAnimator`.
+			Transitions:
+			- `AwaitingEntities` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._defaultAnimate`, stores `Context._defaultAnimateWasDisabled`, stores `Context._removedAnimator`, sets `_defaultAnimate`, sets `_defaultAnimateWasDisabled`.
+	]=]
+
 	self:AddState("DisablingDefaults", {
 		OnEnter = function(_, fsm)
 			local character = fsm.Context.Character
@@ -183,6 +241,15 @@ function CharacterSetupFSM:RegisterStates()
 		end,
 	}, {"AwaitingEntities","Failed" })
 
+
+	--[=[
+		@state AwaitingEntities
+		@description On enter, stores `Context._awaitStartedAt`, stores `Context.CharacterEntity`, stores `Context.PlayerEntity`.
+			Transitions:
+			- `Failed` when the scheduled transition completes.
+			- `InitControllers` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._awaitStartedAt`, stores `Context.CharacterEntity`, stores `Context.PlayerEntity`, sets `_awaitStartedAt`, sets `CharacterEntity`.
+	]=]
 
 	self:AddState("AwaitingEntities", {
 		OnEnter = function(_, fsm)
@@ -225,6 +292,14 @@ function CharacterSetupFSM:RegisterStates()
 	}, {"InitControllers","Failed" })
 
 
+	--[=[
+		@state InitControllers
+		@description On enter, stores `Context.ReferenceAnimationPlayer`, stores `Context.RenderRouter`, stores `Context.DashController`.
+			Transitions:
+			- `InitFSMs` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context.ReferenceAnimationPlayer`, stores `Context.RenderRouter`, stores `Context.DashController`, stores `Context.DoubleJumpController`, stores `Context.HitReactController`.
+	]=]
+
 	self:AddState("InitControllers", {
 		OnEnter = function(_, fsm)
 			local bundle = safeInvoke(fsm.Context.CreateControllerBundle, fsm) or {}
@@ -248,6 +323,14 @@ function CharacterSetupFSM:RegisterStates()
 	}, {"InitFSMs","Failed" })
 
 
+	--[=[
+		@state InitFSMs
+		@description On enter, stores `Context.LocomotionFSM`, stores `Context.ActionFSM`, stores `Context.DashFSM`.
+			Transitions:
+			- `BindingEvents` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context.LocomotionFSM`, stores `Context.ActionFSM`, stores `Context.DashFSM`, stores `Context.JumpFSM`, stores `Context.InputFSM`.
+	]=]
+
 	self:AddState("InitFSMs", {
 		OnEnter = function(_, fsm)
 			local bundle = safeInvoke(fsm.Context.CreateFSMBundle, fsm) or {}
@@ -270,6 +353,14 @@ function CharacterSetupFSM:RegisterStates()
 	}, {"BindingEvents","Failed" })
 
 
+	--[=[
+		@state BindingEvents
+		@description On enter, stores `Context.Connections`, sets `Connections`, writes to the log.
+			Transitions:
+			- `Active` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context.Connections`, sets `Connections`, writes to the log.
+	]=]
+
 	self:AddState("BindingEvents", {
 		OnEnter = function(_, fsm)
 			fsm.Context.Connections = safeInvoke(fsm.Context.BindEvents, fsm) or {}
@@ -281,6 +372,14 @@ function CharacterSetupFSM:RegisterStates()
 		end,
 	}, {"Active","Failed" })
 
+
+	--[=[
+		@state Active
+		@description On enter, sets `Parent`, writes to the log.
+			Transitions:
+			- `TearingDown` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: sets `Parent`, writes to the log.
+	]=]
 
 	self:AddState("Active", {
 		OnEnter = function(_, fsm)
@@ -302,6 +401,14 @@ function CharacterSetupFSM:RegisterStates()
 		end,
 	}, {"TearingDown","Failed" })
 
+
+	--[=[
+		@state TearingDown
+		@description On enter, writes to the log.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: writes to the log.
+	]=]
 
 	self:AddState("TearingDown", {
 		OnEnter = function(_, fsm)

@@ -23,6 +23,11 @@ local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Par
 assert(Helpers,"Helpers folder not found")
 local ModuleLoader = require(Helpers:WaitForChild("ModuleLoader"))
 
+--[=[
+	@module ReplicateIntentJob
+	@description Collects pending intents from an entity, sanitizes them for replication, and publishes the payload through the orchestrator.
+]=]
+
 local ReplicateIntentJob = {
 	Name = "ReplicateIntentJob",
 	className = "ReplicateIntentJob",
@@ -146,8 +151,22 @@ local function validateAllowedPayload(kind: string, payload: { [string]: any }, 
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `ReplicateIntentJob`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function ReplicateIntentJob:RegisterStates()
 
+
+--[=[
+	@state Validate
+	@description Validates the required runtime context and prerequisites.
+		Transitions:
+		- `NormalizePayload` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: stores `Context._characterEntity`, sets `_characterEntity`.
+]=]
 
 self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -189,6 +208,15 @@ self:AddState("Validate", {
 	}, {"NormalizePayload","Failed" })
 
 
+--[=[
+	@state NormalizePayload
+	@description On enter, stores `Context._normalizedPayload`, sets `Name`, sets `Speed`.
+		Transitions:
+		- `CheckAllowList` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: stores `Context._normalizedPayload`, sets `Name`, sets `Speed`, sets `FadeTime`, sets `SoundId`.
+]=]
+
 self:AddState("NormalizePayload", {
 		OnEnter = function(_, fsm)
 			local intentSchema = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(),"IntentSchema")
@@ -228,6 +256,15 @@ self:AddState("NormalizePayload", {
 	}, {"CheckAllowList","Failed" })
 
 
+--[=[
+	@state CheckAllowList
+	@description Runs the `check allow list` stage of `ReplicateIntentJob`.
+		Transitions:
+		- `ApplyToEntity` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: none.
+]=]
+
 self:AddState("CheckAllowList", {
 		OnEnter = function(_, fsm)
 			local AllowLists = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(),"AllowLists")
@@ -247,6 +284,15 @@ self:AddState("CheckAllowList", {
 		end,
 	}, {"ApplyToEntity","Failed" })
 
+
+--[=[
+	@state ApplyToEntity
+	@description On enter, emits an intent.
+		Transitions:
+		- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+		- `Failed` when validation or downstream work reports an unrecoverable problem.
+		Writes: emits an intent.
+]=]
 
 self:AddState("ApplyToEntity", {
 		OnEnter = function(_, fsm)
@@ -285,6 +331,11 @@ self:AddState("Completed", function() end, {})
 self:AddState("Failed", function() end, {})
 end
 
+
+--[=[
+	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
 
 function ReplicateIntentJob:OnCleanup() end
 

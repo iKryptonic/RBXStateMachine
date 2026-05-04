@@ -13,6 +13,11 @@ local CombatHelpers = require(Helpers:WaitForChild("CombatHelpers"))
 local IntentHelpers = require(Helpers:WaitForChild("IntentHelpers"))
 local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 
+--[=[
+	@module CastFSM
+	@description Runs the cast flow for abilities from validation and resource checks through cast timing, intent emission, and recovery.
+]=]
+
 local CastFSM = {
 	Name = "CastFSM",
 	className = "CastFSM",
@@ -50,17 +55,41 @@ local DEFAULT_PROJECTILE_SPEED = 120
 local DEFAULT_PROJECTILE_LIFETIME = 3
 local DEFAULT_DASH_DURATION = 0.2
 
+--[=[
+	@description Returns the ability defs used by this state machine when it can be resolved.
+	@param orchestrator any -- Input consumed by `getAbilityDefs`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getAbilityDefs(orchestrator: any)
 	return ModuleLoader.requireSharedModule(orchestrator,"AbilityDefs")
 end
+
+--[=[
+	@description Returns the talent tree defs used by this state machine when it can be resolved.
+	@param orchestrator any -- Input consumed by `getTalentTreeDefs`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function getTalentTreeDefs(orchestrator: any)
 	return ModuleLoader.requireSharedModule(orchestrator,"TalentTreeDefs")
 end
 
+--[=[
+	@description Returns the status effect defs used by this state machine when it can be resolved.
+	@param orchestrator any -- Input consumed by `getStatusEffectDefs`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function getStatusEffectDefs(orchestrator: any)
 	return ModuleLoader.requireSharedModule(orchestrator,"StatusEffectDefs")
 end
+
+--[=[
+	@description Returns the item data used by this state machine when it can be resolved.
+	@param itemId any -- Input consumed by `getItemData`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function getItemData(itemId: string?): any?
 	if typeof(itemId) ~= "string" or itemId == "" then
@@ -86,6 +115,12 @@ local function getItemData(itemId: string?): any?
 	return if ok then data else nil
 end
 
+--[=[
+	@description Resolves weapon type from the current FSM context and available runtime data.
+	@param charEntity any -- Input consumed by `resolveWeaponType`.
+	@return string -- Resolved string value used by the FSM.
+]=]
+
 local function resolveWeaponType(charEntity: any): string?
 	local right = charEntity.EquippedRight
 	if typeof(right) == "string" and right ~= "" then
@@ -105,6 +140,14 @@ local function resolveWeaponType(charEntity: any): string?
 
 	return nil
 end
+
+--[=[
+	@description Helper for the is ability unlocked step used by this state machine.
+	@param orchestrator any -- Input consumed by `isAbilityUnlocked`.
+	@param playerEntity any -- Input consumed by `isAbilityUnlocked`.
+	@param castDef any -- Input consumed by `isAbilityUnlocked`.
+	@return boolean -- Whether the helper completed successfully.
+]=]
 
 local function isAbilityUnlocked(orchestrator: any, playerEntity: any, castDef: any): boolean
 	if castDef.SourceType ~= "Ability" then
@@ -133,6 +176,14 @@ local function isAbilityUnlocked(orchestrator: any, playerEntity: any, castDef: 
 	return playerLevel >= unlockLevel
 end
 
+--[=[
+	@description Helper for the are abilities blocked step used by this state machine.
+	@param orchestrator any -- Input consumed by `areAbilitiesBlocked`.
+	@param charEntity any -- Input consumed by `areAbilitiesBlocked`.
+	@param string? any -- Input consumed by `areAbilitiesBlocked`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function areAbilitiesBlocked(orchestrator: any, charEntity: any): (boolean, string?)
 	local activeStatusEffects = charEntity and charEntity.ActiveStatusEffects
 	if typeof(activeStatusEffects) ~= "table" then
@@ -159,6 +210,13 @@ local function areAbilitiesBlocked(orchestrator: any, charEntity: any): (boolean
 
 	return false, nil
 end
+
+--[=[
+	@description Resolves cast def from the current FSM context and available runtime data.
+	@param fsm any -- Input consumed by `resolveCastDef`.
+	@param orchestrator any -- Input consumed by `resolveCastDef`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function resolveCastDef(fsm: any, orchestrator: any): any?
 	local cached = fsm.Context._castDef
@@ -190,6 +248,13 @@ local function resolveCastDef(fsm: any, orchestrator: any): any?
 	return castDef
 end
 
+--[=[
+	@description Resolves target entity from the current FSM context and available runtime data.
+	@param orchestrator any -- Input consumed by `resolveTargetEntity`.
+	@param charEntity any -- Input consumed by `resolveTargetEntity`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function resolveTargetEntity(orchestrator: any, charEntity: any): any?
 	local targetEntityId = charEntity.TargetEntityId
 	if typeof(targetEntityId) ~= "string" or targetEntityId == "" then
@@ -197,6 +262,14 @@ local function resolveTargetEntity(orchestrator: any, charEntity: any): any?
 	end
 	return orchestrator.GetEntity(targetEntityId)
 end
+
+--[=[
+	@description Resolves target position from the current FSM context and available runtime data.
+	@param orchestrator any -- Input consumed by `resolveTargetPosition`.
+	@param charEntity any -- Input consumed by `resolveTargetPosition`.
+	@param fallbackRoot any -- Input consumed by `resolveTargetPosition`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function resolveTargetPosition(orchestrator: any, charEntity: any, fallbackRoot: BasePart): Vector3
 	local targetEntity = resolveTargetEntity(orchestrator, charEntity)
@@ -209,9 +282,25 @@ local function resolveTargetPosition(orchestrator: any, charEntity: any, fallbac
 	return fallbackRoot.Position + fallbackRoot.CFrame.LookVector * 10
 end
 
+--[=[
+	@description Helper for the clamp resource step used by this state machine.
+	@param value any -- Input consumed by `clampResource`.
+	@param maximum any -- Input consumed by `clampResource`.
+	@return number -- Numeric value derived for downstream logic.
+]=]
+
 local function clampResource(value: number, maximum: number): number
 	return math.clamp(value, 0, maximum)
 end
+
+--[=[
+	@description Applies the health change work needed by the surrounding state flow.
+	@param charEntity any -- Input consumed by `applyHealthChange`.
+	@param humanoid any -- Input consumed by `applyHealthChange`.
+	@param amount any -- Input consumed by `applyHealthChange`.
+	@param lockId any -- Input consumed by `applyHealthChange`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function applyHealthChange(charEntity: any, humanoid: Humanoid, amount: number, lockId: string?)
 	local maxHealth = tonumber(charEntity.MaxHealth) or humanoid.MaxHealth
@@ -219,6 +308,11 @@ local function applyHealthChange(charEntity: any, humanoid: Humanoid, amount: nu
 	humanoid.Health = math.clamp(nextHealth, 0, humanoid.MaxHealth)
 	charEntity:UpdateEntity(lockId)
 end
+
+--[=[
+	@description Applies the resource restore work needed by the surrounding state flow.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function applyResourceRestore(
 	charEntity: any,
@@ -232,6 +326,13 @@ local function applyResourceRestore(
 	ResourceHelpers.restoreResource(charEntity, fieldName, amount, maxFieldName)
 	charEntity:UpdateEntity(lockId)
 end
+
+--[=[
+	@description Helper for the container has item step used by this state machine.
+	@param container any -- Input consumed by `containerHasItem`.
+	@param itemId any -- Input consumed by `containerHasItem`.
+	@return boolean -- Whether the helper completed successfully.
+]=]
 
 local function containerHasItem(container: any, itemId: string): boolean
 	if typeof(container) ~= "table" then
@@ -274,6 +375,14 @@ local function containerHasItem(container: any, itemId: string): boolean
 
 	return false
 end
+
+--[=[
+	@description Helper for the consume one in container step used by this state machine.
+	@param container any -- Input consumed by `consumeOneInContainer`.
+	@param itemId any -- Input consumed by `consumeOneInContainer`.
+	@param any any -- Input consumed by `consumeOneInContainer`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function consumeOneInContainer(container: any, itemId: string): (boolean, any)
 	if typeof(container) ~= "table" then
@@ -350,6 +459,14 @@ local function consumeOneInContainer(container: any, itemId: string): (boolean, 
 	return false, container
 end
 
+--[=[
+	@description Helper for the consume player item step used by this state machine.
+	@param playerEntity any -- Input consumed by `consumePlayerItem`.
+	@param itemId any -- Input consumed by `consumePlayerItem`.
+	@param slotIndex any -- Input consumed by `consumePlayerItem`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
+
 local function consumePlayerItem(playerEntity: any, itemId: string, slotIndex: number?)
 	if not playerEntity then
 		return false
@@ -385,6 +502,16 @@ local function consumePlayerItem(playerEntity: any, itemId: string, slotIndex: n
 	playerEntity:UpdateEntity()
 	return true
 end
+
+--[=[
+	@description Helper for the spawn projectile step used by this state machine.
+	@param orchestrator any -- Input consumed by `spawnProjectile`.
+	@param fsm any -- Input consumed by `spawnProjectile`.
+	@param castDef any -- Input consumed by `spawnProjectile`.
+	@param charEntity any -- Input consumed by `spawnProjectile`.
+	@param rootPart any -- Input consumed by `spawnProjectile`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function spawnProjectile(orchestrator: any, fsm: any, castDef: any, charEntity: any, rootPart: BasePart)
 	local targetPosition = resolveTargetPosition(orchestrator, charEntity, rootPart)
@@ -456,9 +583,21 @@ local EFFECT_STATE_BY_TYPE = {
 	TargetedAoE = "ExecuteTargetedAoE",
 }
 
+--[=[
+	@description Returns the cast attack name used by this state machine when it can be resolved.
+	@param castDef any -- Input consumed by `getCastAttackName`.
+	@return string -- Resolved string value used by the FSM.
+]=]
+
 local function getCastAttackName(castDef: any): string
 	return castDef.Id or castDef.Name or "Cast"
 end
+
+--[=[
+	@description Resolves execute context from the current FSM context and available runtime data.
+	@param fsm any -- Input consumed by `resolveExecuteContext`.
+	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+]=]
 
 local function resolveExecuteContext(fsm: any)
 	local orchestrator = fsm:GetOrchestrator()
@@ -485,11 +624,32 @@ local function resolveExecuteContext(fsm: any)
 end
 
 
+--[=[
+	@description Registers the runtime states, transitions, and terminal behavior for `CastFSM`.
+	@return nil -- Populates the state graph on the FSM definition table.
+]=]
+
 function CastFSM:RegisterStates()
 
 
+	--[=[
+		@state Idle
+		@description Runs the `idle` stage of `CastFSM`.
+			Transitions:
+			Writes: none.
+	]=]
+
 	self:AddState("Idle", function() end, {"ValidateAbility" })
 
+
+	--[=[
+		@state ValidateAbility
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `ValidateResources` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context._charEntity`, stores `Context._playerEntity`, stores `Context._character`, stores `Context._humanoid`, stores `Context._rootPart`.
+	]=]
 
 	self:AddState("ValidateAbility", {
 		OnEnter = function(_, fsm)
@@ -593,6 +753,15 @@ function CastFSM:RegisterStates()
 	}, {"ValidateResources","Failed" })
 
 
+	--[=[
+		@state ValidateResources
+		@description Validates the required runtime context and prerequisites, then captures the lock or blocking state needed for the next step.
+			Transitions:
+			- `AcquireLock` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: none.
+	]=]
+
 	self:AddState("ValidateResources", {
 		OnEnter = function(_, fsm)
 			local castDef = fsm.Context._castDef
@@ -614,6 +783,15 @@ function CastFSM:RegisterStates()
 	}, {"AcquireLock","Failed" })
 
 
+	--[=[
+		@state AcquireLock
+		@description Captures the lock or blocking state needed for the next step.
+			Transitions:
+			- `DeductResources` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context._lockHeld`, sets `_lockHeld`.
+	]=]
+
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.Context._charEntity
@@ -626,6 +804,15 @@ function CastFSM:RegisterStates()
 		end,
 	}, {"DeductResources","Failed" })
 
+
+	--[=[
+		@state DeductResources
+		@description On enter, stores `Context._releaseReason`, sets `_releaseReason`, replicates entity changes.
+			Transitions:
+			- `ReleaseLock` when this stage finishes its immediate work or falls through its guard checks.
+			- `EmitCastAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._releaseReason`, sets `_releaseReason`, replicates entity changes.
+	]=]
 
 	self:AddState("DeductResources", {
 		OnEnter = function(_, fsm)
@@ -651,6 +838,15 @@ function CastFSM:RegisterStates()
 		end,
 	}, {"EmitCastAnimation","ReleaseLock" })
 
+
+	--[=[
+		@state EmitCastAnimation
+		@description On enter, stores `Context._releaseReason`, stores `Context._movementLocked`, sets `_releaseReason`.
+			Transitions:
+			- `ReleaseLock` when this stage finishes its immediate work or falls through its guard checks.
+			- `WaitCastDuration` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._releaseReason`, stores `Context._movementLocked`, sets `_releaseReason`, sets `ActiveCastId`, sets `CanMove`.
+	]=]
 
 	self:AddState("EmitCastAnimation", {
 		OnEnter = function(_, fsm)
@@ -681,6 +877,16 @@ function CastFSM:RegisterStates()
 	}, {"WaitCastDuration","ReleaseLock" })
 
 
+	--[=[
+		@state WaitCastDuration
+		@description Waits until its scheduled completion or transition condition is met.
+			Transitions:
+			- `ValidateNotInterrupted` when the scheduled transition completes.
+			- `ReleaseLock` when this stage finishes its immediate work or falls through its guard checks.
+			- `ValidateNotInterrupted` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._releaseReason`, sets `_releaseReason`.
+	]=]
+
 	self:AddState("WaitCastDuration", {
 		OnEnter = function(_, fsm)
 			local castDef = fsm.Context._castDef
@@ -698,6 +904,15 @@ function CastFSM:RegisterStates()
 		end,
 	}, {"ValidateNotInterrupted","ReleaseLock" })
 
+
+	--[=[
+		@state ValidateNotInterrupted
+		@description Validates the required runtime context and prerequisites.
+			Transitions:
+			- `ReleaseLock` when this stage finishes its immediate work or falls through its guard checks.
+			- `Execute` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._releaseReason`, sets `_releaseReason`, sets `IsStunned`, sets `IsKnocked`.
+	]=]
 
 	self:AddState("ValidateNotInterrupted", {
 		OnEnter = function(_, fsm)
@@ -718,6 +933,14 @@ function CastFSM:RegisterStates()
 		end,
 	}, {"Execute","ReleaseLock" })
 
+
+	--[=[
+		@state Execute
+		@description On enter, stores `Context._releaseReason`, sets `_releaseReason`.
+			Transitions:
+			- `ReleaseLock` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._releaseReason`, sets `_releaseReason`.
+	]=]
 
 	self:AddState("Execute", {
 		OnEnter = function(_, fsm)
@@ -744,6 +967,14 @@ function CastFSM:RegisterStates()
 		"ReleaseLock",
 	})
 
+
+	--[=[
+		@state ExecuteMeleeSingle
+		@description Runs the `execute melee single` stage of `CastFSM`.
+			Transitions:
+			- `EmitFinishAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
 
 	self:AddState("ExecuteMeleeSingle", {
 		OnEnter = function(_, fsm)
@@ -773,6 +1004,14 @@ function CastFSM:RegisterStates()
 	}, {"EmitFinishAnimation","ReleaseLock" })
 
 
+	--[=[
+		@state ExecuteMeleeAoE
+		@description Runs the `execute melee ao e` stage of `CastFSM`.
+			Transitions:
+			- `EmitFinishAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("ExecuteMeleeAoE", {
 		OnEnter = function(_, fsm)
 			local executeContext = resolveExecuteContext(fsm)
@@ -797,6 +1036,14 @@ function CastFSM:RegisterStates()
 	}, {"EmitFinishAnimation","ReleaseLock" })
 
 
+	--[=[
+		@state ExecuteProjectile
+		@description Runs the `execute projectile` stage of `CastFSM`.
+			Transitions:
+			- `EmitFinishAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("ExecuteProjectile", {
 		OnEnter = function(_, fsm)
 			local executeContext = resolveExecuteContext(fsm)
@@ -816,6 +1063,14 @@ function CastFSM:RegisterStates()
 	}, {"EmitFinishAnimation","ReleaseLock" })
 
 
+	--[=[
+		@state ExecuteSelfHeal
+		@description Runs the `execute self heal` stage of `CastFSM`.
+			Transitions:
+			- `EmitFinishAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("ExecuteSelfHeal", {
 		OnEnter = function(_, fsm)
 			local executeContext = resolveExecuteContext(fsm)
@@ -834,6 +1089,14 @@ function CastFSM:RegisterStates()
 	}, {"EmitFinishAnimation","ReleaseLock" })
 
 
+	--[=[
+		@state ExecuteInstantHeal
+		@description Runs the `execute instant heal` stage of `CastFSM`.
+			Transitions:
+			- `EmitFinishAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("ExecuteInstantHeal", {
 		OnEnter = function(_, fsm)
 			local executeContext = resolveExecuteContext(fsm)
@@ -851,6 +1114,14 @@ function CastFSM:RegisterStates()
 		end,
 	}, {"EmitFinishAnimation","ReleaseLock" })
 
+
+	--[=[
+		@state ExecuteInstantStamina
+		@description Runs the `execute instant stamina` stage of `CastFSM`.
+			Transitions:
+			- `EmitFinishAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
 
 	self:AddState("ExecuteInstantStamina", {
 		OnEnter = function(_, fsm)
@@ -871,6 +1142,14 @@ function CastFSM:RegisterStates()
 	}, {"EmitFinishAnimation","ReleaseLock" })
 
 
+	--[=[
+		@state ExecuteInstantMana
+		@description Runs the `execute instant mana` stage of `CastFSM`.
+			Transitions:
+			- `EmitFinishAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("ExecuteInstantMana", {
 		OnEnter = function(_, fsm)
 			local executeContext = resolveExecuteContext(fsm)
@@ -889,6 +1168,14 @@ function CastFSM:RegisterStates()
 		end,
 	}, {"EmitFinishAnimation","ReleaseLock" })
 
+
+	--[=[
+		@state ExecuteDash
+		@description Runs the `execute dash` stage of `CastFSM`.
+			Transitions:
+			- `EmitFinishAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
 
 	self:AddState("ExecuteDash", {
 		OnEnter = function(_, fsm)
@@ -929,6 +1216,14 @@ function CastFSM:RegisterStates()
 	}, {"EmitFinishAnimation","ReleaseLock" })
 
 
+	--[=[
+		@state ExecuteTargetedAoE
+		@description Runs the `execute targeted ao e` stage of `CastFSM`.
+			Transitions:
+			- `EmitFinishAnimation` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: none.
+	]=]
+
 	self:AddState("ExecuteTargetedAoE", {
 		OnEnter = function(_, fsm)
 			local executeContext = resolveExecuteContext(fsm)
@@ -958,6 +1253,15 @@ function CastFSM:RegisterStates()
 	}, {"EmitFinishAnimation","ReleaseLock" })
 
 
+	--[=[
+		@state EmitFinishAnimation
+		@description On enter, stores `Context._releaseReason`, sets `_releaseReason`, emits an intent.
+			Transitions:
+			- `ReleaseLock` when this stage finishes its immediate work or falls through its guard checks.
+			- `SetCooldown` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._releaseReason`, sets `_releaseReason`, emits an intent.
+	]=]
+
 	self:AddState("EmitFinishAnimation", {
 		OnEnter = function(_, fsm)
 			local castDef = fsm.Context._castDef
@@ -978,6 +1282,14 @@ function CastFSM:RegisterStates()
 		end,
 	}, {"SetCooldown","ReleaseLock" })
 
+
+	--[=[
+		@state SetCooldown
+		@description Arms the cooldown window before returning control.
+			Transitions:
+			- `ReleaseLock` when this stage finishes its immediate work or falls through its guard checks.
+			Writes: stores `Context._releaseReason`, sets `_releaseReason`, sets `SourceType`, sets `AbilityCooldowns`, replicates entity changes.
+	]=]
 
 	self:AddState("SetCooldown", {
 		OnEnter = function(_, fsm)
@@ -1003,6 +1315,15 @@ function CastFSM:RegisterStates()
 		end,
 	}, {"ReleaseLock" })
 
+
+	--[=[
+		@state ReleaseLock
+		@description On enter, stores `Context._movementLocked`, stores `Context._lockHeld`, sets `CanMove`.
+			Transitions:
+			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
+			- `Failed` when validation or downstream work reports an unrecoverable problem.
+			Writes: stores `Context._movementLocked`, stores `Context._lockHeld`, sets `CanMove`, sets `_movementLocked`, sets `ActiveCastId`.
+	]=]
 
 	self:AddState("ReleaseLock", {
 		OnEnter = function(_, fsm)
@@ -1050,12 +1371,25 @@ function CastFSM:RegisterStates()
 end
 
 
+--[=[
+	@description Attempts to start the `Cast` path when the FSM is in a compatible state.
+	@param fsm any -- Value consumed by `RequestCast`.
+	@param abilityDef any -- Value consumed by `RequestCast`.
+	@param charEntityId any -- Value consumed by `RequestCast`.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
+
 function CastFSM.RequestCast(fsm: any, abilityDef: any, charEntityId: string)
 	fsm.Context._abilityDef = abilityDef
 	fsm.Context.CharacterEntityId = charEntityId
 	fsm.State = "ValidateAbility"
 end
 
+
+--[=[
+	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
+	@return nil -- Performs state changes or cleanup as side effects.
+]=]
 
 function CastFSM:OnCleanup()
 	local charEntity = self.Context._charEntity
