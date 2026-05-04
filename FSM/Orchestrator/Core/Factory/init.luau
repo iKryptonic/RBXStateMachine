@@ -316,15 +316,15 @@ end
 
 
 function Factory.CreateEntity(params: { EntityClass: any, EntityId: string?, Context: {any}?, Persistent: boolean?, PersistenceKey: string?, InitialData: { [string]: any }? })
-assert(Initialized,"Factory not initialized")
-local EntityClass = ResolveClass("Entity", params.EntityClass)
-local entityId = params.EntityId or HttpService:GenerateGUID(false)
-local entityContext = if params.Context then table.clone(params.Context) else {}
-entityContext.EntityId = entityId
+	assert(Initialized,"Factory not initialized")
+	local EntityClass = ResolveClass("Entity", params.EntityClass)
+	local entityId = params.EntityId or HttpService:GenerateGUID(false)
+	local entityContext = if params.Context then table.clone(params.Context) else {}
+	entityContext.EntityId = entityId
 
-if not EntityClass then
-Logger:Log({ Level = "ERROR", Message = "Failed to resolve EntityClass for " .. tostring(entityId) })
-return nil
+	if not EntityClass then
+	Logger:Log({ Level = "ERROR", Message = "Failed to resolve EntityClass for " .. tostring(entityId) })
+	return nil
 end
 
 local existing = Factory.Registry.GetEntity(entityId)

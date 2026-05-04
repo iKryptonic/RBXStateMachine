@@ -258,7 +258,7 @@ function NetworkModule:_CountSubscribers(obj: any): number
 	local subs = obj.Subscribers or obj._subscribers or obj.Listeners or obj._listeners
 	if type(subs) == "table" then
 		local count = 0
-		for _ in pairs(subs) do count + = 1 end
+		for _ in pairs(subs) do count += 1 end
 		return count
 	end
 	if type(subs) == "number" then return subs end
@@ -395,13 +395,13 @@ function NetworkModule:BuildRootLayer(frame: Frame, context: any)
 				Parent = contentFrame,
 			}).LayoutOrder = order
 
-			order + = 1
+			order += 1
 			for _, item in ipairs(group) do
 				local row = self:_BuildNetworkRow(contentFrame, item.Name, item.Data, nexus, order)
 				table.insert(itemsToAnimate, row)
-				order + = 1
+				order += 1
 			end
-			order + = 5
+			order += 5
 		end
 	end
 
@@ -440,14 +440,14 @@ function NetworkModule:_BuildSummaryStrip(parent: Frame)
 
 	local cmdCount, busCount, cbCount, totalMsgs = 0, 0, 0, 0
 	for _, d in pairs(self._commandCache) do
-		cmdCount + = 1
-		totalMsgs + = (d.MessageCount or 0)
+		cmdCount += 1
+		totalMsgs += (d.MessageCount or 0)
 	end
 	for _, d in pairs(self._eventBusCache) do
-		busCount + = 1
-		totalMsgs + = (d.MessageCount or 0)
+		busCount += 1
+		totalMsgs += (d.MessageCount or 0)
 	end
-	for _ in pairs(self._serverCallbacks) do cbCount + = 1 end
+	for _ in pairs(self._serverCallbacks) do cbCount += 1 end
 
 	local metrics = {
 		{ Label = "COMMANDS", Value = tostring(cmdCount), Color = Theme.Colors.Accent, Filter = "commands" },
@@ -873,7 +873,7 @@ function NetworkModule:_BuildNetworkDetailLayer(frame: Frame, context: any)
 	-- Properties
 	if type(itemData.Properties) == "table" then
 		local propCount = 0
-		for _ in pairs(itemData.Properties) do propCount + = 1 end
+		for _ in pairs(itemData.Properties) do propCount += 1 end
 		if propCount > 0 then
 			Theme.CreateLabel({
 				Text = string.format("PROPERTIES (%d)", propCount),
@@ -887,7 +887,7 @@ function NetworkModule:_BuildNetworkDetailLayer(frame: Frame, context: any)
 			local order = 41
 			for key, value in pairs(itemData.Properties) do
 				self:_BuildPropRow(contentFrame, tostring(key), tostring(value), Theme.Colors.TextPrimary, order)
-				order + = 1
+				order += 1
 				if order > 60 then break end
 			end
 		end
@@ -1167,7 +1167,7 @@ function NetworkModule:_RenderStructuredArg(parent: Frame, key: string, value: a
 	local t = type(value)
 	if t == "table" then
 		local n = 0
-		for _ in pairs(value) do n + = 1 end
+		for _ in pairs(value) do n += 1 end
 		Theme.CreateLabel({
 			Text = string.format('<font color="#9DC9FF">%s</font> = <font color="#3CD278">{%d keys}</font>',
 				safeKey, n),
@@ -1185,7 +1185,7 @@ function NetworkModule:_RenderStructuredArg(parent: Frame, key: string, value: a
 			table.sort(sortedKeys, function(a, b) return tostring(a) < tostring(b) end)
 			local idx = 0
 			for _, k in ipairs(sortedKeys) do
-				idx + = 1
+				idx += 1
 				self:_RenderStructuredArg(parent, tostring(k), value[k], depth + 1, layoutOrder * 100 + idx)
 			end
 		end

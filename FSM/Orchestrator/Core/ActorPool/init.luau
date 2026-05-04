@@ -62,7 +62,7 @@ end
 
 
 function ActorPool:Submit(job: Job): Result
-	self._nextId + = 1
+	self._nextId += 1
 	local jobId = self._nextId
 
 	local worker = self:_pickWorker()

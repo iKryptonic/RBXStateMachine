@@ -190,7 +190,7 @@ function Theme.CreateLabel(props: {
 	FontFace: Font?,
 	Alignment: Enum.TextXAlignment?,
 	Parent: Instance?,
-}): TextLabel
+	}): TextLabel
 	local label = Instance.new("TextLabel")
 	label.Text = props.Text or ""
 	label.Size = props.Size or UDim2.new(1, 0, 0, 20)
@@ -247,7 +247,7 @@ function Theme.CreateIconButton(props: {
 	Size: UDim2?,
 	Color: Color3?,
 	Parent: Instance?,
-}): TextButton
+	}): TextButton
 	local btn = Instance.new("TextButton")
 	btn.Size = props.Size or UDim2.new(0, 36, 0, 36)
 	btn.BackgroundColor3 = props.Color or Theme.Colors.GlassTertiary
@@ -398,7 +398,7 @@ function Theme.CreateRow(props: {
 	LayoutOrder: number?,
 	Parent: Instance?,
 	OnClick: (() -> ())?,
-}): Frame
+	}): Frame
 	local row = Instance.new("Frame")
 	row.Name = props.Name
 	row.Size = props.Size or UDim2.new(1, 0, 0, 36)

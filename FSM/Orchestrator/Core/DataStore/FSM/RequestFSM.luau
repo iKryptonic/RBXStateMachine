@@ -69,7 +69,7 @@ function RequestFSM:RegisterStates()
 	--[=[
 		@state Failed
 		@description Handles the `Failed` terminal state for `RequestFSM`.
-]=]
+	]=]
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm)

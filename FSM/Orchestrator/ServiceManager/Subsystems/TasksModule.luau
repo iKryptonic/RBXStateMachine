@@ -318,7 +318,7 @@ function TasksModule:FetchData(nexus: any)
 		end
 		local taskCount = 0
 		if scheduler and scheduler.Tasks then
-			for _ in pairs(scheduler.Tasks) do taskCount + = 1 end
+			for _ in pairs(scheduler.Tasks) do taskCount += 1 end
 		end
 		local frameBudget = if scheduler then (scheduler.Settings and scheduler.Settings.FrameBudget or 0.005) else 0
 		self._perfCache = {
@@ -525,8 +525,8 @@ function TasksModule:BuildRootLayer(frame: Frame, context: any)
 	local sortedTasks = self:_GetSortedFilteredTasks()
 	local activeCount, errorCount = 0, 0
 	for _, item in ipairs(sortedTasks) do
-		if item.Data.Status == "running" or item.Data.Status == "active" then activeCount + = 1 end
-		if (item.Data.Errors or 0) > 0 then errorCount + = 1 end
+		if item.Data.Status == "running" or item.Data.Status == "active" then activeCount += 1 end
+		if (item.Data.Errors or 0) > 0 then errorCount += 1 end
 	end
 
 	Theme.CreateLabel({
@@ -548,7 +548,7 @@ function TasksModule:BuildRootLayer(frame: Frame, context: any)
 	-- Archived section
 	if self._showArchived then
 		local archivedCount = 0
-		for _ in pairs(self._archivedTasks) do archivedCount + = 1 end
+		for _ in pairs(self._archivedTasks) do archivedCount += 1 end
 		if archivedCount > 0 then
 			Theme.CreateLabel({
 				Text = string.format("ARCHIVED (%d)", archivedCount),
@@ -564,7 +564,7 @@ function TasksModule:BuildRootLayer(frame: Frame, context: any)
 				local row = self:_BuildTaskRow(contentFrame, name, data, nexus, order)
 				row.BackgroundTransparency = 0.92
 				table.insert(itemsToAnimate, row)
-				order + = 1
+				order += 1
 			end
 		end
 	end
@@ -572,11 +572,11 @@ function TasksModule:BuildRootLayer(frame: Frame, context: any)
 	-- Completed/Failed/Cancelled tasks (from Scheduler.History)
 	if self._showCompleted then
 		local completedCount = 0
-		for _ in pairs(self._completedTasks) do completedCount + = 1 end
+		for _ in pairs(self._completedTasks) do completedCount += 1 end
 		if completedCount > 0 then
 			local failedCount = 0
 			for _, td in pairs(self._completedTasks) do
-				if td.Errors and td.Errors > 0 then failedCount + = 1 end
+				if td.Errors and td.Errors > 0 then failedCount += 1 end
 			end
 			Theme.CreateLabel({
 				Text = string.format('<font color="#3CD278">COMPLETED TASKS (%d)</font>  <font color="#F05050">%d failed</font>',
@@ -593,7 +593,7 @@ function TasksModule:BuildRootLayer(frame: Frame, context: any)
 				local row = self:_BuildTaskRow(contentFrame, id, data, nexus, order)
 				row.BackgroundTransparency = 0.92
 				table.insert(itemsToAnimate, row)
-				order + = 1
+				order += 1
 				if order > 350 then break end
 			end
 		end

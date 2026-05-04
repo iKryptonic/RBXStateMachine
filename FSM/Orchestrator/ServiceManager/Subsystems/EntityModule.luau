@@ -372,15 +372,15 @@ function EntityModule:_BuildSummaryStrip(parent: Frame)
 	local liveCount, deadCount, persistCount, fsmCount = 0, 0, 0, 0
 	local typeSet = {}
 	for _, d in pairs(self._entityCache) do
-		liveCount + = 1
-		if d.IsPersistent then persistCount + = 1 end
-		if d.HasFSM then fsmCount + = 1 end
+		liveCount += 1
+		if d.IsPersistent then persistCount += 1 end
+		if d.HasFSM then fsmCount += 1 end
 		typeSet[d.ClassName or "Unknown"] = true
 	end
-	for _ in pairs(self._deadEntities) do deadCount + = 1 end
+	for _ in pairs(self._deadEntities) do deadCount += 1 end
 
 	local typeCount = 0
-	for _ in pairs(typeSet) do typeCount + = 1 end
+	for _ in pairs(typeSet) do typeCount += 1 end
 
 	local metrics = {
 		{ Label = "LIVE", Value = tostring(liveCount), Color = Theme.Colors.Success },
@@ -545,7 +545,7 @@ function EntityModule:_BuildEntityRow(parent: Frame, id: string, entityData: any
 	-- Build right-anchored stats: data fields, tags, badges, version, type
 	local dataCount = 0
 	if type(entityData.Data) == "table" then
-		for _ in pairs(entityData.Data) do dataCount + = 1 end
+		for _ in pairs(entityData.Data) do dataCount += 1 end
 	end
 
 	local stats: { Theme.RowStat } = {
@@ -798,7 +798,7 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 	-- ─── CONTEXT ───
 	if type(entityData.Context) == "table" then
 		local ctxCount = 0
-		for _ in pairs(entityData.Context) do ctxCount + = 1 end
+		for _ in pairs(entityData.Context) do ctxCount += 1 end
 		if ctxCount > 0 then
 			Theme.CreateLabel({
 				Text = string.format("CONTEXT (%d)", ctxCount),
@@ -812,7 +812,7 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 			local order = 41
 			for key, value in pairs(entityData.Context) do
 				self:_BuildPropRow(contentFrame, tostring(key), self:_Stringify(value), Theme.Colors.TextPrimary, order)
-				order + = 1
+				order += 1
 			end
 		end
 	end
@@ -820,7 +820,7 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 	-- ─── DATA ───
 	if type(entityData.Data) == "table" then
 		local dataCount = 0
-		for _ in pairs(entityData.Data) do dataCount + = 1 end
+		for _ in pairs(entityData.Data) do dataCount += 1 end
 		if dataCount > 0 then
 			Theme.CreateLabel({
 				Text = string.format("DATA (%d fields)", dataCount),
@@ -873,7 +873,7 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 				else
 					self:_BuildPropRow(contentFrame, tostring(key), valStr, valColor, order)
 				end
-				order + = 1
+				order += 1
 				if order > 90 then break end -- cap to prevent lag
 			end
 		end
@@ -882,7 +882,7 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 	-- ─── SCHEMA ───
 	if type(entityData.Schema) == "table" then
 		local schemaCount = 0
-		for _ in pairs(entityData.Schema) do schemaCount + = 1 end
+		for _ in pairs(entityData.Schema) do schemaCount += 1 end
 		if schemaCount > 0 then
 			Theme.CreateLabel({
 				Text = string.format("SCHEMA (%d)", schemaCount),
@@ -897,14 +897,14 @@ function EntityModule:_BuildEntityDetailLayer(frame: Frame, context: any)
 			for fieldName, fieldDef in pairs(entityData.Schema) do
 				local badges = ""
 				if type(fieldDef) == "table" then
-					if fieldDef.Type then badges .. = fieldDef.Type .." " end
-					if fieldDef.Persist then badges .. = "◆ " end
-					if fieldDef.Replicate then badges .. = "↗ " end
+					if fieldDef.Type then badges ..= fieldDef.Type .." " end
+					if fieldDef.Persist then badges ..= "◆ " end
+					if fieldDef.Replicate then badges ..= "↗ " end
 				else
 					badges = tostring(fieldDef)
 				end
 				self:_BuildPropRow(contentFrame, tostring(fieldName), badges, Theme.Colors.Cyan, order)
-				order + = 1
+				order += 1
 				if order > 130 then break end
 			end
 		end
@@ -919,7 +919,7 @@ function EntityModule:_Stringify(value: any): string
 	elseif t == "boolean" then return tostring(value)
 	elseif t == "table" then
 		local count = 0
-		for _ in pairs(value) do count + = 1 end
+		for _ in pairs(value) do count += 1 end
 		return string.format("{%d entries}", count)
 	elseif t == "nil" then return"nil"
 	else return tostring(value) end
@@ -982,7 +982,7 @@ function EntityModule:_BuildTableViewLayer(frame: Frame, context: any)
 
 	-- Header
 	local count = 0
-	for _ in pairs(tableData) do count + = 1 end
+	for _ in pairs(tableData) do count += 1 end
 	Theme.CreateLabel({
 		Text = string.format("📂 %s (%d entries)", tableKey, count),
 		Size = UDim2.new(1, 0, 0, 22),
@@ -998,7 +998,7 @@ function EntityModule:_BuildTableViewLayer(frame: Frame, context: any)
 		if type(value) == "table" then
 			-- Nested table: another clickable row
 			local nestedCount = 0
-			for _ in pairs(value) do nestedCount + = 1 end
+			for _ in pairs(value) do nestedCount += 1 end
 			local propRow = Instance.new("Frame")
 			propRow.Size = UDim2.new(1, 0, 0, 24)
 			propRow.BackgroundColor3 = Theme.Colors.GlassTertiary
@@ -1035,7 +1035,7 @@ function EntityModule:_BuildTableViewLayer(frame: Frame, context: any)
 		else
 			self:_BuildPropRow(contentFrame, tostring(key), self:_Stringify(value), self:_TypeColor(value), order)
 		end
-		order + = 1
+		order += 1
 		if order > 200 then break end
 	end
 end

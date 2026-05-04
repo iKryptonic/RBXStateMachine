@@ -176,7 +176,7 @@ function BaseEntity.new(params: { Name: string, OwnerId: string?, Context: { [an
 		@return { [string]: any } -- Authoritative committed property values
 		@reads privateProperties.Data
 		@writes None
-]=]
+	]=]
 	proxy.GetRawData = function()
 		return privateProperties.Data
 	end
@@ -317,10 +317,10 @@ function BaseEntity:UpdateEntity(lockingCallerId: string?)
 	local fastFailReason = ""
 	local isLockContention = false
 	if not privateProperties.IsValid then
-		fastFailReason .. = "Attempt to call UpdateEntity on destroyed entity. "
+		fastFailReason ..= "Attempt to call UpdateEntity on destroyed entity. "
 	end
 	if privateProperties.EntityLocked and privateProperties.EntityLocked ~= lockingCallerId then
-		fastFailReason .. = "Attempt to call UpdateEntity without holding the lock. "
+		fastFailReason ..= "Attempt to call UpdateEntity without holding the lock. "
 		isLockContention = true
 	end
 	-- Detect "no pending" via the explicit key set so that nil writes count as changes
@@ -332,10 +332,10 @@ function BaseEntity:UpdateEntity(lockingCallerId: string?)
 		hasPending = next(privateProperties.Pending) ~= nil
 	end
 	if not hasPending then
-		fastFailReason .. = "No pending changes to apply in UpdateEntity. "
+		fastFailReason ..= "No pending changes to apply in UpdateEntity. "
 	end
 	if not privateProperties.Mutable then
-		fastFailReason .. = "Attempt to call UpdateEntity on immutable entity. "
+		fastFailReason ..= "Attempt to call UpdateEntity on immutable entity. "
 	end
 	if fastFailReason ~= "" then
 		-- Lock contention during combat is expected; log as WARN not ERROR
@@ -391,7 +391,7 @@ function BaseEntity:UpdateEntity(lockingCallerId: string?)
 	table.clear(privateProperties._cache)
 
 	-- Increment Version
-	privateProperties.Version + = 1
+	privateProperties.Version += 1
 	changes._v = privateProperties.Version
 
 	-- Append to version history ring buffer (snapshot was built pre-commit)

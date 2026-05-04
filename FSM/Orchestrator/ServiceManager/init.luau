@@ -120,8 +120,8 @@ function ServiceManager.Initialize(Orchestrator: any)
 	-- 8. FPS tracking + per-frame perf strip animation
 	if RunService:IsClient() then
 		RunService.RenderStepped:Connect(function(dt)
-			_fpsAccum + = dt
-			_fpsFrames + = 1
+			_fpsAccum += dt
+			_fpsFrames += 1
 			if _fpsAccum >= 0.5 then
 				_lastFPS = _fpsFrames / _fpsAccum
 				_fpsAccum = 0
@@ -1266,9 +1266,9 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 				local ok2, svc = pcall(function() return game:GetService(svcName) end)
 				if ok2 and svc then
 					local c = 0
-					for _ in svc:GetDescendants() do c + = 1 end
+					for _ in svc:GetDescendants() do c += 1 end
 					instMem.Services[svcName] = c
-					instMem.TotalDescendants + = c
+					instMem.TotalDescendants += c
 				end
 			end
 			-- Top offenders: children of RS/Workspace with many descendants
@@ -1276,7 +1276,7 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 			if rs2 then
 				for _, child in rs2:GetChildren() do
 					local c = 0
-					for _ in child:GetDescendants() do c + = 1 end
+					for _ in child:GetDescendants() do c += 1 end
 					if c > 50 then
 						table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "RS" })
 					end
@@ -1284,7 +1284,7 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 			end
 			for _, child in game.Workspace:GetChildren() do
 				local c = 0
-				for _ in child:GetDescendants() do c + = 1 end
+				for _ in child:GetDescendants() do c += 1 end
 				if c > 100 then
 					table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "WS" })
 				end
@@ -1300,9 +1300,9 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 				local pg = player:FindFirstChild("PlayerGui")
 				if pg then
 					local c = 0
-					for _ in pg:GetDescendants() do c + = 1 end
+					for _ in pg:GetDescendants() do c += 1 end
 					instMem.Services["PlayerGui:" .. player.Name] = c
-					instMem.TotalDescendants + = c
+					instMem.TotalDescendants += c
 				end
 			end
 			-- Detect duplicate assets (cloned multiple times)
@@ -1353,7 +1353,7 @@ function ServiceManager.RegisterServerHandlers(Orchestrator: any)
 				if child:IsA("Folder") then continue end
 				-- Check for suspicious objects (small parts, hitboxes, clones)
 				local desc = 0
-				for _ in child:GetDescendants() do desc + = 1 end
+				for _ in child:GetDescendants() do desc += 1 end
 				local isSuspicious = child.Name:lower():find("hitbox")
 					or child.Name:lower():find("clone")
 					or child.Name:lower():find("projectile")
@@ -1435,7 +1435,7 @@ end
 
 function _CountKeys(tbl: { [any]: any }): number
 	local count = 0
-	for _ in pairs(tbl) do count + = 1 end
+	for _ in pairs(tbl) do count += 1 end
 	return count
 end
 

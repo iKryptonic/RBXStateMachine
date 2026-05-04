@@ -188,7 +188,7 @@ function AnalyticsEngine:_CreateInsight(params: {
 	Threshold: number?,
 	RelatedIds: { string }?,
 	ActionableHints: { { Label: string, Command: string? } }?,
-}): Insight
+	}): Insight
 	return {
 		Id = params.Id,
 		Severity = params.Severity,
@@ -282,7 +282,7 @@ function AnalyticsEngine:_RegisterBuiltinRules()
 
 		local count = 0
 		for _ in pairs(entities) do
-			count + = 1
+			count += 1
 		end
 
 		if count > 500 then
@@ -339,7 +339,7 @@ function AnalyticsEngine:_RegisterBuiltinRules()
 		local renderCount = 0
 		for _, fsm in pairs(machines) do
 			if fsm.IsActive and fsm.Priority == 1 then
-				renderCount + = 1
+				renderCount += 1
 			end
 		end
 
@@ -435,7 +435,7 @@ function AnalyticsEngine:_RegisterBuiltinRules()
 
 		local taskCount = 0
 		for _ in pairs(tasks) do
-			taskCount + = 1
+			taskCount += 1
 		end
 
 		-- Only fire when there are literally zero tasks registered (real misconfiguration).
@@ -466,7 +466,7 @@ function AnalyticsEngine:_RegisterBuiltinRules()
 		for _, entity in pairs(entities) do
 			pcall(function()
 				if entity._privateProperties and entity._privateProperties.IsValid == false then
-					deadCount + = 1
+					deadCount += 1
 				end
 			end)
 		end

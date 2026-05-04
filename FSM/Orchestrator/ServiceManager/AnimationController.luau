@@ -42,7 +42,7 @@ end
 
 
 function AnimationController:Animate(target: Instance, properties: { [string]: any }, tweenInfo: TweenInfo?, delay: number?, onComplete: (() -> ())?)
-	self._nextId + = 1
+	self._nextId += 1
 	local id = "anim_" .. tostring(self._nextId)
 
 	local entry: AnimationEntry = {
@@ -198,8 +198,8 @@ function AnimationController:Tick()
 
 			-- Respect delay
 			if entry.Delay > 0 then
-				entry.Delay - = (1 / 60) -- approximate frame time
-				i + = 1
+				entry.Delay -= (1 / 60) -- approximate frame time
+				i += 1
 				continue
 			end
 
@@ -219,7 +219,7 @@ function AnimationController:Tick()
 			table.remove(self._queue, i)
 			continue
 		end
-		i + = 1
+		i += 1
 	end
 end
 

@@ -22,7 +22,7 @@ function SearchAutocomplete.new(config: {
 	OnSelect: OnSelectCallback,
 	AnchorPosition: UDim2?,
 	DropDirection: string?,
-}): any
+	}): any
 	local self = setmetatable({}, SearchAutocomplete)
 
 	self._textBox = config.TextBox

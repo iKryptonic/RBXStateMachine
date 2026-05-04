@@ -51,7 +51,7 @@ end
 
 function ProfilerModule:_CountTable(t: { [any]: any }): number
 	local n = 0
-	for _ in pairs(t) do n + = 1 end
+	for _ in pairs(t) do n += 1 end
 	return n
 end
 
@@ -266,9 +266,9 @@ function ProfilerModule:_FetchInstanceMemoryLocal()
 		local ok, svc = pcall(function() return game:GetService(svcName) end)
 		if ok and svc then
 			local c = 0
-			for _ in svc:GetDescendants() do c + = 1 end
+			for _ in svc:GetDescendants() do c += 1 end
 			instMem.Services[svcName] = c
-			instMem.TotalDescendants + = c
+			instMem.TotalDescendants += c
 		end
 	end
 	-- PlayerGui
@@ -278,9 +278,9 @@ function ProfilerModule:_FetchInstanceMemoryLocal()
 		local pg = lp:FindFirstChild("PlayerGui")
 		if pg then
 			local c = 0
-			for _ in pg:GetDescendants() do c + = 1 end
+			for _ in pg:GetDescendants() do c += 1 end
 			instMem.Services["PlayerGui"] = c
-			instMem.TotalDescendants + = c
+			instMem.TotalDescendants += c
 		end
 	end
 	-- Top offenders in RS
@@ -288,7 +288,7 @@ function ProfilerModule:_FetchInstanceMemoryLocal()
 	if rs then
 		for _, child in rs:GetChildren() do
 			local c = 0
-			for _ in child:GetDescendants() do c + = 1 end
+			for _ in child:GetDescendants() do c += 1 end
 			if c > 50 then
 				table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "RS" })
 			end
@@ -297,7 +297,7 @@ function ProfilerModule:_FetchInstanceMemoryLocal()
 	-- Top offenders in Workspace
 	for _, child in game.Workspace:GetChildren() do
 		local c = 0
-		for _ in child:GetDescendants() do c + = 1 end
+		for _ in child:GetDescendants() do c += 1 end
 		if c > 100 then
 			table.insert(instMem.TopOffenders, { Name = child.Name, Class = child.ClassName, Count = c, Service = "WS" })
 		end
@@ -393,7 +393,7 @@ function ProfilerModule:BuildRootLayer(frame: Frame, context: any)
 
 	local order = 0
 	local function nextOrder(): number
-		order + = 1
+		order += 1
 		return order
 	end
 
@@ -952,7 +952,7 @@ function ProfilerModule:_BuildTableHeader(parent: Frame, layoutOrder: number, co
 			Alignment = Enum.TextXAlignment.Left,
 			Parent = row,
 		})
-		xOff + = w
+		xOff += w
 	end
 end
 
@@ -980,7 +980,7 @@ function ProfilerModule:_BuildTableRow(parent: Frame, layoutOrder: number, cells
 			Alignment = Enum.TextXAlignment.Left,
 			Parent = row,
 		})
-		xOff + = w
+		xOff += w
 	end
 end
 

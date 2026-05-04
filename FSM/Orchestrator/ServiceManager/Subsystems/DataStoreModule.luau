@@ -118,7 +118,7 @@ function DataStoreModule:_ExtractStoreData(name: string, store: any): any
 	local cache = store.Cache or store._cache or store.Data or store._data or {}
 	if type(cache) == "table" then
 		for k, v in pairs(cache) do
-			cachedKeys + = 1
+			cachedKeys += 1
 			keys[tostring(k)] = v
 		end
 	end
@@ -126,7 +126,7 @@ function DataStoreModule:_ExtractStoreData(name: string, store: any): any
 	local pendingOps = 0
 	local pending = store.PendingOperations or store._pendingOperations or store.Queue or store._queue or {}
 	if type(pending) == "table" then
-		for _ in pairs(pending) do pendingOps + = 1 end
+		for _ in pairs(pending) do pendingOps += 1 end
 	end
 
 	local config = {}
@@ -277,11 +277,11 @@ function DataStoreModule:_BuildSummaryStrip(parent: Frame)
 
 	local storeCount, totalKeys, totalOps, totalPending, errorCount = 0, 0, 0, 0, 0
 	for _, d in pairs(self._storeCache) do
-		storeCount + = 1
-		totalKeys + = (d.CachedKeys or 0)
-		totalOps + = (d.TotalOps or 0)
-		totalPending + = (d.PendingOps or 0)
-		errorCount + = (d.Errors or 0)
+		storeCount += 1
+		totalKeys += (d.CachedKeys or 0)
+		totalOps += (d.TotalOps or 0)
+		totalPending += (d.PendingOps or 0)
+		errorCount += (d.Errors or 0)
 	end
 
 	local metrics = {
@@ -661,7 +661,7 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 	-- ─── CONFIG ───
 	if type(storeData.Config) == "table" then
 		local configCount = 0
-		for _ in pairs(storeData.Config) do configCount + = 1 end
+		for _ in pairs(storeData.Config) do configCount += 1 end
 		if configCount > 0 then
 			Theme.CreateLabel({
 				Text = string.format("CONFIG (%d)", configCount),
@@ -675,7 +675,7 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 			local order = 51
 			for key, val in pairs(storeData.Config) do
 				self:_BuildPropRow(contentFrame, tostring(key), tostring(val), Theme.Colors.TextPrimary, order)
-				order + = 1
+				order += 1
 				if order > 65 then break end
 			end
 		end
@@ -684,7 +684,7 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 	-- ─── CACHED KEYS ───
 	if type(storeData.Keys) == "table" then
 		local keyCount = 0
-		for _ in pairs(storeData.Keys) do keyCount + = 1 end
+		for _ in pairs(storeData.Keys) do keyCount += 1 end
 		if keyCount > 0 then
 			Theme.CreateLabel({
 				Text = string.format("CACHED KEYS (%d)", keyCount),
@@ -700,7 +700,7 @@ function DataStoreModule:_BuildStoreDetailLayer(frame: Frame, context: any)
 				local valStr = self:_Stringify(value)
 				local valColor = self:_TypeColor(value)
 				self:_BuildPropRow(contentFrame, tostring(key), valStr, valColor, order)
-				order + = 1
+				order += 1
 				if order > 110 then break end
 			end
 		end
@@ -742,7 +742,7 @@ function DataStoreModule:_Stringify(value: any): string
 	elseif t == "boolean" then return tostring(value)
 	elseif t == "table" then
 		local count = 0
-		for _ in pairs(value) do count + = 1 end
+		for _ in pairs(value) do count += 1 end
 		return string.format("{%d}", count)
 	elseif t == "nil" then return"nil"
 	else return tostring(value) end

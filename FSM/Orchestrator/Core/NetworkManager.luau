@@ -42,7 +42,7 @@ local function sanitizeForReplication(value: any, depth: number): any
 		local out = {}
 		local count = 0
 		for k, v in pairs(value) do
-			count + = 1
+			count += 1
 			if count > 16 then
 				out["…"] = string.format("(+%d more)", count - 16)
 				break
@@ -75,7 +75,7 @@ local function formatArgsInline(packed): string
 			local kvs = {}
 			local kcount = 0
 			for k, val in pairs(v) do
-				kcount + = 1
+				kcount += 1
 				if kcount > 3 then break end
 				local vt = type(val)
 				local vstr
@@ -87,7 +87,7 @@ local function formatArgsInline(packed): string
 				table.insert(kvs, tostring(k) .."=" .. vstr)
 			end
 			local total = 0
-			for _ in pairs(v) do total + = 1 end
+			for _ in pairs(v) do total += 1 end
 			if total > 3 then table.insert(kvs,"+" .. (total - 3)) end
 			table.insert(parts,"{" .. table.concat(kvs,", ") .."}")
 		elseif t == "nil" then table.insert(parts,"nil")
@@ -217,7 +217,7 @@ local function trackRemoteCall(remoteName: string, direction: string, packedArgs
 		stats = { Count = 0, LastFired = 0, RecentCalls = {} }
 		NetworkManager._remoteStats[key] = stats
 	end
-	stats.Count + = 1
+	stats.Count += 1
 	stats.LastFired = os.clock()
 	if not stats.RecentCalls then stats.RecentCalls = {} end
 	-- Store both the inline summary string AND a structured (sanitized,
@@ -362,7 +362,7 @@ function NetworkManager.FireEventBus(name: string, ...)
 			stats = { Count = 0, LastFired = 0, RecentCalls = {} }
 			NetworkManager._busStats[name] = stats
 		end
-		stats.Count + = 1
+		stats.Count += 1
 		stats.LastFired = os.clock()
 
 		-- Track recent calls (ring buffer of 30) for the View Calls drill-down.
@@ -427,7 +427,7 @@ function NetworkManager._RegisterServerListeners()
 				stats = { Count = 0, LastInvoked = 0 }
 				NetworkManager._invokeStats[requestName] = stats
 			end
-			stats.Count + = 1
+			stats.Count += 1
 			stats.LastInvoked = os.clock()
 
 			-- Track recent calls per ServerRequest name so the dashboard's
@@ -467,7 +467,7 @@ function NetworkManager._RegisterServerListeners()
 					stats = { Count = 0, LastInvoked = 0 }
 					NetworkManager._invokeStats[key] = stats
 				end
-				stats.Count + = 1
+				stats.Count += 1
 				stats.LastInvoked = os.clock()
 
 				-- Per-command call history for the dashboard's "View Calls"
