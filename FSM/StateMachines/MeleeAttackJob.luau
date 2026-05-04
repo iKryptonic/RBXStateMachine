@@ -1,6 +1,5 @@
 --!strict
 
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
 assert(Helpers,"Helpers folder not found")
@@ -12,34 +11,8 @@ local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
 
 --[=[
-	@Name MeleeAttackJob
-	@Author iKrypto
-	@Description Server-authoritative unarmed melee combo chain FSM. Validates the attack
-	request, acquires a combat lock, checks and deducts stamina, resolves the combo
-	sequence (RightPunch → LeftPunch → LeftKnee → Uppercut → RightKick), emits phase
-	animations, schedules damage windows with victim scanning and knockback, then releases
-	the lock. Uses "Completed" as terminal state (historical: "Complete" typo caused zombie
-	FSM leak — never use "Complete").
-
-	State flow:
-	Validate → AcquireLock → ValidateStamina → DeductStamina → ResolveSequence
-	→ EmitPhaseAnimation → ScheduleDamageWindow → WaitForDamageWindow
-	→ ScanVictims → ProcessVictim → ApplyKnockback → WaitForRecovery
-	→ ReleaseLock → Completed
-
-	Context fields:
-	- _charEntity: any — attacker character entity
-	- _character: Model — attacker character model
-	- _humanoid: Humanoid — for death detection during combo
-	- _comboSlot: number — which combo step (1-5)
-	- _phases: table — resolved phase timeline
-	- _damage: number — computed damage per hit
-	- _lockHeld: boolean — whether combat lock was acquired
-	- _releaseReason: string? — stored failure reason for cleanup path
-
-	Required params:
-	- CharacterEntityId: string — attacking character entity ID
-	- ComboSlot: number? — combo step index (defaults to 1)
+	@module MeleeAttackJob
+	@description Runs an unarmed combo attack by validating the character, spending stamina, playing phase animations, scanning victims, and spawning damage jobs.
 ]=]
 
 local MeleeAttackJob = {
@@ -113,12 +86,12 @@ local MELEE_SEQUENCES = {
 }
 
 --[=[
-	@description Helper for the append animation intent step used by this state machine.
-	@param orchestrator any -- Input consumed by `appendAnimationIntent`.
-	@param charEntity any -- Input consumed by `appendAnimationIntent`.
-	@param fsm any -- Input consumed by `appendAnimationIntent`.
-	@param phase any -- Input consumed by `appendAnimationIntent`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Appends animation intent for this request.
+	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
+	@param charEntity any  -- Character entity being read from or written to.
+	@param fsm any  -- MeleeAttackJob instance carrying the active melee sequence, victims, and release state.
+	@param phase any  -- Animation phase entry whose intent should be emitted.
+	@return nil -- Performs this helper's work in place.
 ]=]
 
 local function appendAnimationIntent(orchestrator: any, charEntity: any, fsm: any, phase: any)
@@ -126,10 +99,10 @@ local function appendAnimationIntent(orchestrator: any, charEntity: any, fsm: an
 end
 
 --[=[
-	@description Helper for the emit due animation phases step used by this state machine.
-	@param fsm any -- Input consumed by `emitDueAnimationPhases`.
-	@param elapsed any -- Input consumed by `emitDueAnimationPhases`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Emits due animation phases.
+	@param fsm any  -- MeleeAttackJob instance carrying the active melee sequence, victims, and release state.
+	@param elapsed any  -- Elapsed attack time used to decide which phases are due.
+	@return nil -- Performs this helper's work in place.
 ]=]
 
 local function emitDueAnimationPhases(fsm: any, elapsed: number)
@@ -157,7 +130,6 @@ local function emitDueAnimationPhases(fsm: any, elapsed: number)
 	fsm.Context._nextPhaseIndex = nextPhaseIndex
 end
 
-
 --[=[
 	@description Registers the runtime states, transitions, and terminal behavior for `MeleeAttackJob`.
 	@return nil -- Populates the state graph on the FSM definition table.
@@ -165,16 +137,16 @@ end
 
 function MeleeAttackJob:RegisterStates()
 
-
 	--[=[
-		@state Validate
-		@description Validates the required runtime context and prerequisites, then captures the lock or blocking state needed for the next step.
-			Transitions:
-			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
-			- `AcquireLock` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: stores `Context._charEntity`, stores `Context._staminaCost`, stores `Context._character`, stores `Context._humanoid`, stores `Context._root`.
-	]=]
+	@state Validate
+	@description Resolves the attacker, clamps combo slot, computes stamina cost, and silently completes when a weapon is already drawn instead of unarmed melee.
+	Transitions:
+	- `Completed` when OnEnter finishes or falls through its guard checks.
+	- `AcquireLock` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: stores `Context._charEntity`, stores `Context._staminaCost`, stores `Context._character`, stores `Context._humanoid`, stores `Context._root`.
+
+]=]
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -234,15 +206,15 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"AcquireLock","Completed","Failed" })
 
-
 	--[=[
-		@state AcquireLock
-		@description Captures the lock or blocking state needed for the next step.
-			Transitions:
-			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
-			- `ValidateStamina` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: stores `Context._lockHeld`, sets `_lockHeld`.
-	]=]
+	@state AcquireLock
+	@description Acquires the character lock for the melee sequence and treats contention as a no-op completion.
+	Transitions:
+	- `Completed` when OnEnter finishes or falls through its guard checks.
+	- `ValidateStamina` when OnEnter finishes or falls through its guard checks.
+	Writes: stores `Context._lockHeld`, sets `_lockHeld`.
+
+]=]
 
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
@@ -256,14 +228,14 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"ValidateStamina","Completed","Failed" })
 
-
 	--[=[
-		@state ValidateStamina
-		@description Validates the required runtime context and prerequisites.
-			Transitions:
-			- `DeductStamina` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state ValidateStamina
+	@description Checks the cached stamina cost before the melee sequence spends anything.
+	Transitions:
+	- `DeductStamina` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("ValidateStamina", {
 		OnEnter = function(_, fsm)
@@ -277,14 +249,14 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"DeductStamina","ReleaseLock" })
 
-
 	--[=[
-		@state DeductStamina
-		@description On enter, replicates entity changes.
-			Transitions:
-			- `ResolveSequence` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: replicates entity changes.
-	]=]
+	@state DeductStamina
+	@description Deducts melee stamina, replicates the spend, and queues lock release with a failure reason when the spend fails.
+	Transitions:
+	- `ResolveSequence` when OnEnter finishes or falls through its guard checks.
+	Writes: replicates entity changes.
+
+]=]
 
 	self:AddState("DeductStamina", {
 		OnEnter = function(_, fsm)
@@ -299,14 +271,14 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"ResolveSequence" })
 
-
 	--[=[
-		@state ResolveSequence
-		@description Resolves the data needed for the `ResolveSequence` step.
-			Transitions:
-			- `EmitPhaseAnimation` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: stores `Context._damage`, stores `Context._phases`, stores `Context._phaseStartTimes`, stores `Context._nextPhaseIndex`, stores `Context._attackDuration`.
-	]=]
+	@state ResolveSequence
+	@description Resolves the current unarmed combo sequence, advances the per-slot pointer, and caches phase timing plus damage values.
+	Transitions:
+	- `EmitPhaseAnimation` when OnEnter finishes or falls through its guard checks.
+	Writes: stores `Context._damage`, stores `Context._phases`, stores `Context._phaseStartTimes`, stores `Context._nextPhaseIndex`, stores `Context._attackDuration`.
+
+]=]
 
 	self:AddState("ResolveSequence", {
 		OnEnter = function(_, fsm)
@@ -353,14 +325,14 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"EmitPhaseAnimation","ReleaseLock" })
 
-
 	--[=[
-		@state EmitPhaseAnimation
-		@description On enter, stores `Context._nextPhaseIndex`, sets `_nextPhaseIndex`.
-			Transitions:
-			- `ScheduleDamageWindow` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: stores `Context._nextPhaseIndex`, sets `_nextPhaseIndex`.
-	]=]
+	@state EmitPhaseAnimation
+	@description Emits the first melee animation phase intent, then advances `_nextPhaseIndex` for later heartbeat-driven phases.
+	Transitions:
+	- `ScheduleDamageWindow` when OnEnter finishes or falls through its guard checks.
+	Writes: stores `Context._nextPhaseIndex`, sets `_nextPhaseIndex`.
+
+]=]
 
 	self:AddState("EmitPhaseAnimation", {
 		OnEnter = function(_, fsm)
@@ -377,16 +349,16 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"ScheduleDamageWindow","ReleaseLock" })
 
-
 	--[=[
-		@state ScheduleDamageWindow
-		@description Runs the `schedule damage window` stage of `MeleeAttackJob`.
-			Transitions:
-			- `ScanVictims` when the scheduled transition completes.
-			- `WaitForDamageWindow` when this stage finishes its immediate work or falls through its guard checks.
-			- `ScanVictims` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state ScheduleDamageWindow
+	@description Schedules the victim scan at the configured mid-combo damage window, or skips there immediately for zero-delay attacks.
+	Transitions:
+	- `ScanVictims` when the scheduled transition completes.
+	- `WaitForDamageWindow` when OnEnter finishes or falls through its guard checks.
+	- `ScanVictims` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("ScheduleDamageWindow", {
 		OnEnter = function(_, fsm)
@@ -400,14 +372,14 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"WaitForDamageWindow","ScanVictims" })
 
-
 	--[=[
-		@state WaitForDamageWindow
-		@description Waits until its scheduled completion or transition condition is met.
-			Transitions:
-			- External transitions allow: `ScanVictims`, `Failed`.
-			Writes: none.
-	]=]
+	@state WaitForDamageWindow
+	@description OnHeartbeat keeps emitting due animation phases while waiting for the scheduled victim scan.
+	Transitions:
+	- `ScanVictims` is entered by the scheduled damage-window transition; `Failed` remains available for forced shutdown.
+	Writes: none.
+
+]=]
 
 	self:AddState("WaitForDamageWindow", {
 		OnHeartbeat = function(_, fsm)
@@ -415,15 +387,15 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"ScanVictims","Failed" })
 
-
 	--[=[
-		@state ScanVictims
-		@description On enter, clears `Context._currentVictim`, stores `Context._knockbackDirection`, stores `Context._victims`.
-			Transitions:
-			- `ProcessVictim` when this stage finishes its immediate work or falls through its guard checks.
-			- `WaitForRecovery` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: clears `Context._currentVictim`, stores `Context._knockbackDirection`, stores `Context._victims`, stores `Context._victimIndex`, stores `Context._currentVictim`.
-	]=]
+	@state ScanVictims
+	@description Scans forward from the attacker root, caches all victims plus knockback direction, and skips straight to recovery when nobody is hit.
+	Transitions:
+	- `ProcessVictim` when OnEnter finishes or falls through its guard checks.
+	- `WaitForRecovery` when OnEnter finishes or falls through its guard checks.
+	Writes: clears `Context._currentVictim`, stores `Context._knockbackDirection`, stores `Context._victims`, stores `Context._victimIndex`, stores `Context._currentVictim`.
+
+]=]
 
 	self:AddState("ScanVictims", {
 		OnEnter = function(_, fsm)
@@ -445,15 +417,15 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"ProcessVictim","WaitForRecovery" })
 
-
 	--[=[
-		@state ProcessVictim
-		@description On enter, stores `Context._currentVictim`, stores `Context._victimIndex`, sets `_currentVictim`.
-			Transitions:
-			- `WaitForRecovery` when this stage finishes its immediate work or falls through its guard checks.
-			- `ApplyKnockback` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: stores `Context._currentVictim`, stores `Context._victimIndex`, sets `_currentVictim`, sets `_victimIndex`.
-	]=]
+	@state ProcessVictim
+	@description Loads the current victim, starts a `DamageJob` when that victim is still alive, and advances the victim index for the next pass.
+	Transitions:
+	- `WaitForRecovery` when OnEnter finishes or falls through its guard checks.
+	- `ApplyKnockback` when OnEnter finishes or falls through its guard checks.
+	Writes: stores `Context._currentVictim`, stores `Context._victimIndex`, sets `_currentVictim`, sets `_victimIndex`.
+
+]=]
 
 	self:AddState("ProcessVictim", {
 		OnEnter = function(_, fsm)
@@ -493,15 +465,15 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"ApplyKnockback","WaitForRecovery" })
 
-
 	--[=[
-		@state ApplyKnockback
-		@description On enter, sets `AssemblyLinearVelocity`.
-			Transitions:
-			- `ProcessVictim` when this stage finishes its immediate work or falls through its guard checks.
-			- `WaitForRecovery` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: sets `AssemblyLinearVelocity`.
-	]=]
+	@state ApplyKnockback
+	@description Applies forward and upward knockback to the current victim root, then either loops to the next victim or enters recovery.
+	Transitions:
+	- `ProcessVictim` when OnEnter finishes or falls through its guard checks.
+	- `WaitForRecovery` when OnEnter finishes or falls through its guard checks.
+	Writes: sets `AssemblyLinearVelocity`.
+
+]=]
 
 	self:AddState("ApplyKnockback", {
 		OnEnter = function(_, fsm)
@@ -523,15 +495,15 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"ProcessVictim","WaitForRecovery" })
 
-
 	--[=[
-		@state WaitForRecovery
-		@description Waits until its scheduled completion or transition condition is met.
-			Transitions:
-			- `ReleaseLock` when the scheduled transition completes.
-			- `ReleaseLock` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state WaitForRecovery
+	@description Schedules the remainder of the attack recovery window and keeps emitting any late animation phases on heartbeat.
+	Transitions:
+	- `ReleaseLock` when the scheduled transition completes.
+	- `ReleaseLock` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("WaitForRecovery", {
 		OnEnter = function(_, fsm)
@@ -550,15 +522,15 @@ function MeleeAttackJob:RegisterStates()
 		end,
 	}, {"ReleaseLock","Failed" })
 
-
 	--[=[
-		@state ReleaseLock
-		@description On enter, stores `Context._lockHeld`, stores `Context._releaseTargetState`, sets `_lockHeld`.
-			Transitions:
-			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: stores `Context._lockHeld`, stores `Context._releaseTargetState`, sets `_lockHeld`, sets `_releaseTargetState`.
-	]=]
+	@state ReleaseLock
+	@description Releases the melee entity lock and routes to `Completed` or `Failed` based on the queued release target state.
+	Transitions:
+	- `Completed` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: stores `Context._lockHeld`, stores `Context._releaseTargetState`, sets `_lockHeld`, sets `_releaseTargetState`.
+
+]=]
 
 	self:AddState("ReleaseLock", {
 		OnEnter = function(_, fsm)
@@ -578,17 +550,19 @@ function MeleeAttackJob:RegisterStates()
 	--[=[
 	@state Completed
 	@description Terminal success sink reached after `ReleaseLock` drops the held character lock at the end of the melee timeline. `OnEnter` is a no-op because the job has already finished its work.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
 	@state Failed
 	@description Terminal failure sink entered when `ReleaseLock` forwards `_releaseReason` into `Fail`. `OnEnter` is a no-op because lock cleanup and failure bookkeeping happen before entry.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Failed", function() end, {})
 end

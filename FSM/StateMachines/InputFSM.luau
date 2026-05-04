@@ -1,24 +1,8 @@
 --!strict
 
-
 --[=[
-	@Name InputFSM
-	@Author iKrypto
-	@Description Client-side input state machine. Tracks whether the player is in Normal
-	input mode, Combo mode (C key for spell combos), or HeldAttack mode (holding Q for
-	repeated attacks). Manages the combo key buffer and pointer for spell keystroke
-	sequences.
-
-	State flow:
-	Normal ↔ ComboMode (C key toggle)
-	Normal → HeldAttack (Q hold) → Normal (Q release)
-
-	Context fields:
-	- _comboBuffer: string — accumulated keystroke sequence for spell combos
-	- _comboPointer: number — current position in the combo buffer
-
-	Required params:
-	- CharacterEntityId: string — character entity ID
+	@module InputFSM
+	@description Tracks the client combat-input mode between `Normal`, `ComboMode`, and `HeldAttack`, including combo buffer setup and hold release handling.
 ]=]
 
 local InputFSM = {
@@ -33,9 +17,9 @@ local KEYSTROKE_TIMEOUT = 1.75
 
 --[=[
 	@description Writes the derived input mode data back onto the active entity or FSM context.
-	@param fsm any -- Input consumed by `writeInputMode`.
-	@param mode any -- Input consumed by `writeInputMode`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@param fsm any  -- InputFSM instance tracking combo-buffer and held-attack input state.
+	@param mode any  -- Mode name to apply.
+	@return nil -- Performs this helper's work in place.
 ]=]
 
 local function writeInputMode(fsm: any, mode: string)
@@ -49,7 +33,6 @@ local function writeInputMode(fsm: any, mode: string)
 	end
 end
 
-
 --[=[
 	@description Registers the runtime states, transitions, and terminal behavior for `InputFSM`.
 	@return nil -- Populates the state graph on the FSM definition table.
@@ -57,14 +40,14 @@ end
 
 function InputFSM:RegisterStates()
 
-
 	--[=[
-		@state Normal
-		@description Runs the `normal` stage of `InputFSM`.
-			Transitions:
-			- External transitions allow: `ComboMode`, `HeldAttack`.
-			Writes: none.
-	]=]
+	@state Normal
+	@description Default input state with normal combat bindings active until combo buffering or held-attack logic takes over.
+	Transitions:
+	- Other input handlers may switch to `ComboMode` or `HeldAttack` when those interactions begin.
+	Writes: none.
+
+]=]
 
 	self:AddState("Normal", {
 		OnEnter = function(_, _fsm)
@@ -72,14 +55,14 @@ function InputFSM:RegisterStates()
 		end,
 	}, {"ComboMode","HeldAttack" })
 
-
 	--[=[
-		@state ComboMode
-		@description On enter, stores `Context._comboBuffer`, stores `Context._comboPointer`, sets `_comboBuffer`.
-			Transitions:
-			- `Normal` when the KEYSTROKE_TIMEOUT-second timeout expires.
-			Writes: stores `Context._comboBuffer`, stores `Context._comboPointer`, sets `_comboBuffer`, sets `_comboPointer`.
-	]=]
+	@state ComboMode
+	@description Switches the input mode to combo capture, clears `_comboBuffer`, and resets `_comboPointer`; `OnLeave` clears both again before returning to normal input.
+	Transitions:
+	- `Normal` when the `KEYSTROKE_TIMEOUT` timeout expires.
+	Writes: stores `Context._comboBuffer`, stores `Context._comboPointer`, sets `_comboBuffer`, sets `_comboPointer`.
+
+]=]
 
 	self:AddState("ComboMode", {
 		OnEnter = function(_, fsm)
@@ -95,14 +78,14 @@ function InputFSM:RegisterStates()
 		OnTimeout = "Normal",
 	}, {"Normal" })
 
-
 	--[=[
-		@state HeldAttack
-		@description Runs the `held attack` stage of `InputFSM`.
-			Transitions:
-			- External transitions allow: `Normal`.
-			Writes: none.
-	]=]
+	@state HeldAttack
+	@description Writes held-attack mode on enter and clears it back to `None` on leave.
+	Transitions:
+	- Input release logic returns here to `Normal` when the held attack ends.
+	Writes: none.
+
+]=]
 
 	self:AddState("HeldAttack", {
 		OnEnter = function(_, fsm)
@@ -115,26 +98,27 @@ function InputFSM:RegisterStates()
 	--[=[
 	@state Completed
 	@description Terminal success sink reserved for explicit shutdown of the input-mode FSM. Runtime behavior normally stays inside `Normal`, `ComboMode`, and `HeldAttack`, so `OnEnter` is a no-op.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
 	@state Failed
 	@description Terminal failure sink reserved for future input-processing errors. The current implementation does not route here, and `OnEnter` performs no writes.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Failed", function() end, {})
 end
 
-
 --[=[
 	@description Switches the FSM into `ComboMode` when its current state allows the change.
-	@param fsm any -- Value consumed by `EnterComboMode`.
-	@return boolean -- True when the requested transition or action was accepted.
+	@param fsm any  -- InputFSM instance tracking combo-buffer and held-attack input state.
+	@return boolean -- `true` when the request is accepted.
 ]=]
 
 function InputFSM.EnterComboMode(fsm: any): boolean
@@ -146,11 +130,10 @@ function InputFSM.EnterComboMode(fsm: any): boolean
 	return true
 end
 
-
 --[=[
 	@description Switches the FSM into `HeldAttack` when its current state allows the change.
-	@param fsm any -- Value consumed by `EnterHeldAttack`.
-	@return boolean -- True when the requested transition or action was accepted.
+	@param fsm any  -- InputFSM instance tracking combo-buffer and held-attack input state.
+	@return boolean -- `true` when the request is accepted.
 ]=]
 
 function InputFSM.EnterHeldAttack(fsm: any): boolean
@@ -161,11 +144,10 @@ function InputFSM.EnterHeldAttack(fsm: any): boolean
 	return true
 end
 
-
 --[=[
-	@description Releases the active `held attack` mode and returns control to the default path when applicable.
-	@param fsm any -- Value consumed by `ReleaseHeldAttack`.
-	@return nil -- Performs state changes or cleanup as side effects.
+	@description Releases the active `held attack` mode and returns control to the default path when the current state allows it.
+	@param fsm any  -- InputFSM instance tracking combo-buffer and held-attack input state.
+	@return nil -- Updates FSM state as a side effect.
 ]=]
 
 function InputFSM.ReleaseHeldAttack(fsm: any)
@@ -174,22 +156,20 @@ function InputFSM.ReleaseHeldAttack(fsm: any)
 	end
 end
 
-
 --[=[
 	@description Returns whether the FSM is currently in the `ComboMode` branch.
-	@param fsm any -- Value consumed by `IsComboMode`.
-	@return boolean -- True when the requested transition or action was accepted.
+	@param fsm any  -- InputFSM instance tracking combo-buffer and held-attack input state.
+	@return boolean -- `true` when combo mode is true.
 ]=]
 
 function InputFSM.IsComboMode(fsm: any): boolean
 	return fsm.State == "ComboMode"
 end
 
-
 --[=[
 	@description Returns whether the FSM is currently in the `HeldAttack` branch.
-	@param fsm any -- Value consumed by `IsHeldAttack`.
-	@return boolean -- True when the requested transition or action was accepted.
+	@param fsm any  -- InputFSM instance tracking combo-buffer and held-attack input state.
+	@return boolean -- `true` when held attack is true.
 ]=]
 
 function InputFSM.IsHeldAttack(fsm: any): boolean

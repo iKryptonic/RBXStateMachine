@@ -1,27 +1,10 @@
 --!strict
 
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 --[=[
-	@Name StatusEffectFSM
-	@Author iKrypto
-	@Description Server-authoritative timed buff/debuff FSM. Loads the effect definition
-	(Poison, Burning, Slow, Regeneration, Strength, Shield, Stun, Silence), applies stat
-	modifiers and status flags to the target entity, ticks for the effect duration (applying
-	periodic damage/healing), then removes all modifiers and flags on expiry.
-
-	State flow:
-	ValidateInput → LoadEntities → LoadEffectDef → InitializeContext
-	→ UpdateEffectsRegistry → ApplyStatModifiers → ApplyStatusFlags
-	→ SyncResources → BroadcastUpdate → Ticking
-	→ RemoveStatModifiers → RemoveStatusFlags → CleanupRegistry
-	→ BroadcastCleanup → Expired
-
-	Required params:
-	- CharacterEntityId: string — target character entity
-	- EffectId: string — unique ID for this effect instance
-	- Definition: table — effect definition from StatusEffectDefs
+	@module StatusEffectFSM
+	@description Loads a status-effect definition, applies registry entries, stats, flags, and ticks for the effect duration, then cleans everything back up.
 ]=]
 
 local StatusEffectFSM = {
@@ -50,8 +33,8 @@ local StatusEffectFSM = {
 }
 
 --[=[
-	@description Returns the status effect defs used by this state machine when it can be resolved.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Returns the status effect defs for this FSM, or `nil` when it cannot be found.
+	@return any -- Resolved status effect defs, or `nil` when unavailable.
 ]=]
 
 local function getStatusEffectDefs()
@@ -59,9 +42,9 @@ local function getStatusEffectDefs()
 end
 
 --[=[
-	@description Helper for the clone active effects step used by this state machine.
-	@param charEntity any -- Input consumed by `cloneActiveEffects`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Clones the active effects.
+	@param charEntity any  -- Character entity being read from or written to.
+	@return any -- Result returned by `cloneActiveEffects`, mirrored through this wrapper.
 ]=]
 
 local function cloneActiveEffects(charEntity: any): { any }
@@ -80,9 +63,9 @@ local function cloneActiveEffects(charEntity: any): { any }
 end
 
 --[=[
-	@description Helper for the find effect entry index step used by this state machine.
-	@param activeEffects any -- Input consumed by `findEffectEntryIndex`.
-	@param instanceId any -- Input consumed by `findEffectEntryIndex`.
+	@description Finds the effect entry index for the current request.
+	@param activeEffects any  -- Cloned ActiveStatusEffects table to search.
+	@param instanceId any  -- Effect instance id to look up in ActiveStatusEffects.
 	@return number -- Numeric value derived for downstream logic.
 ]=]
 
@@ -96,9 +79,9 @@ local function findEffectEntryIndex(activeEffects: { any }, instanceId: string):
 end
 
 --[=[
-	@description Returns the humanoid used by this state machine when it can be resolved.
-	@param charEntity any -- Input consumed by `getHumanoid`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Returns the humanoid for this FSM, or `nil` when it cannot be found.
+	@param charEntity any  -- Character entity being read from or written to.
+	@return any -- Resolved humanoid, or `nil` when unavailable.
 ]=]
 
 local function getHumanoid(charEntity: any): Humanoid?
@@ -115,9 +98,9 @@ local function getHumanoid(charEntity: any): Humanoid?
 end
 
 --[=[
-	@description Helper for the clamp resources step used by this state machine.
-	@param charEntity any -- Input consumed by `clampResources`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Clamps resources to valid bounds.
+	@param charEntity any  -- Character entity being read from or written to.
+	@return nil -- Performs this helper's work in place.
 ]=]
 
 local function clampResources(charEntity: any)
@@ -134,8 +117,8 @@ end
 
 --[=[
 	@description Synchronizes humanoid with the latest derived runtime state.
-	@param charEntity any -- Input consumed by `syncHumanoid`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@param charEntity any  -- Character entity being read from or written to.
+	@return nil -- Performs this helper's work in place.
 ]=]
 
 local function syncHumanoid(charEntity: any)
@@ -156,9 +139,9 @@ local function syncHumanoid(charEntity: any)
 end
 
 --[=[
-	@description Returns the context used by this state machine when it can be resolved.
-	@param fsm any -- Input consumed by `getContext`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Returns the context for this FSM, or `nil` when it cannot be found.
+	@param fsm any  -- StatusEffectFSM instance carrying the active effect definition, timers, and rollback state.
+	@return any -- Resolved context, or `nil` when unavailable.
 ]=]
 
 local function getContext(fsm: any): any
@@ -167,8 +150,8 @@ local function getContext(fsm: any): any
 end
 
 --[=[
-	@description Helper for the reverse stat modifiers step used by this state machine.
-	@param fsm any -- Input consumed by `reverseStatModifiers`.
+	@description Restores stat modifiers.
+	@param fsm any  -- StatusEffectFSM instance carrying the active effect definition, timers, and rollback state.
 	@return boolean -- Whether the helper completed successfully.
 ]=]
 
@@ -191,8 +174,8 @@ local function reverseStatModifiers(fsm: any): boolean
 end
 
 --[=[
-	@description Helper for the reverse status flags step used by this state machine.
-	@param fsm any -- Input consumed by `reverseStatusFlags`.
+	@description Restores status flags.
+	@param fsm any  -- StatusEffectFSM instance carrying the active effect definition, timers, and rollback state.
 	@return boolean -- Whether the helper completed successfully.
 ]=]
 
@@ -215,8 +198,8 @@ local function reverseStatusFlags(fsm: any): boolean
 end
 
 --[=[
-	@description Helper for the cleanup registry step used by this state machine.
-	@param fsm any -- Input consumed by `cleanupRegistry`.
+	@description Cleans up registry.
+	@param fsm any  -- StatusEffectFSM instance carrying the active effect definition, timers, and rollback state.
 	@return boolean -- Whether the helper completed successfully.
 ]=]
 
@@ -238,8 +221,8 @@ local function cleanupRegistry(fsm: any): boolean
 end
 
 --[=[
-	@description Helper for the broadcast entity step used by this state machine.
-	@param charEntity any -- Input consumed by `broadcastEntity`.
+	@description Performs the `broadcastEntity` helper work.
+	@param charEntity any  -- Character entity being read from or written to.
 	@return boolean -- Whether the helper completed successfully.
 ]=]
 
@@ -256,8 +239,8 @@ end
 
 --[=[
 	@description Applies the tick work needed by the surrounding state flow.
-	@param fsm any -- Input consumed by `applyTick`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@param fsm any  -- StatusEffectFSM instance carrying the active effect definition, timers, and rollback state.
+	@return nil -- Performs this helper's work in place.
 ]=]
 
 local function applyTick(fsm: any)
@@ -297,7 +280,6 @@ local function applyTick(fsm: any)
 	end
 end
 
-
 --[=[
 	@description Registers the runtime states, transitions, and terminal behavior for `StatusEffectFSM`.
 	@return nil -- Populates the state graph on the FSM definition table.
@@ -305,15 +287,15 @@ end
 
 function StatusEffectFSM:RegisterStates()
 
-
 	--[=[
-		@state ValidateInput
-		@description Validates the required runtime context and prerequisites.
-			Transitions:
-			- `LoadEntities` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: none.
-	]=]
+	@state ValidateInput
+	@description Verifies the target character id before the status-effect pipeline starts.
+	Transitions:
+	- `LoadEntities` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: none.
+
+]=]
 
 	self:AddState("ValidateInput", {
 		OnEnter = function(_, fsm)
@@ -325,15 +307,15 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"LoadEntities","Failed" })
 
-
 	--[=[
-		@state LoadEntities
-		@description Runs the `load entities` stage of `StatusEffectFSM`.
-			Transitions:
-			- `LoadEffectDef` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: none.
-	]=]
+	@state LoadEntities
+	@description Resolves the target character entity and caches it in both FSM context and direct fields.
+	Transitions:
+	- `LoadEffectDef` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: none.
+
+]=]
 
 	self:AddState("LoadEntities", {
 		OnEnter = function(_, fsm)
@@ -350,15 +332,15 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"LoadEffectDef","Failed" })
 
-
 	--[=[
-		@state LoadEffectDef
-		@description Runs the `load effect def` stage of `StatusEffectFSM`.
-			Transitions:
-			- `InitializeContext` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: none.
-	]=]
+	@state LoadEffectDef
+	@description Loads the requested status-effect definition and caches it for later modifier, flag, and tick processing.
+	Transitions:
+	- `InitializeContext` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: none.
+
+]=]
 
 	self:AddState("LoadEffectDef", {
 		OnEnter = function(_, fsm)
@@ -376,14 +358,14 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"InitializeContext","Failed" })
 
-
 	--[=[
-		@state InitializeContext
-		@description Runs the `initialize context` stage of `StatusEffectFSM`.
-			Transitions:
-			- `UpdateEffectsRegistry` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state InitializeContext
+	@description Initializes timers, stack count, and original-value snapshots used to apply and later roll back the status effect.
+	Transitions:
+	- `UpdateEffectsRegistry` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("InitializeContext", {
 		OnEnter = function(_, fsm)
@@ -402,15 +384,15 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"UpdateEffectsRegistry" })
 
-
 	--[=[
-		@state UpdateEffectsRegistry
-		@description On enter, sets `ActiveStatusEffects`.
-			Transitions:
-			- `ApplyStatModifiers` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: sets `ActiveStatusEffects`.
-	]=]
+	@state UpdateEffectsRegistry
+	@description Inserts or refreshes this effect entry inside `ActiveStatusEffects` before modifiers and flags are applied.
+	Transitions:
+	- `ApplyStatModifiers` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: sets `ActiveStatusEffects`.
+
+]=]
 
 	self:AddState("UpdateEffectsRegistry", {
 		OnEnter = function(_, fsm)
@@ -441,15 +423,15 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"ApplyStatModifiers","Failed" })
 
-
 	--[=[
-		@state ApplyStatModifiers
-		@description Runs the `apply stat modifiers` stage of `StatusEffectFSM`.
-			Transitions:
-			- `ApplyStatusFlags` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: none.
-	]=]
+	@state ApplyStatModifiers
+	@description Applies numeric stat modifiers from the effect definition while caching original values for cleanup.
+	Transitions:
+	- `ApplyStatusFlags` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: none.
+
+]=]
 
 	self:AddState("ApplyStatModifiers", {
 		OnEnter = function(_, fsm)
@@ -474,15 +456,15 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"ApplyStatusFlags","Failed" })
 
-
 	--[=[
-		@state ApplyStatusFlags
-		@description Runs the `apply status flags` stage of `StatusEffectFSM`.
-			Transitions:
-			- `SyncResources` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: none.
-	]=]
+	@state ApplyStatusFlags
+	@description Applies boolean or direct status flags from the effect definition while caching each original flag value.
+	Transitions:
+	- `SyncResources` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: none.
+
+]=]
 
 	self:AddState("ApplyStatusFlags", {
 		OnEnter = function(_, fsm)
@@ -504,20 +486,19 @@ function StatusEffectFSM:RegisterStates()
 				end
 			end
 
-
 			fsm.State = "SyncResources"
 		end,
 	}, {"SyncResources","Failed" })
 
-
 	--[=[
-		@state SyncResources
-		@description Runs the `sync resources` stage of `StatusEffectFSM`.
-			Transitions:
-			- `BroadcastUpdate` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: none.
-	]=]
+	@state SyncResources
+	@description Syncs derived humanoid-facing resources after stat and flag mutations so runtime character state matches entity values.
+	Transitions:
+	- `BroadcastUpdate` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: none.
+
+]=]
 
 	self:AddState("SyncResources", {
 		OnEnter = function(_, fsm)
@@ -534,15 +515,15 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"BroadcastUpdate","Failed" })
 
-
 	--[=[
-		@state BroadcastUpdate
-		@description Runs the `broadcast update` stage of `StatusEffectFSM`.
-			Transitions:
-			- `Ticking` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: none.
-	]=]
+	@state BroadcastUpdate
+	@description Broadcasts the freshly applied effect state to the entity, then enters the ticking window.
+	Transitions:
+	- `Ticking` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: none.
+
+]=]
 
 	self:AddState("BroadcastUpdate", {
 		OnEnter = function(_, fsm)
@@ -557,14 +538,14 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"Ticking","Failed" })
 
-
 	--[=[
-		@state Ticking
-		@description Runs the `ticking` stage of `StatusEffectFSM`.
-			Transitions:
-			- `RemoveStatModifiers` when the scheduled transition completes.
-			Writes: none.
-	]=]
+	@state Ticking
+	@description Schedules effect expiration after the configured duration and applies periodic ticks on heartbeat using `TickInterval`.
+	Transitions:
+	- `RemoveStatModifiers` when the scheduled transition completes.
+	Writes: none.
+
+]=]
 
 	self:AddState("Ticking", {
 		OnEnter = function(_, fsm)
@@ -591,14 +572,14 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"RemoveStatModifiers","Failed" })
 
-
 	--[=[
-		@state RemoveStatModifiers
-		@description Runs the `remove stat modifiers` stage of `StatusEffectFSM`.
-			Transitions:
-			- `RemoveStatusFlags` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state RemoveStatModifiers
+	@description Restores every stat modified by the effect before status-flag cleanup.
+	Transitions:
+	- `RemoveStatusFlags` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("RemoveStatModifiers", {
 		OnEnter = function(_, fsm)
@@ -607,14 +588,14 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"RemoveStatusFlags" })
 
-
 	--[=[
-		@state RemoveStatusFlags
-		@description Runs the `remove status flags` stage of `StatusEffectFSM`.
-			Transitions:
-			- `CleanupRegistry` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state RemoveStatusFlags
+	@description Restores every status flag modified by the effect before registry cleanup.
+	Transitions:
+	- `CleanupRegistry` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("RemoveStatusFlags", {
 		OnEnter = function(_, fsm)
@@ -623,14 +604,14 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"CleanupRegistry" })
 
-
 	--[=[
-		@state CleanupRegistry
-		@description Runs the `cleanup registry` stage of `StatusEffectFSM`.
-			Transitions:
-			- `BroadcastCleanup` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state CleanupRegistry
+	@description Removes this effect instance from `ActiveStatusEffects` before the final cleanup broadcast.
+	Transitions:
+	- `BroadcastCleanup` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("CleanupRegistry", {
 		OnEnter = function(_, fsm)
@@ -639,14 +620,14 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"BroadcastCleanup" })
 
-
 	--[=[
-		@state BroadcastCleanup
-		@description Runs the `broadcast cleanup` stage of `StatusEffectFSM`.
-			Transitions:
-			- `Expired` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state BroadcastCleanup
+	@description Clamps resources, syncs humanoid values, rebroadcasts the cleaned entity, and then marks the effect expired.
+	Transitions:
+	- `Expired` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("BroadcastCleanup", {
 		OnEnter = function(_, fsm)
@@ -661,29 +642,29 @@ function StatusEffectFSM:RegisterStates()
 		end,
 	}, {"Expired" })
 
-
 	--[=[
-		@state Expired
-		@description Runs the `expired` stage of `StatusEffectFSM`.
-			Transitions:
-			Writes: none.
-	]=]
+	@state Expired
+	@description Terminal post-cleanup state reached after the effect has been removed and the final entity broadcast has been sent.
+	Transitions:
+	Writes: none.
+
+]=]
 
 	self:AddState("Expired", function() end, {})
 	--[=[
 	@state Failed
 	@description Terminal failure sink for bad effect input or runtime errors while applying, ticking, or removing a status effect. `OnEnter` is a no-op; `OnCleanup` reverses stat/status changes, prunes registry state, reclamps resources, and rebroadcasts the entity when anything changed.
-		Transitions: none.
-		Writes: none in-state; rollback writes may still run.
-	]=]
+	Transitions: none.
+	Writes: none in-state; rollback writes may still run.
+
+]=]
 
 	self:AddState("Failed", function() end, {})
 end
 
-
 --[=[
 	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
-	@return nil -- Performs state changes or cleanup as side effects.
+	@return nil -- Updates FSM state as a side effect.
 ]=]
 
 function StatusEffectFSM:OnCleanup()

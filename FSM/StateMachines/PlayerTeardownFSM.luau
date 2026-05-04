@@ -1,24 +1,8 @@
 --!strict
 
-
 --[=[
-	@Name PlayerTeardownFSM
-	@Author iKrypto
-	@Description Server-side player disconnect cleanup. Cancels all FSMs belonging to the
-	player (by scanning StateMachineId for entity ID patterns), flushes persistent entity
-	state to DataStore, then deletes both PlayerEntity and CharacterEntity from the registry.
-
-	State flow:
-	CancelSMs → FlushEntities → DeleteEntities → Completed
-
-	Context fields:
-	- _cancelledStateMachineIds: table — IDs of cancelled FSMs for logging
-
-	Required params:
-	- Player: Player — the leaving player
-	- UserId: number — player's UserId
-	- PlayerEntityId: string — "Player_{userId}"
-	- CharacterEntityId: string — "Char_{userId}"
+	@module PlayerTeardownFSM
+	@description Cancels the player-owned FSMs, flushes persistent entities, deletes the player and character entities, and finishes with teardown logging.
 ]=]
 
 local PlayerTeardownFSM = {
@@ -30,9 +14,9 @@ local PlayerTeardownFSM = {
 }
 
 --[=[
-	@description Returns the state machines used by this state machine when it can be resolved.
-	@param orchestrator any -- Input consumed by `getStateMachines`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Returns the state machines for this FSM, or `nil` when it cannot be found.
+	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
+	@return any -- Resolved state machines, or `nil` when unavailable.
 ]=]
 
 local function getStateMachines(orchestrator: any): { [string]: any }
@@ -49,10 +33,10 @@ local function getStateMachines(orchestrator: any): { [string]: any }
 end
 
 --[=[
-	@description Returns the state machine field used by this state machine when it can be resolved.
-	@param stateMachine any -- Input consumed by `getStateMachineField`.
-	@param key any -- Input consumed by `getStateMachineField`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Returns the state machine field for this FSM, or `nil` when it cannot be found.
+	@param stateMachine any  -- State machine being inspected during teardown matching.
+	@param key any  -- Field name to read from the state machine or its context.
+	@return any -- Resolved state machine field, or `nil` when unavailable.
 ]=]
 
 local function getStateMachineField(stateMachine: any, key: string): any
@@ -72,10 +56,10 @@ local function getStateMachineField(stateMachine: any, key: string): any
 end
 
 --[=[
-	@description Helper for the state machine matches player step used by this state machine.
-	@param fsm any -- Input consumed by `stateMachineMatchesPlayer`.
-	@param candidateId any -- Input consumed by `stateMachineMatchesPlayer`.
-	@param stateMachine any -- Input consumed by `stateMachineMatchesPlayer`.
+	@description Performs the `stateMachineMatchesPlayer` helper work.
+	@param fsm any  -- PlayerTeardownFSM instance carrying the user, entity ids, and teardown bookkeeping.
+	@param candidateId any  -- Candidate state-machine id from the orchestrator lookup.
+	@param stateMachine any  -- State machine being inspected during teardown matching.
 	@return boolean -- Whether the helper completed successfully.
 ]=]
 
@@ -124,10 +108,10 @@ local function stateMachineMatchesPlayer(fsm: any, candidateId: string, stateMac
 end
 
 --[=[
-	@description Helper for the flush persistent entity step used by this state machine.
-	@param orchestrator any -- Input consumed by `flushPersistentEntity`.
-	@param entity any -- Input consumed by `flushPersistentEntity`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Saves a persistent entity through the available persistence API before teardown deletes it.
+	@param orchestrator any  -- Orchestrator providing persistence services.
+	@param entity any  -- Entity being flushed if it is marked persistent.
+	@return boolean -- `true` when a persistence save call succeeds.
 ]=]
 
 local function flushPersistentEntity(orchestrator: any, entity: any)
@@ -160,7 +144,6 @@ local function flushPersistentEntity(orchestrator: any, entity: any)
 	return false
 end
 
-
 --[=[
 	@description Registers the runtime states, transitions, and terminal behavior for `PlayerTeardownFSM`.
 	@return nil -- Populates the state graph on the FSM definition table.
@@ -168,14 +151,14 @@ end
 
 function PlayerTeardownFSM:RegisterStates()
 
-
 	--[=[
-		@state CancelSMs
-		@description On enter, stores `Context._cancelledStateMachineIds`, sets `_cancelledStateMachineIds`, writes to the log.
-			Transitions:
-			- `FlushEntities` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: stores `Context._cancelledStateMachineIds`, sets `_cancelledStateMachineIds`, writes to the log.
-	]=]
+	@state CancelSMs
+	@description Cancels every state machine tied to the player, stores the cancelled ids, and logs the teardown fan-out.
+	Transitions:
+	- `FlushEntities` when OnEnter finishes or falls through its guard checks.
+	Writes: stores `Context._cancelledStateMachineIds`, sets `_cancelledStateMachineIds`, writes to the log.
+
+]=]
 
 	self:AddState("CancelSMs", {
 		OnEnter = function(_, fsm)
@@ -213,14 +196,14 @@ function PlayerTeardownFSM:RegisterStates()
 		end,
 	}, {"FlushEntities","Failed" })
 
-
 	--[=[
-		@state FlushEntities
-		@description On enter, writes to the log.
-			Transitions:
-			- `DeleteEntities` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: writes to the log.
-	]=]
+	@state FlushEntities
+	@description Flushes the persistent player and character entities when present, counts successful flushes, and logs the result.
+	Transitions:
+	- `DeleteEntities` when OnEnter finishes or falls through its guard checks.
+	Writes: writes to the log.
+
+]=]
 
 	self:AddState("FlushEntities", {
 		OnEnter = function(_, fsm)
@@ -249,14 +232,14 @@ function PlayerTeardownFSM:RegisterStates()
 		end,
 	}, {"DeleteEntities","Failed" })
 
-
 	--[=[
-		@state DeleteEntities
-		@description On enter, writes to the log.
-			Transitions:
-			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: writes to the log.
-	]=]
+	@state DeleteEntities
+	@description Deletes the character and player entities from the orchestrator and logs which ids were removed.
+	Transitions:
+	- `Completed` when OnEnter finishes or falls through its guard checks.
+	Writes: writes to the log.
+
+]=]
 
 	self:AddState("DeleteEntities", {
 		OnEnter = function(_, fsm)
@@ -287,9 +270,10 @@ function PlayerTeardownFSM:RegisterStates()
 	--[=[
 	@state Completed
 	@description Terminal success state entered after state machines are cancelled, matching entities are deleted, and teardown logging can be finalized. `OnEnter` writes the final info log for `UserId`.
-		Transitions: none.
-		Writes: info log.
-	]=]
+	Transitions: none.
+	Writes: info log.
+
+]=]
 
 	self:AddState("Completed", {
 		OnEnter = function(_, fsm)
@@ -302,9 +286,10 @@ function PlayerTeardownFSM:RegisterStates()
 	--[=[
 	@state Failed
 	@description Terminal failure state for teardown errors while cancelling machines or deleting entities. `OnEnter` logs the failure reason for `UserId` and performs no additional rollback.
-		Transitions: none.
-		Writes: error log.
-	]=]
+	Transitions: none.
+	Writes: error log.
+
+]=]
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm, reason)

@@ -1,6 +1,5 @@
 --!strict
 
-
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
@@ -8,28 +7,8 @@ assert(Helpers,"Helpers folder not found")
 local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 
 --[=[
-	@Name JumpFSM
-	@Author iKrypto
-	@Description Client-side double jump and front flip FSM. Tracks grounded vs airborne
-	state. On second jump input while airborne, validates stamina, deducts it, plays the
-	flip sound and animation, applies a BodyVelocity upward impulse (tracked via
-	TrackInstance for leak-safe cleanup), rotates the character through 12×30° steps,
-	then enters cooldown before returning to Grounded.
-
-	State flow:
-	Grounded → InAir → ValidateFlip → DeductFlipStamina → PlayFlipSound
-	→ TriggerFlipAnimation → ApplyUpwardForce → RotateCharacter
-	→ Flipping → PlayLandSound → TriggerLandAnimation → Cooldown → Grounded
-
-	Context fields:
-	- _rootPart: BasePart — HumanoidRootPart for physics
-	- _humanoid: Humanoid — for state detection
-	- _bodyVelocity: BodyVelocity — impulse object (TrackInstance'd for leak safety)
-	- _flipRequested: boolean — set by TryDoubleJump input handler
-	- _onAnimate: function — animation playback callback
-
-	Required params:
-	- CharacterEntityId: string — character entity ID
+	@module JumpFSM
+	@description Tracks grounded versus airborne movement and runs the stamina-gated double-jump flip sequence with sounds, animation, force, and landing recovery.
 ]=]
 
 local JumpFSM = {
@@ -65,10 +44,9 @@ local FLIP_TIMEOUT = 3
 local DOUBLE_JUMP_STAMINA_COST = 20
 
 --[=[
-	@description Returns the character parts used by this state machine when it can be resolved.
-	@param fsm any -- Input consumed by `getCharacterParts`.
-	@param Humanoid? any -- Input consumed by `getCharacterParts`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Resolves the current character root part and humanoid from the ECS entity, falling back to the local character when needed.
+	@param fsm any  -- JumpFSM instance tracking grounded, airborne, and flip runtime state.
+	@return any -- Root part followed by humanoid, or `nil, nil` when the character cannot be resolved.
 ]=]
 
 local function getCharacterParts(fsm: any): (BasePart?, Humanoid?)
@@ -100,8 +78,8 @@ local function getCharacterParts(fsm: any): (BasePart?, Humanoid?)
 end
 
 --[=[
-	@description Helper for the is airborne step used by this state machine.
-	@param humanoid any -- Input consumed by `isAirborne`.
+	@description Returns whether airborne is true.
+	@param humanoid any  -- Humanoid to inspect or update.
 	@return boolean -- Whether the helper completed successfully.
 ]=]
 
@@ -113,9 +91,9 @@ local function isAirborne(humanoid: Humanoid): boolean
 end
 
 --[=[
-	@description Returns the character entity used by this state machine when it can be resolved.
-	@param fsm any -- Input consumed by `getCharacterEntity`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Returns the character entity for this FSM, or `nil` when it cannot be found.
+	@param fsm any  -- JumpFSM instance tracking grounded, airborne, and flip runtime state.
+	@return any -- Resolved character entity, or `nil` when unavailable.
 ]=]
 
 local function getCharacterEntity(fsm: any): any?
@@ -126,7 +104,6 @@ local function getCharacterEntity(fsm: any): any?
 	return orchestrator.GetEntity(fsm.CharacterEntityId)
 end
 
-
 --[=[
 	@description Registers the runtime states, transitions, and terminal behavior for `JumpFSM`.
 	@return nil -- Populates the state graph on the FSM definition table.
@@ -134,14 +111,14 @@ end
 
 function JumpFSM:RegisterStates()
 
-
 	--[=[
-		@state Grounded
-		@description On enter, clears `Context._rootPart`, clears `Context._humanoid`, clears `Context._bodyVelocity`.
-			Transitions:
-			- `InAir` when this state's transition condition passes.
-			Writes: clears `Context._rootPart`, clears `Context._humanoid`, clears `Context._bodyVelocity`, stores `Context._flipRequested`, stores `Context._rootPart`.
-	]=]
+	@state Grounded
+	@description Resets cached jump references, removes any leftover `BodyVelocity`, and waits for `RequestJump` to populate the root part and move the FSM into `InAir`.
+	Transitions:
+	- `InAir` after a jump request caches the current root part and changes state.
+	Writes: clears `Context._rootPart`, clears `Context._humanoid`, clears `Context._bodyVelocity`, stores `Context._flipRequested`, stores `Context._rootPart`.
+
+]=]
 
 	self:AddState("Grounded", {
 		OnEnter = function(_, fsm)
@@ -164,15 +141,15 @@ function JumpFSM:RegisterStates()
 		},
 	}, {"InAir" })
 
-
 	--[=[
-		@state InAir
-		@description On enter, stores `Context._flipRequested`, sets `_flipRequested`.
-			Transitions:
-			- `ValidateFlip` when this state's transition condition passes.
-			- `Grounded` when this state's transition condition passes.
-			Writes: stores `Context._flipRequested`, sets `_flipRequested`.
-	]=]
+	@state InAir
+	@description Clears `_flipRequested` on enter, then waits for either a queued flip request or landing back on the ground.
+	Transitions:
+	- `ValidateFlip` when this state's transition condition passes.
+	- `Grounded` when this state's transition condition passes.
+	Writes: stores `Context._flipRequested`, sets `_flipRequested`.
+
+]=]
 
 	self:AddState("InAir", {
 		OnEnter = function(_, fsm)
@@ -198,15 +175,15 @@ function JumpFSM:RegisterStates()
 		},
 	}, {"ValidateFlip","Grounded" })
 
-
 	--[=[
-		@state ValidateFlip
-		@description Validates the required runtime context and prerequisites.
-			Transitions:
-			- `Grounded` when this stage finishes its immediate work or falls through its guard checks.
-			- `DeductFlipStamina` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: stores `Context._rootPart`, stores `Context._humanoid`, sets `_rootPart`, sets `_humanoid`.
-	]=]
+	@state ValidateFlip
+	@description Resolves root part and humanoid for the double-jump attempt and falls back to `Grounded` when they are missing or dead.
+	Transitions:
+	- `Grounded` when OnEnter finishes or falls through its guard checks.
+	- `DeductFlipStamina` when OnEnter finishes or falls through its guard checks.
+	Writes: stores `Context._rootPart`, stores `Context._humanoid`, sets `_rootPart`, sets `_humanoid`.
+
+]=]
 
 	self:AddState("ValidateFlip", {
 		OnEnter = function(_, fsm)
@@ -222,15 +199,15 @@ function JumpFSM:RegisterStates()
 		end,
 	}, {"DeductFlipStamina","Grounded" })
 
-
 	--[=[
-		@state DeductFlipStamina
-		@description On enter, stores `Context._flipRequested`, sets `_flipRequested`, replicates entity changes.
-			Transitions:
-			- `InAir` when this stage finishes its immediate work or falls through its guard checks.
-			- `PlayFlipSound` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: stores `Context._flipRequested`, sets `_flipRequested`, replicates entity changes.
-	]=]
+	@state DeductFlipStamina
+	@description Spends double-jump stamina, clears the pending flip request on failure, and replicates the stamina change before the flip starts.
+	Transitions:
+	- `InAir` when OnEnter finishes or falls through its guard checks.
+	- `PlayFlipSound` when OnEnter finishes or falls through its guard checks.
+	Writes: stores `Context._flipRequested`, sets `_flipRequested`, replicates entity changes.
+
+]=]
 
 	self:AddState("DeductFlipStamina", {
 		OnEnter = function(_, fsm)
@@ -254,14 +231,14 @@ function JumpFSM:RegisterStates()
 		end,
 	}, {"PlayFlipSound","InAir" })
 
-
 	--[=[
-		@state PlayFlipSound
-		@description Runs the `play flip sound` stage of `JumpFSM`.
-			Transitions:
-			- `TriggerFlipAnimation` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state PlayFlipSound
+	@description Plays the airborne flip sound on the cached root part before the flip animation begins.
+	Transitions:
+	- `TriggerFlipAnimation` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("PlayFlipSound", {
 		OnEnter = function(_, fsm)
@@ -278,14 +255,14 @@ function JumpFSM:RegisterStates()
 		end,
 	}, {"TriggerFlipAnimation" })
 
-
 	--[=[
-		@state TriggerFlipAnimation
-		@description Runs the `trigger flip animation` stage of `JumpFSM`.
-			Transitions:
-			- `ApplyUpwardForce` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state TriggerFlipAnimation
+	@description Spawns the optional `FrontFlip` animation callback and immediately advances to upward force.
+	Transitions:
+	- `ApplyUpwardForce` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("TriggerFlipAnimation", {
 		OnEnter = function(_, fsm)
@@ -299,15 +276,15 @@ function JumpFSM:RegisterStates()
 		end,
 	}, {"ApplyUpwardForce" })
 
-
 	--[=[
-		@state ApplyUpwardForce
-		@description On enter, stores `Context._bodyVelocity`, sets `_bodyVelocity`.
-			Transitions:
-			- `Grounded` when this stage finishes its immediate work or falls through its guard checks.
-			- `RotateCharacter` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: stores `Context._bodyVelocity`, sets `_bodyVelocity`.
-	]=]
+	@state ApplyUpwardForce
+	@description Creates and tracks a temporary upward `BodyVelocity` that powers the second jump before rotation starts.
+	Transitions:
+	- `Grounded` when OnEnter finishes or falls through its guard checks.
+	- `RotateCharacter` when OnEnter finishes or falls through its guard checks.
+	Writes: stores `Context._bodyVelocity`, sets `_bodyVelocity`.
+
+]=]
 
 	self:AddState("ApplyUpwardForce", {
 		OnEnter = function(_, fsm)
@@ -327,14 +304,14 @@ function JumpFSM:RegisterStates()
 		end,
 	}, {"RotateCharacter","Grounded" })
 
-
 	--[=[
-		@state RotateCharacter
-		@description On enter, sets `C0`.
-			Transitions:
-			- `Flipping` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: sets `C0`.
-	]=]
+	@state RotateCharacter
+	@description Animates the root joint through the flip arc on a background task, then restores `C0` and destroys the temporary lift force.
+	Transitions:
+	- `Flipping` when OnEnter finishes or falls through its guard checks.
+	Writes: sets `C0`.
+
+]=]
 
 	self:AddState("RotateCharacter", {
 		OnEnter = function(_, fsm)
@@ -360,15 +337,15 @@ function JumpFSM:RegisterStates()
 		end,
 	}, {"Flipping" })
 
-
 	--[=[
-		@state Flipping
-		@description On enter, stores `Context._flipRequested`, sets `_flipRequested`.
-			Transitions:
-			- `Cooldown` when the FLIP_TIMEOUT-second timeout expires.
-			- `PlayLandSound` when this state's transition condition passes.
-			Writes: stores `Context._flipRequested`, sets `_flipRequested`.
-	]=]
+	@state Flipping
+	@description Clears any new flip request while airborne, then waits to land or times out into cooldown after `FLIP_TIMEOUT`.
+	Transitions:
+	- `Cooldown` when the `FLIP_TIMEOUT` timeout expires.
+	- `PlayLandSound` when this state's transition condition passes.
+	Writes: stores `Context._flipRequested`, sets `_flipRequested`.
+
+]=]
 
 	self:AddState("Flipping", {
 		OnEnter = function(_, fsm)
@@ -390,14 +367,14 @@ function JumpFSM:RegisterStates()
 		OnTimeout = "Cooldown",
 	}, {"PlayLandSound","Cooldown" })
 
-
 	--[=[
-		@state PlayLandSound
-		@description Runs the `play land sound` stage of `JumpFSM`.
-			Transitions:
-			- `TriggerLandAnimation` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state PlayLandSound
+	@description Plays the landing sound on the cached root part before the recovery animation.
+	Transitions:
+	- `TriggerLandAnimation` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("PlayLandSound", {
 		OnEnter = function(_, fsm)
@@ -415,14 +392,14 @@ function JumpFSM:RegisterStates()
 		end,
 	}, {"TriggerLandAnimation" })
 
-
 	--[=[
-		@state TriggerLandAnimation
-		@description Runs the `trigger land animation` stage of `JumpFSM`.
-			Transitions:
-			- `Cooldown` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state TriggerLandAnimation
+	@description Calls `_onAnimate("SummonGroundCast")` for the landing recovery, then enters cooldown.
+	Transitions:
+	- `Cooldown` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("TriggerLandAnimation", {
 		OnEnter = function(_, fsm)
@@ -434,14 +411,14 @@ function JumpFSM:RegisterStates()
 		end,
 	}, {"Cooldown" })
 
-
 	--[=[
-		@state Cooldown
-		@description Arms the cooldown window before returning control.
-			Transitions:
-			- `Grounded` when the scheduled transition completes.
-			Writes: none.
-	]=]
+	@state Cooldown
+	@description Arms the cooldown window before returning control.
+	Transitions:
+	- `Grounded` when the scheduled transition completes.
+	Writes: none.
+
+]=]
 
 	self:AddState("Cooldown", {
 		OnEnter = function(_, fsm)
@@ -451,26 +428,27 @@ function JumpFSM:RegisterStates()
 	--[=[
 	@state Completed
 	@description Terminal success sink reserved for explicit shutdown of the jump FSM. Normal jump and flip handling returns to `Grounded` after landing cooldown rather than terminating here.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
 	--[=[
 	@state Failed
 	@description Terminal failure sink reserved for future jump-processing errors. The current flow does not route here, and `OnEnter` is a no-op.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Failed", function(_fsm) end, {})
 end
 
-
 --[=[
 	@description Public helper for `JumpFSM.TryDoubleJump`.
-	@param fsm any -- Value consumed by `TryDoubleJump`.
-	@return boolean -- True when the requested transition or action was accepted.
+	@param fsm any  -- JumpFSM instance tracking grounded, airborne, and flip runtime state.
+	@return boolean -- `true` when the request is accepted.
 ]=]
 
 function JumpFSM.TryDoubleJump(fsm: any): boolean

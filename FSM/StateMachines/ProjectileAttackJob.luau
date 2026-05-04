@@ -1,6 +1,5 @@
 --!strict
 
-
 local Debris = game:GetService("Debris")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
@@ -15,32 +14,8 @@ local ResourceHelpers = require(Helpers:WaitForChild("ResourceHelpers"))
 local StateTransitionHelpers = require(Helpers:WaitForChild("StateTransitionHelpers"))
 
 --[=[
-	@Name ProjectileAttackJob
-	@Author iKrypto
-	@Description Server-authoritative ranged/projectile attack FSM. Validates the attack,
-	acquires a combat lock, checks and deducts mana, plays charge and fire animations,
-	spawns a projectile Part with BodyVelocity physics, registers Touched hit detection,
-	waits for impact or lifetime expiry, processes the hit (DamageJob + knockback), then
-	cleans up the projectile and releases the lock.
-
-	State flow:
-	Validate → AcquireLock → ValidateMana → DeductMana → EmitChargeAnimation
-	→ WaitCharge → ValidateForFire → EmitFireAnimation → SpawnProjectile
-	→ ConfigurePhysics → RegisterHitDetection → WaitForImpact → ProcessHit
-	→ ApplyProjectileKnockback → DestroyProjectile → ReleaseLock → Completed
-
-	Context fields:
-	- _projectile: BasePart — spawned projectile instance
-	- _hitConn: RBXScriptConnection — Touched connection for impact detection
-	- _hitData: table — victim data on impact
-	- _impactResolved: boolean — whether hit was processed
-	- _damage: number — computed projectile damage
-	- _manaCost: number — mana cost for the shot
-	- _lockHeld: boolean — combat lock state
-	- _lifetime: number — max projectile lifetime before auto-destroy
-
-	Required params:
-	- CharacterEntityId: string — firing character entity
+	@module ProjectileAttackJob
+	@description Validates a ranged attack, spends mana, emits charge and fire intents, spawns a projectile, handles impact, then cleans up and releases the lock.
 ]=]
 
 local ProjectileAttackJob = {
@@ -77,9 +52,9 @@ local DEFAULT_CHARGE_TIME = 0.3
 local DEFAULT_GRAVITY = Vector3.new(0, -30, 0)
 
 --[=[
-	@description Returns the item data used by this state machine when it can be resolved.
-	@param weaponId any -- Input consumed by `getItemData`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Returns the item data for this FSM, or `nil` when it cannot be found.
+	@param weaponId any  -- Weapon or asset identifier to resolve.
+	@return any -- Resolved item data, or `nil` when unavailable.
 ]=]
 
 local function getItemData(weaponId: string): any?
@@ -101,9 +76,9 @@ local function getItemData(weaponId: string): any?
 end
 
 --[=[
-	@description Returns the projectile template used by this state machine when it can be resolved.
-	@param weaponId any -- Input consumed by `getProjectileTemplate`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Returns the projectile template for this FSM, or `nil` when it cannot be found.
+	@param weaponId any  -- Weapon or asset identifier to resolve.
+	@return any -- Resolved projectile template, or `nil` when unavailable.
 ]=]
 
 local function getProjectileTemplate(weaponId: string): BasePart?
@@ -123,9 +98,9 @@ local function getProjectileTemplate(weaponId: string): BasePart?
 end
 
 --[=[
-	@description Helper for the cleanup projectile step used by this state machine.
-	@param fsm any -- Input consumed by `cleanupProjectile`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Disconnects projectile hit detection, destroys the projectile instance, and clears cached hit data.
+	@param fsm any  -- ProjectileAttackJob instance carrying projectile state, hit data, and lock cleanup.
+	@return nil -- Removes cached projectile runtime state in place.
 ]=]
 
 local function cleanupProjectile(fsm: any)
@@ -147,10 +122,10 @@ local function cleanupProjectile(fsm: any)
 end
 
 --[=[
-	@description Returns the victim entity used by this state machine when it can be resolved.
-	@param orchestrator any -- Input consumed by `getVictimEntity`.
-	@param targetModel any -- Input consumed by `getVictimEntity`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Returns the victim entity for this FSM, or `nil` when it cannot be found.
+	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
+	@param targetModel any  -- Hit character model to resolve back to an ECS entity.
+	@return any -- Resolved victim entity, or `nil` when unavailable.
 ]=]
 
 local function getVictimEntity(orchestrator: any, targetModel: Model): any?
@@ -163,7 +138,6 @@ local function getVictimEntity(orchestrator: any, targetModel: Model): any?
 	return nil
 end
 
-
 --[=[
 	@description Registers the runtime states, transitions, and terminal behavior for `ProjectileAttackJob`.
 	@return nil -- Populates the state graph on the FSM definition table.
@@ -171,15 +145,15 @@ end
 
 function ProjectileAttackJob:RegisterStates()
 
-
 	--[=[
-		@state Validate
-		@description Validates the required runtime context and prerequisites, then captures the lock or blocking state needed for the next step.
-			Transitions:
-			- `AcquireLock` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: stores `Context._manaCost`, stores `Context._charEntity`, stores `Context._character`, stores `Context._humanoid`, stores `Context._rootPart`.
-	]=]
+	@state Validate
+	@description Resolves the ranged attacker, validates weapon type and crowd-control state, then caches mana cost, projectile stats, and runtime parts.
+	Transitions:
+	- `AcquireLock` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: stores `Context._manaCost`, stores `Context._charEntity`, stores `Context._character`, stores `Context._humanoid`, stores `Context._rootPart`.
+
+]=]
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -250,15 +224,15 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"AcquireLock","Failed" })
 
-
 	--[=[
-		@state AcquireLock
-		@description Captures the lock or blocking state needed for the next step.
-			Transitions:
-			- `ValidateMana` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: stores `Context._lockHeld`, sets `_lockHeld`.
-	]=]
+	@state AcquireLock
+	@description Acquires the character action lock so the ranged attack owns its cast and projectile lifetime.
+	Transitions:
+	- `ValidateMana` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: stores `Context._lockHeld`, sets `_lockHeld`.
+
+]=]
 
 	self:AddState("AcquireLock", {
 		OnEnter = function(_, fsm)
@@ -272,14 +246,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"ValidateMana","Failed" })
 
-
 	--[=[
-		@state ValidateMana
-		@description Validates the required runtime context and prerequisites.
-			Transitions:
-			- `DeductMana` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state ValidateMana
+	@description Checks the cached mana cost before the projectile attack spends anything.
+	Transitions:
+	- `DeductMana` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("ValidateMana", {
 		OnEnter = function(_, fsm)
@@ -293,14 +267,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"DeductMana","ReleaseLock" })
 
-
 	--[=[
-		@state DeductMana
-		@description On enter, replicates entity changes.
-			Transitions:
-			- `EmitChargeAnimation` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: replicates entity changes.
-	]=]
+	@state DeductMana
+	@description Deducts mana, replicates the spend, and queues lock release when the cost can no longer be paid.
+	Transitions:
+	- `EmitChargeAnimation` when OnEnter finishes or falls through its guard checks.
+	Writes: replicates entity changes.
+
+]=]
 
 	self:AddState("DeductMana", {
 		OnEnter = function(_, fsm)
@@ -315,14 +289,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"EmitChargeAnimation" })
 
-
 	--[=[
-		@state EmitChargeAnimation
-		@description On enter, emits an intent.
-			Transitions:
-			- `WaitCharge` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: emits an intent.
-	]=]
+	@state EmitChargeAnimation
+	@description Appends the charge-up animation intent before the bow or staff waits out its charge time.
+	Transitions:
+	- `WaitCharge` when OnEnter finishes or falls through its guard checks.
+	Writes: emits an intent.
+
+]=]
 
 	self:AddState("EmitChargeAnimation", {
 		OnEnter = function(_, fsm)
@@ -331,15 +305,15 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"WaitCharge" })
 
-
 	--[=[
-		@state WaitCharge
-		@description Waits until its scheduled completion or transition condition is met.
-			Transitions:
-			- `ValidateForFire` when the scheduled transition completes.
-			- `ValidateForFire` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state WaitCharge
+	@description Waits out the configured charge time, scheduling `ValidateForFire` or skipping there immediately for instant shots.
+	Transitions:
+	- `ValidateForFire` when the scheduled transition completes.
+	- `ValidateForFire` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("WaitCharge", {
 		OnEnter = function(_, fsm)
@@ -352,14 +326,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"ValidateForFire","Failed" })
 
-
 	--[=[
-		@state ValidateForFire
-		@description Validates the required runtime context and prerequisites.
-			Transitions:
-			- `EmitFireAnimation` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state ValidateForFire
+	@description Re-checks that the attacker root still exists before the projectile is fired.
+	Transitions:
+	- `EmitFireAnimation` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("ValidateForFire", {
 		OnEnter = function(_, fsm)
@@ -372,14 +346,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"EmitFireAnimation","ReleaseLock" })
 
-
 	--[=[
-		@state EmitFireAnimation
-		@description On enter, emits an intent.
-			Transitions:
-			- `SpawnProjectile` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: emits an intent.
-	]=]
+	@state EmitFireAnimation
+	@description Appends the release animation intent immediately before projectile spawn.
+	Transitions:
+	- `SpawnProjectile` when OnEnter finishes or falls through its guard checks.
+	Writes: emits an intent.
+
+]=]
 
 	self:AddState("EmitFireAnimation", {
 		OnEnter = function(_, fsm)
@@ -388,14 +362,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"SpawnProjectile" })
 
-
 	--[=[
-		@state SpawnProjectile
-		@description On enter, stores `Context._projectile`, sets `Shape`, sets `Size`.
-			Transitions:
-			- `ConfigurePhysics` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: stores `Context._projectile`, sets `Shape`, sets `Size`, sets `Color`, sets `Material`.
-	]=]
+	@state SpawnProjectile
+	@description Clones the configured projectile template when available, otherwise builds a default neon orb, and caches the new projectile instance.
+	Transitions:
+	- `ConfigurePhysics` when OnEnter finishes or falls through its guard checks.
+	Writes: stores `Context._projectile`, sets `Shape`, sets `Size`, sets `Color`, sets `Material`.
+
+]=]
 
 	self:AddState("SpawnProjectile", {
 		OnEnter = function(_, fsm)
@@ -416,14 +390,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"ConfigurePhysics" })
 
-
 	--[=[
-		@state ConfigurePhysics
-		@description On enter, sets `CFrame`, sets `Anchored`, sets `CanCollide`.
-			Transitions:
-			- `RegisterHitDetection` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: sets `CFrame`, sets `Anchored`, sets `CanCollide`, sets `CanQuery`, sets `CanTouch`.
-	]=]
+	@state ConfigurePhysics
+	@description Positions the projectile in front of the attacker, enables touch-only physics, assigns launch velocity, and parents it to workspace.
+	Transitions:
+	- `RegisterHitDetection` when OnEnter finishes or falls through its guard checks.
+	Writes: sets `CFrame`, sets `Anchored`, sets `CanCollide`, sets `CanQuery`, sets `CanTouch`.
+
+]=]
 
 	self:AddState("ConfigurePhysics", {
 		OnEnter = function(_, fsm)
@@ -446,15 +420,15 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"RegisterHitDetection","ReleaseLock" })
 
-
 	--[=[
-		@state RegisterHitDetection
-		@description On enter, stores `Context._impactResolved`, stores `Context._hitData`, stores `Context._hitConn`.
-			Transitions:
-			- `ProcessHit` when this stage finishes its immediate work or falls through its guard checks.
-			- `WaitForImpact` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: stores `Context._impactResolved`, stores `Context._hitData`, stores `Context._hitConn`, sets `_impactResolved`, sets `_hitData`.
-	]=]
+	@state RegisterHitDetection
+	@description Starts the projectile touch listener, ignores self-hits and dead targets, and caches impact data when a valid victim is found.
+	Transitions:
+	- `ProcessHit` when OnEnter finishes or falls through its guard checks.
+	- `WaitForImpact` when OnEnter finishes or falls through its guard checks.
+	Writes: stores `Context._impactResolved`, stores `Context._hitData`, stores `Context._hitConn`, sets `_impactResolved`, sets `_hitData`.
+
+]=]
 
 	self:AddState("RegisterHitDetection", {
 		OnEnter = function(_, fsm)
@@ -497,14 +471,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"WaitForImpact","ReleaseLock","ProcessHit" })
 
-
 	--[=[
-		@state WaitForImpact
-		@description Waits until its scheduled completion or transition condition is met.
-			Transitions:
-			- `DestroyProjectile` when the scheduled transition completes.
-			Writes: none.
-	]=]
+	@state WaitForImpact
+	@description Waits for either a projectile hit or the projectile lifetime timer to route into cleanup.
+	Transitions:
+	- `DestroyProjectile` when the scheduled transition completes.
+	Writes: none.
+
+]=]
 
 	self:AddState("WaitForImpact", {
 		OnEnter = function(_, fsm)
@@ -512,14 +486,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"DestroyProjectile","ProcessHit" })
 
-
 	--[=[
-		@state ProcessHit
-		@description Runs the `process hit` stage of `ProjectileAttackJob`.
-			Transitions:
-			- `ApplyProjectileKnockback` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state ProcessHit
+	@description Starts a `DamageJob` for the cached victim entity, then advances into projectile knockback.
+	Transitions:
+	- `ApplyProjectileKnockback` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("ProcessHit", {
 		OnEnter = function(_, fsm)
@@ -539,14 +513,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"ApplyProjectileKnockback" })
 
-
 	--[=[
-		@state ApplyProjectileKnockback
-		@description Runs the `apply projectile knockback` stage of `ProjectileAttackJob`.
-			Transitions:
-			- `DestroyProjectile` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state ApplyProjectileKnockback
+	@description Pushes the victim root along the projectile flight direction before the projectile is destroyed.
+	Transitions:
+	- `DestroyProjectile` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("ApplyProjectileKnockback", {
 		OnEnter = function(_, fsm)
@@ -570,14 +544,14 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"DestroyProjectile" })
 
-
 	--[=[
-		@state DestroyProjectile
-		@description Runs the `destroy projectile` stage of `ProjectileAttackJob`.
-			Transitions:
-			- `ReleaseLock` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state DestroyProjectile
+	@description Disconnects hit detection and destroys the projectile before lock release.
+	Transitions:
+	- `ReleaseLock` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("DestroyProjectile", {
 		OnEnter = function(_, fsm)
@@ -586,15 +560,15 @@ function ProjectileAttackJob:RegisterStates()
 		end,
 	}, {"ReleaseLock" })
 
-
 	--[=[
-		@state ReleaseLock
-		@description On enter, stores `Context._lockHeld`, stores `Context._releaseTargetState`, sets `_lockHeld`.
-			Transitions:
-			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: stores `Context._lockHeld`, stores `Context._releaseTargetState`, sets `_lockHeld`, sets `_releaseTargetState`.
-	]=]
+	@state ReleaseLock
+	@description Cleans up projectile state, releases the character lock, and routes to `Completed` or `Failed` based on queued release state.
+	Transitions:
+	- `Completed` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: stores `Context._lockHeld`, stores `Context._releaseTargetState`, sets `_lockHeld`, sets `_releaseTargetState`.
+
+]=]
 
 	self:AddState("ReleaseLock", {
 		OnEnter = function(_, fsm)
@@ -614,25 +588,26 @@ function ProjectileAttackJob:RegisterStates()
 	--[=[
 	@state Completed
 	@description Terminal success sink reached after the projectile lifecycle finishes and any held attack lock has already been released. `OnEnter` is a no-op because all projectile cleanup happens before entry or in `OnCleanup`.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
 	@state Failed
 	@description Terminal failure sink for projectile spawn, travel, or hit-processing errors. `OnEnter` is a no-op; `OnCleanup` destroys the projectile instance and releases any remaining held lock.
-		Transitions: none.
-		Writes: none in-state; cleanup writes may still run.
-	]=]
+	Transitions: none.
+	Writes: none in-state; cleanup writes may still run.
+
+]=]
 
 	self:AddState("Failed", function() end, {})
 end
 
-
 --[=[
 	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
-	@return nil -- Performs state changes or cleanup as side effects.
+	@return nil -- Updates FSM state as a side effect.
 ]=]
 
 function ProjectileAttackJob:OnCleanup()

@@ -1,22 +1,8 @@
 --!strict
 
-
 --[=[
-	@Name SpawnCharacterJob
-	@Author iKrypto
-	@Description Server-side character respawn handler. Validates the player and character
-	model, binds the CharacterEntity.Instance field to the new character, and re-applies
-	the player's loadout (equipped weapons, stats). Short-lived FSM that completes
-	immediately after binding.
-
-	State flow:
-	Validate → BindEntity → ApplyLoadout → Completed
-
-	Required params:
-	- Player: Player — the respawning player
-	- Character: Model — the new character model
-	- CharacterEntityId: string — character entity to bind
-	- PlayerEntityId: string — player entity for loadout data
+	@module SpawnCharacterJob
+	@description Validates the spawned player and character, binds the character entity to the model, and starts follow-up loadout work for equipped items.
 ]=]
 
 local SpawnCharacterJob = {
@@ -28,8 +14,8 @@ local SpawnCharacterJob = {
 }
 
 --[=[
-	@description Helper for the create and start state machine step used by this state machine.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Creates a child state machine and starts it immediately in the requested initial state.
+	@return any -- Newly created child state machine, or `nil` when creation fails.
 ]=]
 
 local function createAndStartStateMachine(
@@ -52,7 +38,6 @@ local function createAndStartStateMachine(
 	return machine
 end
 
-
 --[=[
 	@description Registers the runtime states, transitions, and terminal behavior for `SpawnCharacterJob`.
 	@return nil -- Populates the state graph on the FSM definition table.
@@ -60,15 +45,15 @@ end
 
 function SpawnCharacterJob:RegisterStates()
 
-
 	--[=[
-		@state Validate
-		@description Validates the required runtime context and prerequisites.
-			Transitions:
-			- `BindEntity` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: none.
-	]=]
+	@state Validate
+	@description Verifies the bound `Player`, `Character`, and required entity ids before any spawn wiring begins.
+	Transitions:
+	- `BindEntity` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: none.
+
+]=]
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -88,15 +73,15 @@ function SpawnCharacterJob:RegisterStates()
 		end,
 	}, {"BindEntity","Failed" })
 
-
 	--[=[
-		@state BindEntity
-		@description On enter, sets `IsBlocking`, sets `CanAnimate`, sets `IsStunned`.
-			Transitions:
-			- `ApplyLoadout` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: sets `IsBlocking`, sets `CanAnimate`, sets `IsStunned`, sets `IsKnocked`, sets `CanMove`.
-	]=]
+	@state BindEntity
+	@description Binds the live character model onto the character entity, resets combat and movement flags, clears equipment state, and replicates the fresh spawn snapshot.
+	Transitions:
+	- `ApplyLoadout` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: sets `IsBlocking`, sets `CanAnimate`, sets `IsStunned`, sets `IsKnocked`, sets `CanMove`.
+
+]=]
 
 	self:AddState("BindEntity", {
 		OnEnter = function(_, fsm)
@@ -128,14 +113,14 @@ function SpawnCharacterJob:RegisterStates()
 		end,
 	}, {"ApplyLoadout","Failed" })
 
-
 	--[=[
-		@state ApplyLoadout
-		@description On enter, writes to the log.
-			Transitions:
-			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: writes to the log.
-	]=]
+	@state ApplyLoadout
+	@description Applies the selected player loadout when a player entity exists, otherwise logs a warning and completes without loadout changes.
+	Transitions:
+	- `Completed` when OnEnter finishes or falls through its guard checks.
+	Writes: writes to the log.
+
+]=]
 
 	self:AddState("ApplyLoadout", {
 		OnEnter = function(_, fsm)
@@ -179,17 +164,19 @@ function SpawnCharacterJob:RegisterStates()
 	--[=[
 	@state Completed
 	@description Terminal success sink reached after the spawned character entity is initialized and any persisted loadout equip jobs have been queued. `OnEnter` is a no-op.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
 	--[=[
 	@state Failed
 	@description Terminal failure sink for missing player, character, or entity context during spawn-time binding. `OnEnter` is a no-op because there is no extra rollback after failure.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Failed", function(_fsm) end, {})
 end

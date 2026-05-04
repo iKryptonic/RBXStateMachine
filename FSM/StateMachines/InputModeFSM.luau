@@ -1,19 +1,8 @@
 --!strict
 
-
 --[=[
-	@Name InputModeFSM
-	@Author iKrypto
-	@Description Client-side input mode toggle. Switches between CombatInput (mouse locked,
-	camera follows, combat keys active) and UIInput (mouse unlocked, UI panels interactive,
-	combat keys suppressed). Tab key triggers the toggle. The mode is read by InputRouter
-	to decide whether key presses should be routed to combat or UI handlers.
-
-	State flow:
-	CombatInput ↔ UIInput (Tab toggle)
-
-	Required params:
-	- CharacterEntityId: string — character entity ID
+	@module InputModeFSM
+	@description Switches the character between combat input and UI input by updating `MouseLocked` and `InputMode` on the character entity.
 ]=]
 
 local InputModeFSM = {
@@ -26,10 +15,10 @@ local InputModeFSM = {
 
 --[=[
 	@description Writes the derived input mode data back onto the active entity or FSM context.
-	@param fsm any -- Input consumed by `writeInputMode`.
-	@param mouseLocked any -- Input consumed by `writeInputMode`.
-	@param inputMode any -- Input consumed by `writeInputMode`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@param fsm any  -- InputModeFSM instance mirroring combat-vs-UI mode for this character.
+	@param mouseLocked any  -- Whether the mouse should stay locked for combat input.
+	@param inputMode any  -- Mode name to apply.
+	@return nil -- Updates the character entity in place when it exists.
 ]=]
 
 local function writeInputMode(fsm: any, mouseLocked: boolean, inputMode: string)
@@ -45,7 +34,6 @@ local function writeInputMode(fsm: any, mouseLocked: boolean, inputMode: string)
 	end
 end
 
-
 --[=[
 	@description Registers the runtime states, transitions, and terminal behavior for `InputModeFSM`.
 	@return nil -- Populates the state graph on the FSM definition table.
@@ -53,14 +41,14 @@ end
 
 function InputModeFSM:RegisterStates()
 
-
 	--[=[
-		@state CombatInput
-		@description Runs the `combat input` stage of `InputModeFSM`.
-			Transitions:
-			- External transitions allow: `UIInput`.
-			Writes: none.
-	]=]
+	@state CombatInput
+	@description Writes combat input availability to the shared mode flag so gameplay bindings stay active.
+	Transitions:
+	- Menu or focus changes may switch to `UIInput` when gameplay controls should pause.
+	Writes: none.
+
+]=]
 
 	self:AddState("CombatInput", {
 		OnEnter = function(_, fsm)
@@ -68,14 +56,14 @@ function InputModeFSM:RegisterStates()
 		end,
 	}, {"UIInput" })
 
-
 	--[=[
-		@state UIInput
-		@description Runs the `uiinput` stage of `InputModeFSM`.
-			Transitions:
-			- External transitions allow: `CombatInput`.
-			Writes: none.
-	]=]
+	@state UIInput
+	@description Writes UI-only input availability to the shared mode flag so combat bindings stay disabled.
+	Transitions:
+	- Gameplay flow switches back to `CombatInput` when UI focus closes.
+	Writes: none.
+
+]=]
 
 	self:AddState("UIInput", {
 		OnEnter = function(_, fsm)
@@ -85,17 +73,19 @@ function InputModeFSM:RegisterStates()
 	--[=[
 	@state Completed
 	@description Terminal success sink reserved for explicit teardown of the combat/UI mode FSM. Normal operation only toggles between `CombatInput` and `UIInput`, so `OnEnter` is a no-op.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
 	@state Failed
 	@description Terminal failure sink reserved for future input-mode errors. The current helper-driven flow never enters it, and `OnEnter` performs no writes.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Failed", function() end, {})
 end
@@ -118,10 +108,9 @@ function InputModeFSM.SetUIInput(fsm: any)
 	end
 end
 
-
 --[=[
-	@description Flips between the two supported runtime modes and returns the resulting state name.
-	@param fsm any -- Value consumed by `Toggle`.
+	@description Switches between `CombatInput` and `UIInput`, then returns the new state name.
+	@param fsm any  -- InputModeFSM instance mirroring combat-vs-UI mode for this character.
 	@return string -- The resulting state name after the toggle completes.
 ]=]
 

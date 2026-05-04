@@ -1,6 +1,5 @@
 --!strict
 
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
 assert(Helpers,"Helpers folder not found")
@@ -15,22 +14,8 @@ type RouteConfig = {
 }
 
 --[=[
-	@Name CrowdControlFSM
-	@Author iKrypto
-	@Description Server-authoritative crowd control application pipeline. Applies stun,
-	knockdown, or other CC effects by acquiring a CC lock, setting entity flags
-	(IsStunned, IsKnocked), emitting a replication intent, waiting for the CC duration,
-	then clearing flags and releasing the lock.
-
-	State flow:
-	Validate → RouteBranch → AcquireCCLock → ApplyFlags → EmitIntent
-	→ WaitDuration → ClearFlags → ReleaseCCLock → Completed
-	Any state may → ReleaseCCLock → Failed on error.
-
-	Required params:
-	- CharacterEntityId: string — target character entity
-	- Operation: string — CC type ("Stun", "Knockdown", etc.)
-	- Duration: number — effect duration in seconds
+	@module CrowdControlFSM
+	@description Applies a routed crowd-control operation, sets the matching flags and intents for its duration, then clears the flags and releases the CC lock.
 ]=]
 
 local CrowdControlFSM = {
@@ -53,9 +38,9 @@ local CrowdControlFSM = {
 }
 
 --[=[
-	@description Resolves route config from the current FSM context and available runtime data.
-	@param operation any -- Input consumed by `resolveRouteConfig`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Maps `Stun` and `Knockdown` operations to the flag name, animation name, and log prefix used by the FSM.
+	@param operation any  -- Requested crowd-control operation name.
+	@return any -- Resolved route config, or `nil` when unavailable.
 ]=]
 
 local function resolveRouteConfig(operation: string?): RouteConfig?
@@ -77,9 +62,9 @@ local function resolveRouteConfig(operation: string?): RouteConfig?
 end
 
 --[=[
-	@description Returns the route config used by this state machine when it can be resolved.
-	@param fsm any -- Input consumed by `getRouteConfig`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Returns the route config for this FSM, or `nil` when it cannot be found.
+	@param fsm any  -- CrowdControlFSM instance carrying the requested crowd-control operation and routed flags.
+	@return any -- Resolved route config, or `nil` when unavailable.
 ]=]
 
 local function getRouteConfig(fsm: any): RouteConfig?
@@ -100,15 +85,14 @@ local function getRouteConfig(fsm: any): RouteConfig?
 end
 
 --[=[
-	@description Returns the operation label used by this state machine when it can be resolved.
-	@param routeConfig any -- Input consumed by `getOperationLabel`.
+	@description Returns the operation label for this FSM, or `nil` when it cannot be found.
+	@param routeConfig any  -- Routed crowd-control metadata for the current operation.
 	@return string -- Resolved string value used by the FSM.
 ]=]
 
 local function getOperationLabel(routeConfig: RouteConfig): string
 	return string.lower(routeConfig.logPrefix)
 end
-
 
 --[=[
 	@description Registers the runtime states, transitions, and terminal behavior for `CrowdControlFSM`.
@@ -117,15 +101,15 @@ end
 
 function CrowdControlFSM:RegisterStates()
 
-
 	--[=[
-		@state Validate
-		@description Validates the required runtime context and prerequisites.
-			Transitions:
-			- `RouteBranch` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: none.
-	]=]
+	@state Validate
+	@description Checks orchestrator, operation, target character, and non-negative duration before crowd-control routing begins.
+	Transitions:
+	- `RouteBranch` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: none.
+
+]=]
 
 	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
@@ -157,15 +141,15 @@ function CrowdControlFSM:RegisterStates()
 		end,
 	}, {"RouteBranch","Failed" })
 
-
 	--[=[
-		@state RouteBranch
-		@description Runs the `route branch` stage of `CrowdControlFSM`.
-			Transitions:
-			- `AcquireCCLock` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: none.
-	]=]
+	@state RouteBranch
+	@description Caches the route fields for the requested crowd-control operation so later states can apply the right flag and animation.
+	Transitions:
+	- `AcquireCCLock` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: none.
+
+]=]
 
 	self:AddState("RouteBranch", {
 		OnEnter = function(_, fsm)
@@ -184,16 +168,16 @@ function CrowdControlFSM:RegisterStates()
 		end,
 	}, {"AcquireCCLock","Failed" })
 
-
 	--[=[
-		@state AcquireCCLock
-		@description Runs the `acquire cclock` stage of `CrowdControlFSM`.
-			Transitions:
-			- `ReleaseCCLock` when this stage finishes its immediate work or falls through its guard checks.
-			- `ApplyFlags` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: none.
-	]=]
+	@state AcquireCCLock
+	@description Attempts to grab the character's crowd-control lock, failing immediately on an existing lock and otherwise routing cleanup on helper errors.
+	Transitions:
+	- `ReleaseCCLock` when OnEnter finishes or falls through its guard checks.
+	- `ApplyFlags` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: none.
+
+]=]
 
 	self:AddState("AcquireCCLock", {
 		OnEnter = function(_, fsm)
@@ -214,14 +198,14 @@ function CrowdControlFSM:RegisterStates()
 		end,
 	}, {"ApplyFlags","ReleaseCCLock","Failed" })
 
-
 	--[=[
-		@state ApplyFlags
-		@description Runs the `apply flags` stage of `CrowdControlFSM`.
-			Transitions:
-			- `EmitIntent` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state ApplyFlags
+	@description Sets the routed crowd-control flag plus movement lockdown fields through `CrowdControlHelpers.applyFlags`.
+	Transitions:
+	- `EmitIntent` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("ApplyFlags", {
 		OnEnter = function(_, fsm)
@@ -245,14 +229,14 @@ function CrowdControlFSM:RegisterStates()
 		end,
 	}, {"EmitIntent","ReleaseCCLock","Failed" })
 
-
 	--[=[
-		@state EmitIntent
-		@description On enter, emits an intent.
-			Transitions:
-			- `WaitDuration` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: emits an intent.
-	]=]
+	@state EmitIntent
+	@description Appends the routed stun or knockdown animation intent after flags are successfully applied.
+	Transitions:
+	- `WaitDuration` when OnEnter finishes or falls through its guard checks.
+	Writes: emits an intent.
+
+]=]
 
 	self:AddState("EmitIntent", {
 		OnEnter = function(_, fsm)
@@ -286,14 +270,14 @@ function CrowdControlFSM:RegisterStates()
 		end,
 	}, {"WaitDuration","ReleaseCCLock","Failed" })
 
-
 	--[=[
-		@state WaitDuration
-		@description Waits until its scheduled completion or transition condition is met.
-			Transitions:
-			- External transitions allow: `ClearFlags`, `ReleaseCCLock`, `Failed`.
-			Writes: none.
-	]=]
+	@state WaitDuration
+	@description Schedules `ClearFlags` after `Duration`; early exits to cleanup only happen through explicit external transitions or failure.
+	Transitions:
+	- `ClearFlags`, `ReleaseCCLock`, or `Failed` can still be forced externally if the effect is cancelled early.
+	Writes: none.
+
+]=]
 
 	self:AddState("WaitDuration", {
 		OnEnter = function(_, fsm)
@@ -301,14 +285,14 @@ function CrowdControlFSM:RegisterStates()
 		end,
 	}, {"ClearFlags","ReleaseCCLock","Failed" })
 
-
 	--[=[
-		@state ClearFlags
-		@description Runs the `clear flags` stage of `CrowdControlFSM`.
-			Transitions:
-			- `ReleaseCCLock` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state ClearFlags
+	@description Clears the routed crowd-control flag and restores movement defaults before lock release.
+	Transitions:
+	- `ReleaseCCLock` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("ClearFlags", {
 		OnEnter = function(_, fsm)
@@ -332,15 +316,15 @@ function CrowdControlFSM:RegisterStates()
 		end,
 	}, {"ReleaseCCLock","Failed" })
 
-
 	--[=[
-		@state ReleaseCCLock
-		@description Runs the `release cclock` stage of `CrowdControlFSM`.
-			Transitions:
-			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: none.
-	]=]
+	@state ReleaseCCLock
+	@description Releases the crowd-control lock, turning release failures into `Failed`; otherwise the effect completes cleanly.
+	Transitions:
+	- `Completed` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: none.
+
+]=]
 
 	self:AddState("ReleaseCCLock", {
 		OnEnter = function(_, fsm)
@@ -361,10 +345,9 @@ function CrowdControlFSM:RegisterStates()
 	}, {"Completed","Failed" })
 end
 
-
 --[=[
 	@description Restores any mutable runtime state that still needs cleanup if the FSM stops before its normal completion path.
-	@return nil -- Performs state changes or cleanup as side effects.
+	@return nil -- Updates FSM state as a side effect.
 ]=]
 
 function CrowdControlFSM:OnCleanup()

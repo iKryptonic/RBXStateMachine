@@ -1,6 +1,5 @@
 --!strict
 
-
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Helpers = ReplicatedStorage:FindFirstChild("Helpers") or script.Parent.Parent:FindFirstChild("Helpers")
 assert(Helpers,"Helpers folder not found")
@@ -11,30 +10,8 @@ local EntityHelpers = require(Helpers:WaitForChild("EntityHelpers"))
 -- @Description Handles player initialization: creates PlayerEntity (persistent), waits for character, creates CharacterEntity, registers command handlers
 
 --[=[
-	@Name LoadPlayerJob
-	@Author iKrypto
-	@Description Server-side player lifecycle bootstrap. Creates PlayerEntity (persistent)
-	and CharacterEntity (ephemeral), hydrates from DataStore, normalizes inventory with
-	migration for legacy saves, waits for the character model, registers all server-side
-	command handlers (combat, equip, ability, utility), then publishes the loaded event.
-
-	State flow:
-	Start → ValidatePlayer → CreatePlayerEntity → LoadData → AwaitCharacter
-	→ CreateCharacterEntity → RegisterCommands → RegisterCombatCommands
-	→ RegisterEquipCommands → RegisterAbilityCommands → RegisterUtilityCommands
-	→ PublishLoaded → Completed
-
-	Context fields:
-	- Player: Player — the joining player instance
-	- UserId: number — player's UserId
-	- Character: Model — player's character (set after AwaitCharacter)
-	- CharacterEntityId: string — "Char_{userId}"
-	- PlayerEntityId: string — "Player_{userId}"
-	- _awaitStart: number — timestamp when character wait began (10s timeout)
-
-	Required params:
-	- Player: Player — the joining player
-	- UserId: number — player's UserId
+	@module LoadPlayerJob
+	@description Creates player and character entities, seeds persistent defaults, derives stats, registers gameplay commands, and publishes the loaded signal.
 ]=]
 
 local LoadPlayerJob = {
@@ -73,8 +50,8 @@ local COMMAND_COOLDOWN = 0.4 -- 400ms between commands per player
 local lastCommandTime: { [number]: number } = {} -- userId → os.clock()
 
 --[=[
-	@description Helper for the is rate limited step used by this state machine.
-	@param userId any -- Input consumed by `isRateLimited`.
+	@description Returns whether rate limited is true.
+	@param userId any  --  user id to resolve.
 	@return boolean -- Whether the helper completed successfully.
 ]=]
 
@@ -89,8 +66,8 @@ local function isRateLimited(userId: number): boolean
 end
 
 --[=[
-	@description Helper for the register entity command step used by this state machine.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Registers entity command.
+	@return nil -- Performs this helper's work in place.
 ]=]
 
 local function registerEntityCommand(
@@ -106,8 +83,8 @@ local function registerEntityCommand(
 end
 
 --[=[
-	@description Helper for the create and start state machine step used by this state machine.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Creates and start state machine.
+	@return nil -- Performs this helper's work in place.
 ]=]
 
 local function createAndStartStateMachine(
@@ -133,11 +110,11 @@ end
 -- Initialization helper only: seeds persistent player defaults before behavioral states run.
 --[=[
 	@description Applies the player defaults work needed by the surrounding state flow.
-	@param orchestrator any -- Input consumed by `applyPlayerDefaults`.
-	@param playerEntity any -- Input consumed by `applyPlayerDefaults`.
-	@param player any -- Input consumed by `applyPlayerDefaults`.
-	@param userId any -- Input consumed by `applyPlayerDefaults`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
+	@param playerEntity any  -- Player entity being read from or written to.
+	@param player any  -- Player instance associated with the request.
+	@param userId any  --  user id to resolve.
+	@return nil -- Performs this helper's work in place.
 ]=]
 
 local function applyPlayerDefaults(orchestrator: any, playerEntity: any, player: Player, userId: number)
@@ -265,11 +242,11 @@ end
 -- Initialization helper only: seeds character defaults before command registration begins.
 --[=[
 	@description Applies the character defaults work needed by the surrounding state flow.
-	@param charEntity any -- Input consumed by `applyCharacterDefaults`.
-	@param character any -- Input consumed by `applyCharacterDefaults`.
-	@param userId any -- Input consumed by `applyCharacterDefaults`.
-	@param playerEntityId any -- Input consumed by `applyCharacterDefaults`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@param charEntity any  -- Character entity being read from or written to.
+	@param character any  -- Character model associated with the request.
+	@param userId any  --  user id to resolve.
+	@param playerEntityId any  -- Player entity id to resolve.
+	@return nil -- Performs this helper's work in place.
 ]=]
 
 local function applyCharacterDefaults(charEntity: any, character: Model, userId: number, playerEntityId: string)
@@ -381,10 +358,10 @@ end
 
 --[=[
 	@description Applies the derived character stats work needed by the surrounding state flow.
-	@param orchestrator any -- Input consumed by `applyDerivedCharacterStats`.
-	@param playerEntity any -- Input consumed by `applyDerivedCharacterStats`.
-	@param charEntity any -- Input consumed by `applyDerivedCharacterStats`.
-	@param refillResources any -- Input consumed by `applyDerivedCharacterStats`.
+	@param orchestrator any  -- Orchestrator used to resolve entities, modules, or child jobs.
+	@param playerEntity any  -- Player entity being read from or written to.
+	@param charEntity any  -- Character entity being read from or written to.
+	@param refillResources any  -- Whether health, stamina, and mana should refill to the new maxima.
 	@return boolean -- Whether the helper completed successfully.
 ]=]
 
@@ -438,9 +415,9 @@ local function applyDerivedCharacterStats(orchestrator: any, playerEntity: any, 
 end
 
 --[=[
-	@description Returns the command registration context used by this state machine when it can be resolved.
-	@param fsm any -- Input consumed by `getCommandRegistrationContext`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Returns the command registration context for this FSM, or `nil` when it cannot be found.
+	@param fsm any  -- LoadPlayerJob instance carrying the player bootstrap context and created entity ids.
+	@return any -- Resolved command registration context, or `nil` when unavailable.
 ]=]
 
 local function getCommandRegistrationContext(fsm: any)
@@ -450,10 +427,11 @@ local function getCommandRegistrationContext(fsm: any)
 	local ownerUserId = fsm.UserId :: number
 
 	--[=[
-		@description Helper for the is authorized step used by this state machine.
-		@param player any -- Input consumed by `isAuthorized`.
-		@return boolean -- Whether the helper completed successfully.
-	]=]
+	@description Returns whether authorized is true.
+	@param player any  -- Player instance associated with the request.
+	@return boolean -- Whether the helper completed successfully.
+
+]=]
 
 	local function isAuthorized(player: Player?): boolean
 		return player ~= nil and player.UserId == ownerUserId
@@ -462,7 +440,6 @@ local function getCommandRegistrationContext(fsm: any)
 	return orchestrator, charEntityId, playerEntityId, ownerUserId, isAuthorized
 end
 
-
 --[=[
 	@description Registers the runtime states, transitions, and terminal behavior for `LoadPlayerJob`.
 	@return nil -- Populates the state graph on the FSM definition table.
@@ -470,14 +447,14 @@ end
 
 function LoadPlayerJob:RegisterStates()
 
-
 	--[=[
-		@state Start
-		@description On enter, writes to the log.
-			Transitions:
-			- `ValidatePlayer` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: writes to the log.
-	]=]
+	@state Start
+	@description Logs the player load start using either `UserId` or the bound `Player`, then immediately enters validation.
+	Transitions:
+	- `ValidatePlayer` when OnEnter finishes or falls through its guard checks.
+	Writes: writes to the log.
+
+]=]
 
 	self:AddState("Start", {
 		OnEnter = function(_, fsm)
@@ -491,15 +468,15 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"ValidatePlayer","Failed" })
 
-
 	--[=[
-		@state ValidatePlayer
-		@description Validates the required runtime context and prerequisites.
-			Transitions:
-			- `CreatePlayerEntity` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: stores `Context.UserId`, sets `UserId`.
-	]=]
+	@state ValidatePlayer
+	@description Verifies the bound `Player` instance and caches its nonzero `UserId` before entity creation begins.
+	Transitions:
+	- `CreatePlayerEntity` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: stores `Context.UserId`, sets `UserId`.
+
+]=]
 
 	self:AddState("ValidatePlayer", {
 		OnEnter = function(_, fsm)
@@ -519,15 +496,15 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"CreatePlayerEntity","Failed" })
 
-
 	--[=[
-		@state CreatePlayerEntity
-		@description On enter, stores `Context.PlayerEntityId`, sets `PlayerEntityId`.
-			Transitions:
-			- `LoadData` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: stores `Context.PlayerEntityId`, sets `PlayerEntityId`.
-	]=]
+	@state CreatePlayerEntity
+	@description Creates or reuses the persistent player entity, applies default player data, and caches the resulting entity id.
+	Transitions:
+	- `LoadData` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: stores `Context.PlayerEntityId`, sets `PlayerEntityId`.
+
+]=]
 
 	self:AddState("CreatePlayerEntity", {
 		OnEnter = function(_, fsm)
@@ -562,14 +539,14 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"LoadData","Failed" })
 
-
 	--[=[
-		@state LoadData
-		@description Runs the `load data` stage of `LoadPlayerJob`.
-			Transitions:
-			- `AwaitCharacter` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state LoadData
+	@description Placeholder step for future persistence loading; it currently falls straight through to character wait.
+	Transitions:
+	- `AwaitCharacter` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("LoadData", {
 		OnEnter = function(_, fsm)
@@ -577,15 +554,15 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"AwaitCharacter","Failed" })
 
-
 	--[=[
-		@state AwaitCharacter
-		@description On enter, stores `Context.Character`, stores `Context._awaitStart`, sets `Character`.
-			Transitions:
-			- `CreateCharacterEntity` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: stores `Context.Character`, stores `Context._awaitStart`, sets `Character`, sets `_awaitStart`.
-	]=]
+	@state AwaitCharacter
+	@description Uses the current character immediately when present, otherwise starts a 30-second heartbeat wait for character spawn.
+	Transitions:
+	- `CreateCharacterEntity` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: stores `Context.Character`, stores `Context._awaitStart`, sets `Character`, sets `_awaitStart`.
+
+]=]
 
 	self:AddState("AwaitCharacter", {
 		OnEnter = function(_, fsm)
@@ -618,15 +595,15 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"CreateCharacterEntity","Failed" })
 
-
 	--[=[
-		@state CreateCharacterEntity
-		@description On enter, stores `Context.CharacterEntityId`, sets `Instance`, sets `CharacterEntityId`.
-			Transitions:
-			- `RegisterCommands` when this stage finishes its immediate work or falls through its guard checks.
-			- `Failed` when validation or downstream work reports an unrecoverable problem.
-			Writes: stores `Context.CharacterEntityId`, sets `Instance`, sets `CharacterEntityId`, replicates entity changes.
-	]=]
+	@state CreateCharacterEntity
+	@description Creates or refreshes the character entity, applies character defaults plus passive bonuses, syncs humanoid state, and caches the character entity id.
+	Transitions:
+	- `RegisterCommands` when OnEnter finishes or falls through its guard checks.
+	- `Failed` when validation or downstream work reports an unrecoverable problem.
+	Writes: stores `Context.CharacterEntityId`, sets `Instance`, sets `CharacterEntityId`, replicates entity changes.
+
+]=]
 
 	self:AddState("CreateCharacterEntity", {
 		OnEnter = function(_, fsm)
@@ -688,14 +665,14 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"RegisterCommands","Failed" })
 
-
 	--[=[
-		@state RegisterCommands
-		@description Runs the `register commands` stage of `LoadPlayerJob`.
-			Transitions:
-			- `RegisterCombatCommands` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state RegisterCommands
+	@description Bridge step that hands player bootstrap from entity creation into the command-registration pipeline.
+	Transitions:
+	- `RegisterCombatCommands` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("RegisterCommands", {
 		OnEnter = function(_, fsm)
@@ -703,14 +680,14 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"RegisterCombatCommands","Failed" })
 
-
 	--[=[
-		@state RegisterCombatCommands
-		@description On enter, sets `IsBlocking`, replicates entity changes.
-			Transitions:
-			- `RegisterEquipCommands` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: sets `IsBlocking`, replicates entity changes.
-	]=]
+	@state RegisterCombatCommands
+	@description Registers combat remotes for attacks, damage, and blocking; the callback writes `IsBlocking` only when block state changes.
+	Transitions:
+	- `RegisterEquipCommands` when OnEnter finishes or falls through its guard checks.
+	Writes: sets `IsBlocking`, replicates entity changes.
+
+]=]
 
 	self:AddState("RegisterCombatCommands", {
 		OnEnter = function(_, fsm)
@@ -819,14 +796,14 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"RegisterEquipCommands","Failed" })
 
-
 	--[=[
-		@state RegisterEquipCommands
-		@description Runs the `register equip commands` stage of `LoadPlayerJob`.
-			Transitions:
-			- `RegisterAbilityCommands` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: none.
-	]=]
+	@state RegisterEquipCommands
+	@description Registers equip, unequip, toggle-weapon, and inventory item commands for the loaded character.
+	Transitions:
+	- `RegisterAbilityCommands` when OnEnter finishes or falls through its guard checks.
+	Writes: none.
+
+]=]
 
 	self:AddState("RegisterEquipCommands", {
 		OnEnter = function(_, fsm)
@@ -976,14 +953,14 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"RegisterAbilityCommands","Failed" })
 
-
 	--[=[
-		@state RegisterAbilityCommands
-		@description On enter, sets `Id`, sets `TalentSelections`, sets `UnlockedAbilities`.
-			Transitions:
-			- `RegisterUtilityCommands` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: sets `Id`, sets `TalentSelections`, sets `UnlockedAbilities`, sets `LearnedAbilities`, sets `SkillPoints`.
-	]=]
+	@state RegisterAbilityCommands
+	@description Registers ability, combo, ranged, consumable, and talent commands; the entity writes happen inside those callbacks, not in `OnEnter`.
+	Transitions:
+	- `RegisterUtilityCommands` when OnEnter finishes or falls through its guard checks.
+	Writes: sets `Id`, sets `TalentSelections`, sets `UnlockedAbilities`, sets `LearnedAbilities`, sets `SkillPoints`.
+
+]=]
 
 	self:AddState("RegisterAbilityCommands", {
 		OnEnter = function(_, fsm)
@@ -1214,14 +1191,14 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"RegisterUtilityCommands","Failed" })
 
-
 	--[=[
-		@state RegisterUtilityCommands
-		@description Captures the lock or blocking state needed for the next step.
-			Transitions:
-			- `PublishLoaded` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: sets `StatPoints`, sets `SprintIntent`, replicates entity changes.
-	]=]
+	@state RegisterUtilityCommands
+	@description Registers client-intent, status-effect, stat-allocation, and sprint commands before publishing the loaded event.
+	Transitions:
+	- `PublishLoaded` when OnEnter finishes or falls through its guard checks.
+	Writes: sets `StatPoints`, sets `SprintIntent`, replicates entity changes.
+
+]=]
 
 	self:AddState("RegisterUtilityCommands", {
 		OnEnter = function(_, fsm)
@@ -1361,14 +1338,14 @@ function LoadPlayerJob:RegisterStates()
 		end,
 	}, {"PublishLoaded","Failed" })
 
-
 	--[=[
-		@state PublishLoaded
-		@description On enter, writes to the log.
-			Transitions:
-			- `Completed` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: writes to the log.
-	]=]
+	@state PublishLoaded
+	@description Fires `Player/Loaded`, logs successful completion, and transitions to the terminal loaded state.
+	Transitions:
+	- `Completed` when OnEnter finishes or falls through its guard checks.
+	Writes: writes to the log.
+
+]=]
 
 	self:AddState("PublishLoaded", {
 		OnEnter = function(_, fsm)
@@ -1382,17 +1359,19 @@ function LoadPlayerJob:RegisterStates()
 	--[=[
 	@state Completed
 	@description Terminal success sink reached after `PublishLoaded` fires `Player/Loaded`, logs the completed load, and hands the user off to steady-state gameplay. `OnEnter` is a no-op.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
 	--[=[
 	@state Failed
 	@description Terminal failure sink for player bootstrap, entity creation, or command-registration errors. `OnEnter` is a no-op because the job logs and cleanup happen before entry.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Failed", function(_fsm) end, {})
 end

@@ -1,30 +1,8 @@
 --!strict
 
-
 --[=[
-	@Name ActionFSM
-	@Author iKrypto
-	@Description Client-side action overlay FSM. Tracks the character's active combat
-	action (melee windup/strike/recovery, dash, flip, hit react) and drives animation
-	phase timing. Each action type is a timed state that transitions back to None when
-	the phase completes. The charEntity.ActionOverlay field is read by the render loop
-	to determine which animation layer to blend.
-
-	State flow:
-	None → MeleeWindup → MeleeStrike → MeleeRecovery → None
-	None → Dashing → None
-	None → Flipping → None
-	None → HitReact → None
-
-	Context fields:
-	- _currentMove: string — active action name (e.g. "RightPunch", "DashStart")
-	- _movePhases: table — phase timeline for the current action
-	- _phaseIndex: number — current phase step
-	- _dashDirection: string? — dash direction for directional dashes
-	- _onAnimate: function? — animation playback callback
-
-	Required params:
-	- CharacterEntityId: string — character entity to read ActionOverlay from
+	@module ActionFSM
+	@description Tracks short-lived action overlays such as melee phases, dashes, flips, and hit react, then returns the character overlay to `None` after each timed state.
 ]=]
 
 local ActionFSM = {
@@ -46,9 +24,9 @@ local ActionFSM = {
 }
 
 --[=[
-	@description Returns the char entity used by this state machine when it can be resolved.
-	@param fsm any -- Input consumed by `getCharEntity`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@description Returns the char entity for this FSM, or `nil` when it cannot be found.
+	@param fsm any  -- ActionFSM instance tracking the current overlay request and cached action data.
+	@return any -- Resolved char entity, or `nil` when unavailable.
 ]=]
 
 local function getCharEntity(fsm: any): any?
@@ -61,9 +39,9 @@ end
 
 --[=[
 	@description Writes the derived action overlay data back onto the active entity or FSM context.
-	@param fsm any -- Input consumed by `writeActionOverlay`.
-	@param overlay any -- Input consumed by `writeActionOverlay`.
-	@return any -- Helper result used by the surrounding FSM flow, when applicable.
+	@param fsm any  -- ActionFSM instance tracking the current overlay request and cached action data.
+	@param overlay any  -- Overlay name to mirror onto the character entity.
+	@return nil -- Performs this helper's work in place.
 ]=]
 
 local function writeActionOverlay(fsm: any, overlay: string)
@@ -73,7 +51,6 @@ local function writeActionOverlay(fsm: any, overlay: string)
 	end
 end
 
-
 --[=[
 	@description Registers the runtime states, transitions, and terminal behavior for `ActionFSM`.
 	@return nil -- Populates the state graph on the FSM definition table.
@@ -81,14 +58,14 @@ end
 
 function ActionFSM:RegisterStates()
 
-
 	--[=[
-		@state None
-		@description Writes `ActionOverlay` as `None`.
-			Transitions:
-			- External transitions allow: `MeleeWindup`, `Dashing`, `Flipping`, `HitReact`.
-			Writes: clears `Context._currentMove`, clears `Context._movePhases`, clears `Context._phaseIndex`, stores `Context._currentMove`, stores `Context._movePhases`.
-	]=]
+	@state None
+	@description Writes `ActionOverlay` as `None`.
+	Transitions:
+	- Other gameplay FSMs may jump here to start melee, dash, flip, or hit-react overlays.
+	Writes: sets `ActionOverlay = "None"`, clears `Context._currentMove`, clears `Context._movePhases`, clears `Context._phaseIndex`.
+
+]=]
 
 	self:AddState("None", {
 		OnEnter = function(_, fsm)
@@ -99,15 +76,15 @@ function ActionFSM:RegisterStates()
 		end,
 	}, {"MeleeWindup","Dashing","Flipping","HitReact" })
 
-
 	--[=[
-		@state MeleeWindup
-		@description Updates the action overlay.
-			Transitions:
-			- `MeleeStrike` when the nil-second timeout expires.
-			- `None` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: stores `Context._phaseIndex`, sets `_phaseIndex`.
-	]=]
+	@state MeleeWindup
+	@description Writes the first queued melee phase to `ActionOverlay`, resets `_phaseIndex` to 1, and calls `_onAnimate`. It immediately returns to `None` when no phases are queued.
+	Transitions:
+	- `MeleeStrike` when the scheduled windup timeout expires.
+	- `None` when `_movePhases` is missing or empty.
+	Writes: stores `Context._phaseIndex`, sets `_phaseIndex`.
+
+]=]
 
 	self:AddState("MeleeWindup", {
 		OnEnter = function(_, fsm)
@@ -130,14 +107,14 @@ function ActionFSM:RegisterStates()
 		OnTimeout = "MeleeStrike",
 	}, {"MeleeStrike","None" })
 
-
 	--[=[
-		@state MeleeStrike
-		@description Updates the action overlay.
-			Transitions:
-			- `MeleeRecovery` when this stage finishes its immediate work or falls through its guard checks.
-			Writes: stores `Context._phaseIndex`, sets `_phaseIndex`.
-	]=]
+	@state MeleeStrike
+	@description Advances `_phaseIndex`, writes the next melee phase name to `ActionOverlay`, and replays `_onAnimate`. It skips straight to `MeleeRecovery` when the combo has no additional strike phase.
+	Transitions:
+	- `MeleeRecovery` after the next phase is processed, or immediately when no later phase exists.
+	Writes: stores `Context._phaseIndex`, sets `_phaseIndex`.
+
+]=]
 
 	self:AddState("MeleeStrike", {
 		OnEnter = function(_, fsm)
@@ -161,14 +138,14 @@ function ActionFSM:RegisterStates()
 		end,
 	}, {"MeleeRecovery","None" })
 
-
 	--[=[
-		@state MeleeRecovery
-		@description Writes `ActionOverlay` as `Recovery`.
-			Transitions:
-			- `None` when the 0.1-second timeout expires.
-			Writes: none.
-	]=]
+	@state MeleeRecovery
+	@description Writes `ActionOverlay` as `Recovery`.
+	Transitions:
+	- `None` when the 0.`1` timeout expires.
+	Writes: none.
+
+]=]
 
 	self:AddState("MeleeRecovery", {
 		OnEnter = function(_, fsm)
@@ -178,14 +155,14 @@ function ActionFSM:RegisterStates()
 		OnTimeout = "None",
 	}, {"None" })
 
-
 	--[=[
-		@state Dashing
-		@description Writes `ActionOverlay` as `Dash_`.
-			Transitions:
-			- `None` when the 0.25-second timeout expires.
-			Writes: none.
-	]=]
+	@state Dashing
+	@description Writes `ActionOverlay` as `Dash_`.
+	Transitions:
+	- `None` when the 0.`25` timeout expires.
+	Writes: none.
+
+]=]
 
 	self:AddState("Dashing", {
 		OnEnter = function(_, fsm)
@@ -196,14 +173,14 @@ function ActionFSM:RegisterStates()
 		OnTimeout = "None",
 	}, {"None" })
 
-
 	--[=[
-		@state Flipping
-		@description Writes `ActionOverlay` as `Flipping`.
-			Transitions:
-			- `None` when the 0.4-second timeout expires.
-			Writes: none.
-	]=]
+	@state Flipping
+	@description Writes `ActionOverlay` as `Flipping`.
+	Transitions:
+	- `None` when the 0.`4` timeout expires.
+	Writes: none.
+
+]=]
 
 	self:AddState("Flipping", {
 		OnEnter = function(_, fsm)
@@ -213,14 +190,14 @@ function ActionFSM:RegisterStates()
 		OnTimeout = "None",
 	}, {"None" })
 
-
 	--[=[
-		@state HitReact
-		@description Writes `ActionOverlay` as `HitReact`.
-			Transitions:
-			- `None` when the 0.2-second timeout expires.
-			Writes: none.
-	]=]
+	@state HitReact
+	@description Writes `ActionOverlay` as `HitReact`.
+	Transitions:
+	- `None` when the 0.`2` timeout expires.
+	Writes: none.
+
+]=]
 
 	self:AddState("HitReact", {
 		OnEnter = function(_, fsm)
@@ -253,25 +230,26 @@ function ActionFSM:RegisterStates()
 	--[=[
 	@state Completed
 	@description Terminal success sink reserved for explicit shutdown of the action overlay FSM. Normal melee, dash, flip, and hit-react flows return to `None` instead, so `OnEnter` is a no-op.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
 	@state Failed
 	@description Terminal failure sink reserved for future hard action errors. Current action requests fall back to `None` rather than routing here, so `OnEnter` is a no-op.
-		Transitions: none.
-		Writes: none.
-	]=]
+	Transitions: none.
+	Writes: none.
+
+]=]
 
 	self:AddState("Failed", function() end, {})
 end
 
-
 --[=[
 	@description Attempts to start the `Melee` path when the FSM is in a compatible state.
-	@return nil -- Performs state changes or cleanup as side effects.
+	@return boolean -- `true` when the request is accepted.
 ]=]
 
 function ActionFSM.RequestMelee(
@@ -293,12 +271,11 @@ function ActionFSM.RequestMelee(
 	return true
 end
 
-
 --[=[
 	@description Attempts to start the `Dash` path when the FSM is in a compatible state.
-	@param fsm any -- Value consumed by `RequestDash`.
-	@param direction any -- Value consumed by `RequestDash`.
-	@return nil -- Performs state changes or cleanup as side effects.
+	@param fsm any  -- ActionFSM instance tracking the current overlay request and cached action data.
+	@param direction any  -- Requested movement or attack direction.
+	@return boolean -- `true` when the request is accepted.
 ]=]
 
 function ActionFSM.RequestDash(fsm: any, direction: string)
@@ -310,11 +287,10 @@ function ActionFSM.RequestDash(fsm: any, direction: string)
 	return true
 end
 
-
 --[=[
 	@description Attempts to start the `Flip` path when the FSM is in a compatible state.
-	@param fsm any -- Value consumed by `RequestFlip`.
-	@return nil -- Performs state changes or cleanup as side effects.
+	@param fsm any  -- ActionFSM instance tracking the current overlay request and cached action data.
+	@return boolean -- `true` when the request is accepted.
 ]=]
 
 function ActionFSM.RequestFlip(fsm: any)
@@ -325,11 +301,10 @@ function ActionFSM.RequestFlip(fsm: any)
 	return true
 end
 
-
 --[=[
 	@description Attempts to start the `HitReact` path when the FSM is in a compatible state.
-	@param fsm any -- Value consumed by `RequestHitReact`.
-	@return nil -- Performs state changes or cleanup as side effects.
+	@param fsm any  -- ActionFSM instance tracking the current overlay request and cached action data.
+	@return boolean -- `true` when the request is accepted.
 ]=]
 
 function ActionFSM.RequestHitReact(fsm: any)
