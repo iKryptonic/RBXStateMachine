@@ -102,7 +102,7 @@ function InputFSM:RegisterStates()
 	@description Terminal success sink reserved for explicit shutdown of the input-mode FSM. Runtime behavior normally stays inside `Normal`, `ComboMode`, and `HeldAttack`, so `OnEnter` is a no-op.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
@@ -110,7 +110,7 @@ function InputFSM:RegisterStates()
 	@description Terminal failure sink reserved for future input-processing errors. The current implementation does not route here, and `OnEnter` performs no writes.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Failed", function() end, {})
 end

@@ -204,7 +204,7 @@ function MockOrchestrator.new(opts: {
 	remoteEvents: { [string]: any }?,
 	fps: number?,
 	frameBudget: number?,
-}?): any
+	}?): any
 	return buildLegacyOrchestrator(opts)
 end
 
@@ -216,7 +216,7 @@ function MockOrchestrator.makeTask(name: string, opts: {
 	avgMs: number?,
 	maxMs: number?,
 	recurring: boolean?,
-}?): any
+	}?): any
 	opts = opts or {}
 	return {
 		TaskName = name,
@@ -242,7 +242,7 @@ function MockOrchestrator.makeFSM(name: string, opts: {
 	transitionCount: number?,
 	hasFailed: boolean?,
 	transitions: { { From: string, To: string } }?,
-}?): any
+	}?): any
 	opts = opts or {}
 	return {
 		Name = name,
@@ -269,7 +269,7 @@ function MockOrchestrator.makeEntity(id: string, opts: {
 	state: { [string]: any }?,
 	data: { [string]: any }?,
 	schema: { [string]: any }?,
-}?): any
+	}?): any
 	opts = opts or {}
 	return {
 		_privateProperties = {
@@ -289,7 +289,7 @@ function MockOrchestrator.makeBus(opts: {
 	subscribers: number?,
 	messages: number?,
 	type: string?,
-}?): any
+	}?): any
 	opts = opts or {}
 	local handlers = {}
 	for _ = 1, (opts.subscribers or 0) do

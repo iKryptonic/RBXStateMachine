@@ -1357,7 +1357,7 @@ function CastFSM:RegisterStates()
 	@description Terminal success sink reached after `ReleaseLock` restores movement, clears `ActiveCastId`, updates the entity, and releases the cast lock. `OnEnter` is a no-op because release cleanup is already complete.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
@@ -1365,7 +1365,7 @@ function CastFSM:RegisterStates()
 	@description Terminal failure sink entered when cast validation or release cleanup calls `Fail`, including deferred `_releaseReason` errors. `OnEnter` is a no-op; `OnCleanup` still restores movement, clears `ActiveCastId`, and releases any held lock.
 		Transitions: none.
 		Writes: none in-state; cleanup writes may still run.
-]=]
+	]=]
 
 	self:AddState("Failed", function() end, {})
 end

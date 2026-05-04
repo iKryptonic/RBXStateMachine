@@ -30,7 +30,7 @@ end
 function ConnectionBag:Add(item: any): any
 	if item == nil then return item end
 	table.insert(self._items, item)
-	self._count + = 1
+	self._count += 1
 	return item
 end
 

@@ -38,7 +38,7 @@ function ReactiveStore:Set(key: string, value: any)
 	if old == value then return end
 
 	self._data[key] = value
-	self._version + = 1
+	self._version += 1
 	self._dirtyKeys[key] = true
 
 	if self._batchDepth > 0 then
@@ -51,9 +51,9 @@ end
 
 
 function ReactiveStore:BatchUpdate(fn: () -> ())
-	self._batchDepth + = 1
+	self._batchDepth += 1
 	fn()
-	self._batchDepth - = 1
+	self._batchDepth -= 1
 
 	if self._batchDepth == 0 then
 		local changes = self._batchedChanges
@@ -66,7 +66,7 @@ end
 
 
 function ReactiveStore:Subscribe(key: string?, handler: (key: string, newVal: any, oldVal: any) -> ()): () -> ()
-	_nextSubId + = 1
+	_nextSubId += 1
 	local sub: StoreSubscription = {
 		Key = key,
 		Handler = handler,

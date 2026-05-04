@@ -231,7 +231,7 @@ function ConsoleModule:_RegisterBuiltinCommands()
 				local tasks = orch.Scheduler.Tasks or {}
 				local count = 0
 				for name, taskDef in pairs(tasks) do
-					count + = 1
+					count += 1
 					local status = taskDef.Status or "idle"
 					local execCount = taskDef.ExecutionCount or 0
 					local statusIcon = if status == "running" then"●" elseif status == "error" then"✕" else"○"
@@ -305,7 +305,7 @@ function ConsoleModule:_RegisterBuiltinCommands()
 				local lines = {"State Machines:","─────────────────────────────" }
 				local count = 0
 				for id, fsm in pairs(machines) do
-					count + = 1
+					count += 1
 					local active = if fsm.IsActive then"●" else"○"
 					table.insert(lines, string.format("  %s %-20s [%s] P%d",
 						active, fsm.Name or id, fsm.State or "none", fsm.Priority or 1))
@@ -362,7 +362,7 @@ function ConsoleModule:_RegisterBuiltinCommands()
 				local lines = {"Entities:","─────────────────────────────" }
 				local count = 0
 				for id, entity in pairs(entities) do
-					count + = 1
+					count += 1
 					local name = "Unknown"
 					local valid = false
 					pcall(function()
@@ -395,7 +395,7 @@ function ConsoleModule:_RegisterBuiltinCommands()
 				}
 				if pp.Schema then
 					local schemaCount = 0
-					for _ in pairs(pp.Schema) do schemaCount + = 1 end
+					for _ in pairs(pp.Schema) do schemaCount += 1 end
 					table.insert(lines,"  Schema:   " .. tostring(schemaCount) .." fields")
 				end
 				return table.concat(lines,"\n")
@@ -418,22 +418,22 @@ function ConsoleModule:_RegisterBuiltinCommands()
 
 			local busCount = 0
 			if nm.EventBuses then
-				for _ in pairs(nm.EventBuses) do busCount + = 1 end
+				for _ in pairs(nm.EventBuses) do busCount += 1 end
 			end
 
 			local cmdCount = 0
 			if nm.Commands then
-				for _ in pairs(nm.Commands) do cmdCount + = 1 end
+				for _ in pairs(nm.Commands) do cmdCount += 1 end
 			end
 
 			local entCmdCount = 0
 			if nm.EntityCommandCallbacks then
-				for _ in pairs(nm.EntityCommandCallbacks) do entCmdCount + = 1 end
+				for _ in pairs(nm.EntityCommandCallbacks) do entCmdCount += 1 end
 			end
 
 			local remoteCount = 0
 			if nm.RemoteEvents then
-				for _ in pairs(nm.RemoteEvents) do remoteCount + = 1 end
+				for _ in pairs(nm.RemoteEvents) do remoteCount += 1 end
 			end
 
 			table.insert(lines,"  Event Buses:     " .. tostring(busCount))
@@ -459,7 +459,7 @@ function ConsoleModule:_RegisterBuiltinCommands()
 					if schema then
 						for _, def in pairs(schema) do
 							if def.Persist then
-								count + = 1
+								count += 1
 								table.insert(lines,"  " .. id)
 								break
 							end
@@ -601,7 +601,7 @@ local function scoreMatch(query: string, candidate: string): number
 	local qi = 1
 	for i = 1, #c do
 		if qi > #q then break end
-		if c:sub(i, i) == q:sub(qi, qi) then qi + = 1 end
+		if c:sub(i, i) == q:sub(qi, qi) then qi += 1 end
 	end
 	if qi > #q then return 100 end
 	return -1
@@ -902,7 +902,7 @@ function ConsoleModule:BuildRootLayer(frame: Frame, context: any)
 			else
 				-- Navigate history up
 				if self._historyIndex > 1 then
-					self._historyIndex - = 1
+					self._historyIndex -= 1
 					inputBox.Text = self._commandHistory[self._historyIndex] or ""
 					inputBox.CursorPosition = #inputBox.Text + 1
 				end
@@ -914,7 +914,7 @@ function ConsoleModule:BuildRootLayer(frame: Frame, context: any)
 			else
 				-- Navigate history down
 				if self._historyIndex < #self._commandHistory then
-					self._historyIndex + = 1
+					self._historyIndex += 1
 					inputBox.Text = self._commandHistory[self._historyIndex] or ""
 				else
 					self._historyIndex = #self._commandHistory + 1

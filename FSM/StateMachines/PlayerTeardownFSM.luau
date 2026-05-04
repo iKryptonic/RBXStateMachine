@@ -274,7 +274,7 @@ function PlayerTeardownFSM:RegisterStates()
 	@description Terminal success state entered after state machines are cancelled, matching entities are deleted, and teardown logging can be finalized. `OnEnter` writes the final info log for `UserId`.
 		Transitions: none.
 		Writes: info log.
-]=]
+	]=]
 
 	self:AddState("Completed", {
 		OnEnter = function(_, fsm)
@@ -289,7 +289,7 @@ function PlayerTeardownFSM:RegisterStates()
 	@description Terminal failure state for teardown errors while cancelling machines or deleting entities. `OnEnter` logs the failure reason for `UserId` and performs no additional rollback.
 		Transitions: none.
 		Writes: error log.
-]=]
+	]=]
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm, reason)

@@ -23,7 +23,7 @@ function StateTransitionHelpers.scheduleTransitionCompat(
 	seconds: number,
 	targetState: string,
 	expectedState: string?
-)
+	)
 	if type(fsm.ScheduleTransition) == "function" then
 		fsm:ScheduleTransition(seconds, targetState)
 		return

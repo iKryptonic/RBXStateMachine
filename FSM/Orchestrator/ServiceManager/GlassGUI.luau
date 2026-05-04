@@ -76,7 +76,7 @@ function GlassGUI:Build(): ScreenGui
 	main.Name = "MainWindow"
 	main.Size = UDim2.new(0.85, 0, 0.85, 0)
 	main.Position = UDim2.new(0.5, 0, 0.5, 0)
-main.AnchorPoint = Vector2.new(0.5, 0.5)
+	main.AnchorPoint = Vector2.new(0.5, 0.5)
 	main.BackgroundColor3 = Theme.Colors.RootBG
 	main.BackgroundTransparency = 0
 	main.BorderSizePixel = 0
@@ -654,7 +654,7 @@ function GlassGUI:UpdateStatusBar(props: {
 	Mode: string?,
 	InsightCount: number?,
 	FPS: number?,
-})
+	})
 	local bar = self._statusBar
 	if not bar then return end
 

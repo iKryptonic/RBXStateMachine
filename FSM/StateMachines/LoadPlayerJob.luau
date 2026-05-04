@@ -1362,7 +1362,7 @@ function LoadPlayerJob:RegisterStates()
 	@description Terminal success sink reached after `PublishLoaded` fires `Player/Loaded`, logs the completed load, and hands the user off to steady-state gameplay. `OnEnter` is a no-op.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
 	--[=[
@@ -1370,7 +1370,7 @@ function LoadPlayerJob:RegisterStates()
 	@description Terminal failure sink for player bootstrap, entity creation, or command-registration errors. `OnEnter` is a no-op because the job logs and cleanup happen before entry.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Failed", function(_fsm) end, {})
 end

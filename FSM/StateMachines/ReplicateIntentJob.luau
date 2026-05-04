@@ -159,16 +159,16 @@ end
 function ReplicateIntentJob:RegisterStates()
 
 
---[=[
+	--[=[
 	@state Validate
 	@description Validates the required runtime context and prerequisites.
 		Transitions:
 		- `NormalizePayload` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: stores `Context._characterEntity`, sets `_characterEntity`.
-]=]
+	]=]
 
-self:AddState("Validate", {
+	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
@@ -208,16 +208,16 @@ self:AddState("Validate", {
 	}, {"NormalizePayload","Failed" })
 
 
---[=[
+	--[=[
 	@state NormalizePayload
 	@description On enter, stores `Context._normalizedPayload`, sets `Name`, sets `Speed`.
 		Transitions:
 		- `CheckAllowList` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: stores `Context._normalizedPayload`, sets `Name`, sets `Speed`, sets `FadeTime`, sets `SoundId`.
-]=]
+	]=]
 
-self:AddState("NormalizePayload", {
+	self:AddState("NormalizePayload", {
 		OnEnter = function(_, fsm)
 			local intentSchema = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(),"IntentSchema")
 			local payload, err = sanitizePayload(intentSchema, fsm.Payload or {}, {})
@@ -256,16 +256,16 @@ self:AddState("NormalizePayload", {
 	}, {"CheckAllowList","Failed" })
 
 
---[=[
+	--[=[
 	@state CheckAllowList
 	@description Runs the `check allow list` stage of `ReplicateIntentJob`.
 		Transitions:
 		- `ApplyToEntity` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("CheckAllowList", {
+	self:AddState("CheckAllowList", {
 		OnEnter = function(_, fsm)
 			local AllowLists = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(),"AllowLists")
 			local payload = fsm.Context._normalizedPayload
@@ -285,16 +285,16 @@ self:AddState("CheckAllowList", {
 	}, {"ApplyToEntity","Failed" })
 
 
---[=[
+	--[=[
 	@state ApplyToEntity
 	@description On enter, emits an intent.
 		Transitions:
 		- `Completed` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: emits an intent.
-]=]
+	]=]
 
-self:AddState("ApplyToEntity", {
+	self:AddState("ApplyToEntity", {
 		OnEnter = function(_, fsm)
 			local IntentSchema = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(),"IntentSchema")
 			local characterEntity = fsm.Context._characterEntity
@@ -313,22 +313,22 @@ self:AddState("ApplyToEntity", {
 			fsm.State = "Completed"
 		end,
 	}, {"Completed","Failed" })
---[=[
+	--[=[
 	@state Completed
 	@description Terminal success sink reached after the sanitized intent payload has been appended to the character entity. `OnEnter` is a no-op because the entity mutation already occurred in `ApplyToEntity`.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("Completed", function() end, {})
---[=[
+	self:AddState("Completed", function() end, {})
+	--[=[
 	@state Failed
 	@description Terminal failure sink for payload normalization, allow-list, or entity-resolution errors. `OnEnter` is a no-op and `OnCleanup` performs no extra rollback.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("Failed", function() end, {})
+	self:AddState("Failed", function() end, {})
 end
 
 

@@ -162,7 +162,7 @@ function AnimationStateFSM:RegisterStates()
 	@description Terminal shutdown state for the animation observer. `OnEnter` forces the observed state back to `Idle`, mirrors that into `charEntity.AnimationState` and `fsm.Context._observedState`, and logs completion for the character.
 		Transitions: none.
 		Writes: `AnimationState`, `Context._observedState`, info log.
-]=]
+	]=]
 
 	self:AddState("Completed", {
 		OnEnter = function(_, fsm)
@@ -178,7 +178,7 @@ function AnimationStateFSM:RegisterStates()
 	@description Terminal error state for animation-state tracking. `OnEnter` logs the failure reason for `CharacterEntityId` and leaves the last observed state untouched.
 		Transitions: none.
 		Writes: error log.
-]=]
+	]=]
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm, reason)

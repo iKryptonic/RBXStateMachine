@@ -432,15 +432,15 @@ end
 function AttackJob:RegisterStates()
 
 
---[=[
+	--[=[
 	@state Validate
 	@description Validates the required runtime context and prerequisites.
 		Transitions:
 		- `AcquireCombatLock` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._characterEntity`, stores `Context._character`, stores `Context._humanoid`, stores `Context._root`, stores `Context._playerEntity`.
-]=]
+	]=]
 
-self:AddState("Validate", {
+	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
@@ -515,15 +515,15 @@ self:AddState("Validate", {
 	}, {"AcquireCombatLock","RollbackConstraints" })
 
 
---[=[
+	--[=[
 	@state AcquireCombatLock
 	@description Captures the lock or blocking state needed for the next step.
 		Transitions:
 		- `ResolveAttackDef` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._entityLockHeld`, stores `Context._combatLockApplied`, sets `_entityLockHeld`, sets `CombatLock`, sets `_combatLockApplied`.
-]=]
+	]=]
 
-self:AddState("AcquireCombatLock", {
+	self:AddState("AcquireCombatLock", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if not characterEntity then
@@ -551,15 +551,15 @@ self:AddState("AcquireCombatLock", {
 	}, {"ResolveAttackDef","RollbackConstraints" })
 
 
---[=[
+	--[=[
 	@state ResolveAttackDef
 	@description Resolves the data needed for the `ResolveAttackDef` step.
 		Transitions:
 		- `ApplyMovementConstraints` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._itemData`, stores `Context._comboDef`, stores `Context._selectedCombo`, stores `Context._comboPointer`, stores `Context._comboTotalFrames`.
-]=]
+	]=]
 
-self:AddState("ResolveAttackDef", {
+	self:AddState("ResolveAttackDef", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			local weaponId = fsm.Context._weaponId
@@ -613,15 +613,15 @@ self:AddState("ResolveAttackDef", {
 	}, {"ApplyMovementConstraints","RollbackConstraints" })
 
 
---[=[
+	--[=[
 	@state ApplyMovementConstraints
 	@description On enter, stores `Context._priorConstraints`, stores `Context._constraintsApplied`, sets `_priorConstraints`.
 		Transitions:
 		- `EmitWindupIntent` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._priorConstraints`, stores `Context._constraintsApplied`, sets `_priorConstraints`, sets `CanMove`, sets `MouseLocked`.
-]=]
+	]=]
 
-self:AddState("ApplyMovementConstraints", {
+	self:AddState("ApplyMovementConstraints", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if not characterEntity then
@@ -662,15 +662,15 @@ self:AddState("ApplyMovementConstraints", {
 	}, {"EmitWindupIntent","RollbackConstraints" })
 
 
---[=[
+	--[=[
 	@state EmitWindupIntent
 	@description Runs the `emit windup intent` stage of `AttackJob`.
 		Transitions:
 		- `PlayTimeline` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("EmitWindupIntent", {
+	self:AddState("EmitWindupIntent", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity then
@@ -688,15 +688,15 @@ self:AddState("EmitWindupIntent", {
 	}, {"PlayTimeline","RollbackConstraints" })
 
 
---[=[
+	--[=[
 	@state PlayTimeline
 	@description On enter, stores `Context._timelineElapsed`, stores `Context._timelineFrame`, stores `Context._timelineFired`.
 		Transitions:
 		- `EmitRecoveryIntent` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._timelineElapsed`, stores `Context._timelineFrame`, stores `Context._timelineFired`, stores `Context._hitDebounces`, sets `_timelineElapsed`.
-]=]
+	]=]
 
-self:AddState("PlayTimeline", {
+	self:AddState("PlayTimeline", {
 		OnEnter = function(_, fsm)
 			fsm.Context._timelineElapsed = 0
 			fsm.Context._timelineFrame = 0
@@ -751,15 +751,15 @@ self:AddState("PlayTimeline", {
 	}, {"EmitRecoveryIntent","RollbackConstraints" })
 
 
---[=[
+	--[=[
 	@state EmitRecoveryIntent
 	@description Runs the `emit recovery intent` stage of `AttackJob`.
 		Transitions:
 		- `RollbackConstraints` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("EmitRecoveryIntent", {
+	self:AddState("EmitRecoveryIntent", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity then
@@ -777,15 +777,15 @@ self:AddState("EmitRecoveryIntent", {
 	}, {"RollbackConstraints" })
 
 
---[=[
+	--[=[
 	@state RollbackConstraints
 	@description On enter, stores `Context._constraintsApplied`, sets `_constraintsApplied`, sets `CanMove`.
 		Transitions:
 		- `ReleaseCombatLock` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._constraintsApplied`, sets `_constraintsApplied`, sets `CanMove`, sets `MoveSpeedCap`, sets `MouseLocked`.
-]=]
+	]=]
 
-self:AddState("RollbackConstraints", {
+	self:AddState("RollbackConstraints", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity and fsm.Context._constraintsApplied == true then
@@ -803,16 +803,16 @@ self:AddState("RollbackConstraints", {
 	}, {"ReleaseCombatLock" })
 
 
---[=[
+	--[=[
 	@state ReleaseCombatLock
 	@description On enter, stores `Context._combatLockApplied`, stores `Context._entityLockHeld`, sets `_combatLockApplied`.
 		Transitions:
 		- `Failed` when this stage finishes its immediate work or falls through its guard checks.
 		- `Completed` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._combatLockApplied`, stores `Context._entityLockHeld`, sets `_combatLockApplied`, sets `CombatLock`, sets `_entityLockHeld`.
-]=]
+	]=]
 
-self:AddState("ReleaseCombatLock", {
+	self:AddState("ReleaseCombatLock", {
 		OnEnter = function(_, fsm)
 			local characterEntity = fsm.Context._characterEntity
 			if characterEntity and fsm.Context._combatLockApplied == true then
@@ -833,22 +833,22 @@ self:AddState("ReleaseCombatLock", {
 			end
 		end,
 	}, {"Completed","Failed" })
---[=[
+	--[=[
 	@state Completed
 	@description Terminal success sink reached after `ReleaseCombatLock` clears `CombatLock` and releases the entity lock at the end of the attack timeline. `OnEnter` is a no-op because cleanup already happened before entry.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("Completed", function() end, {})
---[=[
+	self:AddState("Completed", function() end, {})
+	--[=[
 	@state Failed
 	@description Terminal failure sink entered when validation, timeline processing, or rollback stores `_failureReason` and routes through `ReleaseCombatLock`. `OnEnter` logs that cached failure reason when it is present.
 		Transitions: none.
 		Writes: error log.
-]=]
+	]=]
 
-self:AddState("Failed", function(fsm)
+	self:AddState("Failed", function(fsm)
 		if typeof(fsm.Context._failureReason) == "string" then
 			fsm:Log({
 				Level = "ERROR",

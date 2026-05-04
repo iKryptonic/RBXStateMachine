@@ -234,7 +234,7 @@ function ActionFSM:RegisterStates()
 	@description Terminal success sink reserved for explicit shutdown of the action overlay FSM. Normal melee, dash, flip, and hit-react flows return to `None` instead, so `OnEnter` is a no-op.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
@@ -242,7 +242,7 @@ function ActionFSM:RegisterStates()
 	@description Terminal failure sink reserved for future hard action errors. Current action requests fall back to `None` rather than routing here, so `OnEnter` is a no-op.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Failed", function() end, {})
 end
@@ -257,7 +257,7 @@ function ActionFSM.RequestMelee(
 	fsm: any,
 	phases: { { Name: string, Speed: number, Duration: number } },
 	onAnimate: (string, number?, number?) -> ()
-)
+	)
 	if fsm.State ~= "None" then
 		return false
 	end

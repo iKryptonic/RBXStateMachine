@@ -125,7 +125,7 @@ do
 
 		self.Tasks[t.Name] = t
 		if isNew then
-			self._taskCount + = 1
+			self._taskCount += 1
 		end
 		if not self._heaps[t.Event] then self._heaps[t.Event] = {} end
 		self:_heapPush(self._heaps[t.Event], t)
@@ -162,7 +162,7 @@ do
 		self = ResolveScheduler(self)
 		if self.Tasks[name] then
 			self:AddToHistory(self.Tasks[name],"Cancelled", 0,"")
-			self._taskCount - = 1
+			self._taskCount -= 1
 			self.Tasks[name] = nil
 			local logger = self.Logger or Scheduler.Logger
 			if logger then
@@ -282,12 +282,12 @@ do
 		else
 			thread = coroutine.create(yielder)
 			coroutine.resume(thread) -- Start the yielder
-			totalThreads + = 1
+			totalThreads += 1
 			if totalThreads > peakThreads then
 				peakThreads = totalThreads
 			end
 		end
-		activeThreads + = 1
+		activeThreads += 1
 
 		-- We wrap the logic in a non-allocating wrapper
 		task_spawn(thread, function()
@@ -310,8 +310,8 @@ do
 				self._running[t.Name] = nil
 
 				if self.Tasks[t.Name] == t then
-					t.RunCount + = 1
-					t.TotalRunTime + = dur
+					t.RunCount += 1
+					t.TotalRunTime += dur
 					if dur > t.MaxRunTime then t.MaxRunTime = dur end
 
 					t.TotalMemory = (t.TotalMemory or 0) + memDelta
@@ -320,7 +320,7 @@ do
 					if not t.IsRecurringTask then
 						self:AddToHistory(t, s and "Completed" or "Failed", dur, not s and tostring(e) or nil)
 						self.Tasks[t.Name] = nil
-						self._taskCount - = 1
+						self._taskCount -= 1
 						TaskPool.Release(t)
 					end
 				else
@@ -381,7 +381,7 @@ do
 
 			-- Pop and add to execution list
 			self:_heapPop(heap)
-			count + = 1
+			count += 1
 			dueTasks[count] = t
 		end
 
@@ -444,7 +444,7 @@ do
 		if size > 1 then
 			heap[1] = heap[size]
 			heap[size] = nil
-			size - = 1
+			size -= 1
 			local idx = 1
 			while true do
 				local left, right = 2 * idx, 2 * idx + 1

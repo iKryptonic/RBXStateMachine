@@ -55,16 +55,16 @@ local BlockJob = {
 function BlockJob:RegisterStates()
 
 
---[=[
+	--[=[
 	@state Validate
 	@description Validates the required runtime context and prerequisites.
 		Transitions:
 		- `AcquireBlockState` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("Validate", {
+	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			if type(fsm.CharacterEntityId) ~= "string" or fsm.CharacterEntityId == "" then
 				fsm:Fail("Missing CharacterEntityId")
@@ -83,16 +83,16 @@ self:AddState("Validate", {
 	}, {"AcquireBlockState","Failed" })
 
 
---[=[
+	--[=[
 	@state AcquireBlockState
 	@description Captures the lock or blocking state needed for the next step.
 		Transitions:
 		- `ApplyMovementRestriction` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: sets `IsBlocking`.
-]=]
+	]=]
 
-self:AddState("AcquireBlockState", {
+	self:AddState("AcquireBlockState", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
 			if not charEntity then
@@ -105,16 +105,16 @@ self:AddState("AcquireBlockState", {
 	}, {"ApplyMovementRestriction","Failed" })
 
 
---[=[
+	--[=[
 	@state ApplyMovementRestriction
 	@description On enter, sets `MoveSpeedCap`.
 		Transitions:
 		- `BroadcastBlockUpdate` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: sets `MoveSpeedCap`.
-]=]
+	]=]
 
-self:AddState("ApplyMovementRestriction", {
+	self:AddState("ApplyMovementRestriction", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
 			if not charEntity then
@@ -127,16 +127,16 @@ self:AddState("ApplyMovementRestriction", {
 	}, {"BroadcastBlockUpdate","Failed" })
 
 
---[=[
+	--[=[
 	@state BroadcastBlockUpdate
 	@description On enter, replicates entity changes, writes to the log.
 		Transitions:
 		- `EmitBlockIntent` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: replicates entity changes, writes to the log.
-]=]
+	]=]
 
-self:AddState("BroadcastBlockUpdate", {
+	self:AddState("BroadcastBlockUpdate", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
 			if not charEntity then
@@ -153,16 +153,16 @@ self:AddState("BroadcastBlockUpdate", {
 	}, {"EmitBlockIntent","Failed" })
 
 
---[=[
+	--[=[
 	@state EmitBlockIntent
 	@description On enter, emits an intent.
 		Transitions:
 		- `WaitForRelease` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: emits an intent.
-]=]
+	]=]
 
-self:AddState("EmitBlockIntent", {
+	self:AddState("EmitBlockIntent", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
 			local ok, err = pcall(function()
@@ -177,16 +177,16 @@ self:AddState("EmitBlockIntent", {
 	}, {"WaitForRelease","Failed" })
 
 
---[=[
+	--[=[
 	@state WaitForRelease
 	@description Waits until its scheduled completion or transition condition is met.
 		Transitions:
 		- `ReleaseBlockState` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: sets `IsBlocking`.
-]=]
+	]=]
 
-self:AddState("WaitForRelease", {
+	self:AddState("WaitForRelease", {
 		OnHeartbeat = function(_, fsm, _dt)
 			local charEntity = fsm.CharacterEntity
 			if not charEntity then
@@ -200,16 +200,16 @@ self:AddState("WaitForRelease", {
 	}, {"ReleaseBlockState","Failed" })
 
 
---[=[
+	--[=[
 	@state ReleaseBlockState
 	@description On enter, sets `IsBlocking`.
 		Transitions:
 		- `RestoreMovement` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: sets `IsBlocking`.
-]=]
+	]=]
 
-self:AddState("ReleaseBlockState", {
+	self:AddState("ReleaseBlockState", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
 			if not charEntity then
@@ -222,16 +222,16 @@ self:AddState("ReleaseBlockState", {
 	}, {"RestoreMovement","Failed" })
 
 
---[=[
+	--[=[
 	@state RestoreMovement
 	@description On enter, sets `MoveSpeedCap`.
 		Transitions:
 		- `BroadcastUnblockUpdate` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: sets `MoveSpeedCap`.
-]=]
+	]=]
 
-self:AddState("RestoreMovement", {
+	self:AddState("RestoreMovement", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
 			if not charEntity then
@@ -244,16 +244,16 @@ self:AddState("RestoreMovement", {
 	}, {"BroadcastUnblockUpdate","Failed" })
 
 
---[=[
+	--[=[
 	@state BroadcastUnblockUpdate
 	@description On enter, replicates entity changes, writes to the log.
 		Transitions:
 		- `Completed` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: replicates entity changes, writes to the log.
-]=]
+	]=]
 
-self:AddState("BroadcastUnblockUpdate", {
+	self:AddState("BroadcastUnblockUpdate", {
 		OnEnter = function(_, fsm)
 			local charEntity = fsm.CharacterEntity
 			if not charEntity then
@@ -268,22 +268,22 @@ self:AddState("BroadcastUnblockUpdate", {
 			fsm.State = "Completed"
 		end,
 	}, {"Completed","Failed" })
---[=[
+	--[=[
 	@state Completed
 	@description Terminal success sink reached after `BroadcastUnblockUpdate` replicates the restored movement state and cleared block flag. `OnEnter` is a no-op because the character writes already happened earlier.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("Completed", function() end, {})
---[=[
+	self:AddState("Completed", function() end, {})
+	--[=[
 	@state Failed
 	@description Terminal failure sink for validation, replication, or intent errors during block setup and release. `OnEnter` is a no-op; `OnCleanup` clears `IsBlocking`, restores `MoveSpeedCap`, and updates the entity when blocking had started.
 		Transitions: none.
 		Writes: none in-state; rollback writes happen in `OnCleanup`.
-]=]
+	]=]
 
-self:AddState("Failed", function() end, {})
+	self:AddState("Failed", function() end, {})
 end
 
 

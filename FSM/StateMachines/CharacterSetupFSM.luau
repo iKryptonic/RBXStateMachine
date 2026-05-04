@@ -445,7 +445,7 @@ function CharacterSetupFSM:RegisterStates()
 	@description Terminal success state entered after character controllers and child FSMs have been initialized and teardown-safe defaults restored. `OnEnter` records a final completion log for `CharacterEntityId`.
 		Transitions: none.
 		Writes: info log.
-]=]
+	]=]
 
 	self:AddState("Completed", {
 		OnEnter = function(_, fsm)
@@ -460,7 +460,7 @@ function CharacterSetupFSM:RegisterStates()
 	@description Terminal failure state for setup errors while waiting on entities, wiring controllers, or initializing child FSMs. `OnEnter` logs the reason, destroys managed connections, invokes `RestoreDefaults`, and reapplies Roblox default character behavior.
 		Transitions: none.
 		Writes: error log, restored defaults, destroyed connections.
-]=]
+	]=]
 
 	self:AddState("Failed", {
 		OnEnter = function(_, fsm, reason)

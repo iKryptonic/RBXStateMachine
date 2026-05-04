@@ -108,7 +108,7 @@ function InsightsModule:BuildRootLayer(frame: Frame, context: any)
 		)
 		badge.LayoutOrder = order
 		badge.Parent = summaryFrame
-		order + = 1
+		order += 1
 	end
 
 	-- Active insights header

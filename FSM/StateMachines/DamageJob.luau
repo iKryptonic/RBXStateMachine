@@ -171,7 +171,7 @@ local function getDamageMultiplier(orchestrator: any, entity: any): number
 		local stacks = math.max(tonumber(entry.Stacks) or 1, 1)
 		if effectMultiplier and effectMultiplier > 0 then
 			for _ = 1, stacks do
-				multiplier * = effectMultiplier
+				multiplier *= effectMultiplier
 			end
 		end
 	end
@@ -314,16 +314,16 @@ end
 function DamageJob:RegisterStates()
 
 
---[=[
+	--[=[
 	@state Validate
 	@description Validates the required runtime context and prerequisites.
 		Transitions:
 		- `CheckHitNonce` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: stores `Context.AttackName`, stores `Context._attackerEntity`, stores `Context._attackerUserId`, stores `Context._nonce`, sets `AttackName`.
-]=]
+	]=]
 
-self:AddState("Validate", {
+	self:AddState("Validate", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
@@ -366,16 +366,16 @@ self:AddState("Validate", {
 	}, {"CheckHitNonce","Failed" })
 
 
---[=[
+	--[=[
 	@state CheckHitNonce
 	@description Runs the `check hit nonce` stage of `DamageJob`.
 		Transitions:
 		- `ResolveVictim` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("CheckHitNonce", {
+	self:AddState("CheckHitNonce", {
 		OnEnter = function(_, fsm)
 			cleanExpiredNonces()
 			local attackerUserId = fsm.Context._attackerUserId
@@ -397,16 +397,16 @@ self:AddState("CheckHitNonce", {
 	}, {"ResolveVictim","Failed" })
 
 
---[=[
+	--[=[
 	@state ResolveVictim
 	@description Resolves the data needed for the `ResolveVictim` step.
 		Transitions:
 		- `ComputeDamage` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: stores `Context._victimEntity`, stores `Context._victimEntityId`, stores `Context._victimCharacter`, stores `Context._victimHumanoid`, stores `Context._victimRoot`.
-]=]
+	]=]
 
-self:AddState("ResolveVictim", {
+	self:AddState("ResolveVictim", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
@@ -443,16 +443,16 @@ self:AddState("ResolveVictim", {
 	}, {"ComputeDamage","Failed" })
 
 
---[=[
+	--[=[
 	@state ComputeDamage
 	@description On enter, stores `Context._isVictimBlocking`, stores `Context._computedDamage`, sets `_isVictimBlocking`.
 		Transitions:
 		- `ApplyDamage` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: stores `Context._isVictimBlocking`, stores `Context._computedDamage`, sets `_isVictimBlocking`, sets `_computedDamage`.
-]=]
+	]=]
 
-self:AddState("ComputeDamage", {
+	self:AddState("ComputeDamage", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local DamageCalculator = ModuleLoader.requireSharedModule(orchestrator,"DamageCalculator")
@@ -465,24 +465,24 @@ self:AddState("ComputeDamage", {
 			local explicitBaseDamage = tonumber(fsm.BaseDamage)
 			local baseDamage = explicitBaseDamage or resolveWeaponBaseDamage(orchestrator, attackerEntity)
 			local computedDamage = DamageCalculator.Compute(baseDamage, fsm.Context._isVictimBlocking == true)
-			computedDamage * = getDamageMultiplier(orchestrator, attackerEntity)
-			computedDamage * = (1 - getDamageReduction(orchestrator, fsm.Context._victimEntity))
+			computedDamage *= getDamageMultiplier(orchestrator, attackerEntity)
+			computedDamage *= (1 - getDamageReduction(orchestrator, fsm.Context._victimEntity))
 			fsm.Context._computedDamage = math.max(0, math.floor(computedDamage + 0.5))
 			fsm.State = "ApplyDamage"
 		end,
 	}, {"ApplyDamage","Failed" })
 
 
---[=[
+	--[=[
 	@state ApplyDamage
 	@description On enter, sets `Health`, replicates entity changes.
 		Transitions:
 		- `EmitHitReact` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: sets `Health`, replicates entity changes.
-]=]
+	]=]
 
-self:AddState("ApplyDamage", {
+	self:AddState("ApplyDamage", {
 		OnEnter = function(_, fsm)
 			local victimHumanoid = fsm.Context._victimHumanoid
 			local victimEntity = fsm.Context._victimEntity
@@ -504,16 +504,16 @@ self:AddState("ApplyDamage", {
 	}, {"EmitHitReact","Failed" })
 
 
---[=[
+	--[=[
 	@state EmitHitReact
 	@description On enter, emits an intent.
 		Transitions:
 		- `EmitDamageText` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: emits an intent.
-]=]
+	]=]
 
-self:AddState("EmitHitReact", {
+	self:AddState("EmitHitReact", {
 		OnEnter = function(_, fsm)
 			local IntentSchema = ModuleLoader.requireSharedModule(fsm:GetOrchestrator(),"IntentSchema")
 			local victimEntity = fsm.Context._victimEntity
@@ -540,15 +540,15 @@ self:AddState("EmitHitReact", {
 	}, {"EmitDamageText","Failed" })
 
 
---[=[
+	--[=[
 	@state EmitDamageText
 	@description Runs the `emit damage text` stage of `DamageJob`.
 		Transitions:
 		- `FireEventBus` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("EmitDamageText", {
+	self:AddState("EmitDamageText", {
 		OnEnter = function(_, fsm)
 			local root = fsm.Context._victimRoot
 			local damage = fsm.Context._computedDamage
@@ -560,16 +560,16 @@ self:AddState("EmitDamageText", {
 	}, {"FireEventBus","Failed" })
 
 
---[=[
+	--[=[
 	@state FireEventBus
 	@description Runs the `fire event bus` stage of `DamageJob`.
 		Transitions:
 		- `ApplyOnHitEffects` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("FireEventBus", {
+	self:AddState("FireEventBus", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			if not orchestrator then
@@ -603,15 +603,15 @@ self:AddState("FireEventBus", {
 	}, {"ApplyOnHitEffects","Failed" })
 
 
---[=[
+	--[=[
 	@state ApplyOnHitEffects
 	@description Runs the `apply on hit effects` stage of `DamageJob`.
 		Transitions:
 		- `Completed` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("ApplyOnHitEffects", {
+	self:AddState("ApplyOnHitEffects", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local attackerEntity = fsm.Context._attackerEntity
@@ -631,22 +631,22 @@ self:AddState("ApplyOnHitEffects", {
 			fsm.State = "Completed"
 		end,
 	}, {"Completed","Failed" })
---[=[
+	--[=[
 	@state Completed
 	@description Terminal success sink reached after damage is applied, hit-react replication is emitted, floating damage text is spawned, event buses fire, and passive on-hit effects are queued. `OnEnter` is a no-op.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("Completed", function() end, {})
---[=[
+	self:AddState("Completed", function() end, {})
+	--[=[
 	@state Failed
 	@description Terminal failure sink for invalid attacker/victim context, duplicate hit nonces, or damage computation errors. `OnEnter` is a no-op and `OnCleanup` performs no additional rollback work.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("Failed", function() end, {})
+	self:AddState("Failed", function() end, {})
 end
 
 

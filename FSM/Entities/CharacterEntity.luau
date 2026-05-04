@@ -267,43 +267,43 @@ Instance = { Type = "any", Replicate = false, Persist = false },
 ]=]
 
 function CharacterEntity:GetContext(params: { [any]: any })
-local context = params.Context or params
-local userId = context.UserId or 0
-local playerEntityId = context.PlayerEntityId or ("Player_" .. tostring(userId))
+	local context = params.Context or params
+	local userId = context.UserId or 0
+	local playerEntityId = context.PlayerEntityId or ("Player_" .. tostring(userId))
 
-return {
-PlayerEntityId = playerEntityId,
-UserId = userId,
-Health = 100,
-MaxHealth = 100,
-Stamina = 100,
-MaxStamina = 100,
-Mana = 50,
-MaxMana = 50,
-TargetEntityId = "",
-IsBlocking = false,
-CanAnimate = true,
-IsStunned = false,
-IsKnocked = false,
-CanMove = true,
-MoveSpeedCap = 16,
-MouseLocked = true,
-EquippedRight = "",
-EquippedLeft = "",
-EquipLock = {},
-CombatLock = false,
-CCLock = false,
-AbilityCooldowns = {},
-ActiveStatusEffects = {},
-ActiveCastId = "",
-ActionSeq = 0,
-RecentActions = {},
-LocomotionState = "Idle",
-ActionOverlay = "None",
-AnimationState = "Idle",
-SprintIntent = false,
-InputMode = "Combat",
-}
+	return {
+	PlayerEntityId = playerEntityId,
+	UserId = userId,
+	Health = 100,
+	MaxHealth = 100,
+	Stamina = 100,
+	MaxStamina = 100,
+	Mana = 50,
+	MaxMana = 50,
+	TargetEntityId = "",
+	IsBlocking = false,
+	CanAnimate = true,
+	IsStunned = false,
+	IsKnocked = false,
+	CanMove = true,
+	MoveSpeedCap = 16,
+	MouseLocked = true,
+	EquippedRight = "",
+	EquippedLeft = "",
+	EquipLock = {},
+	CombatLock = false,
+	CCLock = false,
+	AbilityCooldowns = {},
+	ActiveStatusEffects = {},
+	ActiveCastId = "",
+	ActionSeq = 0,
+	RecentActions = {},
+	LocomotionState = "Idle",
+	ActionOverlay = "None",
+	AnimationState = "Idle",
+	SprintIntent = false,
+	InputMode = "Combat",
+	}
 end
 --[=[
 	@description Applies replicated CharacterEntity deltas on the client by forwarding them into local
@@ -318,8 +318,8 @@ end
 ]=]
 
 function CharacterEntity:ApplyChanges(changes: { [string]: any })
-if not RunService:IsClient() then
-return
+	if not RunService:IsClient() then
+	return
 end
 
 if changes.RecentActions or changes.ActionSeq then

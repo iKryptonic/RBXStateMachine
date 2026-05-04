@@ -168,7 +168,7 @@ function SpawnCharacterJob:RegisterStates()
 	@description Terminal success sink reached after the spawned character entity is initialized and any persisted loadout equip jobs have been queued. `OnEnter` is a no-op.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
 	--[=[
@@ -176,7 +176,7 @@ function SpawnCharacterJob:RegisterStates()
 	@description Terminal failure sink for missing player, character, or entity context during spawn-time binding. `OnEnter` is a no-op because there is no extra rollback after failure.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Failed", function(_fsm) end, {})
 end

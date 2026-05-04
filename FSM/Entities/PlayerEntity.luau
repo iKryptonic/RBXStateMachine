@@ -246,42 +246,42 @@ DataVersion = { Type = "number", Replicate = false, Persist = true },
 ]=]
 
 function PlayerEntity:GetContext(params: { [any]: any })
-local context = params.Context or params
-local userId = context.UserId
-or (context.Instance and context.Instance:IsA("Player") and context.Instance.UserId)
-or 0
+	local context = params.Context or params
+	local userId = context.UserId
+	or (context.Instance and context.Instance:IsA("Player") and context.Instance.UserId)
+	or 0
 
-return {
-UserId = userId,
-Class = context.Class or "Beginner",
-Level = context.Level or 1,
-XP = context.XP or 0,
-MaxXP = context.MaxXP or 100,
-Inventory = context.Inventory or {"1","2","3","4","5","6","7","8","Kama","Gale","Artura","ArturaUnleash","GaleUnleash","KamaUnleash","Shade","ShadeUnleash","Zephyr","ZephyrUnleash" },
-BagContents = context.BagContents or {},
-Equipped = context.Equipped or {},
-WeaponEqp = context.WeaponEqp or "",
-LearnedAbilities = context.LearnedAbilities or {},
-EquippedAbilities = context.EquippedAbilities or {},
-AbilityCooldowns = context.AbilityCooldowns or {},
-UnlockedAbilities = context.UnlockedAbilities or {},
-TalentSelections = context.TalentSelections or {},
-SkillPoints = context.SkillPoints or 0,
-StatPoints = context.StatPoints or 0,
-Strength = context.Strength or 0,
-Agility = context.Agility or 0,
-Vitality = context.Vitality or 0,
-Endurance = context.Endurance or 0,
-Intelligence = context.Intelligence or 0,
-Luck = context.Luck or 0,
-AbilityBindings = context.AbilityBindings or { Q = "", E = "", R = "", F = "" },
-QuickItemSlots = context.QuickItemSlots or {"","","","" },
-ActionBar = context.ActionBar or {},
-Settings = context.Settings or {},
-Cooldowns = context.Cooldowns or {},
-Revision = 0,
-DataVersion = context.DataVersion or 1,
-}
+	return {
+	UserId = userId,
+	Class = context.Class or "Beginner",
+	Level = context.Level or 1,
+	XP = context.XP or 0,
+	MaxXP = context.MaxXP or 100,
+	Inventory = context.Inventory or {"1","2","3","4","5","6","7","8","Kama","Gale","Artura","ArturaUnleash","GaleUnleash","KamaUnleash","Shade","ShadeUnleash","Zephyr","ZephyrUnleash" },
+	BagContents = context.BagContents or {},
+	Equipped = context.Equipped or {},
+	WeaponEqp = context.WeaponEqp or "",
+	LearnedAbilities = context.LearnedAbilities or {},
+	EquippedAbilities = context.EquippedAbilities or {},
+	AbilityCooldowns = context.AbilityCooldowns or {},
+	UnlockedAbilities = context.UnlockedAbilities or {},
+	TalentSelections = context.TalentSelections or {},
+	SkillPoints = context.SkillPoints or 0,
+	StatPoints = context.StatPoints or 0,
+	Strength = context.Strength or 0,
+	Agility = context.Agility or 0,
+	Vitality = context.Vitality or 0,
+	Endurance = context.Endurance or 0,
+	Intelligence = context.Intelligence or 0,
+	Luck = context.Luck or 0,
+	AbilityBindings = context.AbilityBindings or { Q = "", E = "", R = "", F = "" },
+	QuickItemSlots = context.QuickItemSlots or {"","","","" },
+	ActionBar = context.ActionBar or {},
+	Settings = context.Settings or {},
+	Cooldowns = context.Cooldowns or {},
+	Revision = 0,
+	DataVersion = context.DataVersion or 1,
+	}
 end
 --[=[
 	@description Intentionally ignores replicated field changes because PlayerEntity is pure data with no
@@ -293,7 +293,7 @@ end
 ]=]
 
 function PlayerEntity:ApplyChanges(_changes: { [string]: any })
--- PlayerEntity is pure data — no visual rendering
+	-- PlayerEntity is pure data — no visual rendering
 end
 
 return PlayerEntity

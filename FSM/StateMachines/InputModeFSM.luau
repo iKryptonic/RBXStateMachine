@@ -77,7 +77,7 @@ function InputModeFSM:RegisterStates()
 	@description Terminal success sink reserved for explicit teardown of the combat/UI mode FSM. Normal operation only toggles between `CombatInput` and `UIInput`, so `OnEnter` is a no-op.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
@@ -85,7 +85,7 @@ function InputModeFSM:RegisterStates()
 	@description Terminal failure sink reserved for future input-mode errors. The current helper-driven flow never enters it, and `OnEnter` performs no writes.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Failed", function() end, {})
 end

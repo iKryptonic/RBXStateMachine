@@ -554,7 +554,7 @@ function MeleeAttackJob:RegisterStates()
 	@description Terminal success sink reached after `ReleaseLock` drops the held character lock at the end of the melee timeline. `OnEnter` is a no-op because the job has already finished its work.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
@@ -562,7 +562,7 @@ function MeleeAttackJob:RegisterStates()
 	@description Terminal failure sink entered when `ReleaseLock` forwards `_releaseReason` into `Fail`. `OnEnter` is a no-op because lock cleanup and failure bookkeeping happen before entry.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Failed", function() end, {})
 end

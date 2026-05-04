@@ -592,7 +592,7 @@ function ProjectileAttackJob:RegisterStates()
 	@description Terminal success sink reached after the projectile lifecycle finishes and any held attack lock has already been released. `OnEnter` is a no-op because all projectile cleanup happens before entry or in `OnCleanup`.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
@@ -600,7 +600,7 @@ function ProjectileAttackJob:RegisterStates()
 	@description Terminal failure sink for projectile spawn, travel, or hit-processing errors. `OnEnter` is a no-op; `OnCleanup` destroys the projectile instance and releases any remaining held lock.
 		Transitions: none.
 		Writes: none in-state; cleanup writes may still run.
-]=]
+	]=]
 
 	self:AddState("Failed", function() end, {})
 end

@@ -729,7 +729,7 @@ function InventoryItemFSM:RegisterStates()
 	@description Terminal success sink reached after the add/drop operation has updated player inventory state, replicated the entity, and written the audit log entry. `OnEnter` is a no-op.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
 	--[=[
@@ -737,7 +737,7 @@ function InventoryItemFSM:RegisterStates()
 	@description Terminal failure sink for invalid inventory requests, missing entities, or persistence errors during add/drop handling. `OnEnter` is a no-op.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Failed", function(_fsm) end, {})
 end

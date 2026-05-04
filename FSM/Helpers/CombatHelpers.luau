@@ -94,7 +94,7 @@ function CombatHelpers.createDamageJob(
 	attackName: string,
 	damage: number?,
 	hitNonce: string?
-)
+	)
 	local victimUserId = if typeof(victim) == "number" then victim else victim and victim.UserId
 	if typeof(victimUserId) ~= "number" then
 		return nil

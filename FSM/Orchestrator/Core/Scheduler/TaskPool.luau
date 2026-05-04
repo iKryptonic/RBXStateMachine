@@ -33,7 +33,7 @@ function TaskPool.Get(): Task
 	if TaskPool._count > 0 then
 		local t = TaskPool._storage[TaskPool._count]
 		TaskPool._storage[TaskPool._count] = nil -- Clear reference
-		TaskPool._count - = 1
+		TaskPool._count -= 1
 		return t
 	end
 
@@ -73,7 +73,7 @@ function TaskPool.Release(t: Task)
 	t.CreationTime = 0
 	t.LastRunTime = nil
 
-	TaskPool._count + = 1
+	TaskPool._count += 1
 	TaskPool._storage[TaskPool._count] = t
 end
 

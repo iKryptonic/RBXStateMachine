@@ -75,7 +75,7 @@ function IntentHelpers.appendIntent(
 	sourceCharId: string?,
 	targetCharId: string?,
 	lockId: string?
-)
+	)
 	local intentSchema = ModuleLoader.requireSharedModule(orchestrator,"IntentSchema")
 	intentSchema.AppendIntent(characterEntity, {
 		Kind = kind,
@@ -105,7 +105,7 @@ function IntentHelpers.appendOptionalIntent(
 	sourceCharId: string,
 	lockId: string?,
 	targetCharId: string?
-)
+	)
 	if typeof(intentDef) ~= "table" then
 		return
 	end

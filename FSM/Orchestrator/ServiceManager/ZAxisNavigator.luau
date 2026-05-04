@@ -56,7 +56,7 @@ function ZAxisNavigator:ExpandLayer(params: {
 	Label: string,
 	Builder: (frame: Frame, context: any) -> (),
 	Context: any?,
-})
+	})
 	if self._animating then return end
 	if #self._layerStack >= self._maxDepth then return end
 

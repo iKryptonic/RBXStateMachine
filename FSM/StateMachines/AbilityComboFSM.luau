@@ -496,7 +496,7 @@ function AbilityComboFSM:RegisterStates()
 	@description Terminal success sink reached after `Cooldown` records the new cooldown timestamp on the character and player entities. `OnEnter` is a no-op because all cooldown writes already happened.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
@@ -504,7 +504,7 @@ function AbilityComboFSM:RegisterStates()
 	@description Terminal failure sink for ability validation, mana spending, combo-step resolution, or cooldown-context errors. `OnEnter` is a no-op because failure bookkeeping happens before entry.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Failed", function() end, {})
 end

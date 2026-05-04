@@ -360,7 +360,7 @@ function DashFSM:RegisterStates()
 	@description Terminal success sink reserved for explicit shutdown of the dash FSM. Normal dash requests clear the overlay and return to `Ready` after cooldown instead of terminating here.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
@@ -368,7 +368,7 @@ function DashFSM:RegisterStates()
 	@description Terminal failure sink reserved for future hard dash errors. Current validation failures fall back to `Ready`, so `OnEnter` is a no-op.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Failed", function() end, {})
 end

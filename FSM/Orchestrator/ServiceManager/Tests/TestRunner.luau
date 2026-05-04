@@ -46,7 +46,7 @@ local function valueToString(v: any): string
 		local parts = {}
 		local ct = 0
 		for k, val in pairs(v) do
-			ct + = 1
+			ct += 1
 			if ct > 6 then table.insert(parts,"..."); break end
 			table.insert(parts, tostring(k) .."=" .. tostring(val))
 		end
@@ -257,7 +257,7 @@ function TestRunner.run(): {
 	failed: number,
 	durationMs: number,
 	results: { Result },
-}
+	}
 	print("══════════════════════════════════════════════════════════════")
 	print("  TEST RUNNER — running suites")
 	print("══════════════════════════════════════════════════════════════")
@@ -268,7 +268,7 @@ function TestRunner.run(): {
 	local passed = 0
 	local failed = 0
 	for _, r in ipairs(results) do
-		if r.pass then passed + = 1 else failed + = 1 end
+		if r.pass then passed += 1 else failed += 1 end
 	end
 	local durationMs = (os.clock() - startTime) * 1000
 	print("══════════════════════════════════════════════════════════════")
@@ -327,7 +327,7 @@ function TestRunner.loadAndRun(): {
 	failed: number,
 	durationMs: number,
 	results: { Result },
-}
+	}
 	TestRunner.reset()
 	for _, specFn in ipairs(_registeredSpecs) do
 		local ok, err = pcall(specFn, TestRunner)

@@ -262,7 +262,7 @@ function BaseStateMachine.Extend(extensionParams: {className: string, validState
 		@return any -- Initialized subclass instance with base signals, context, and registered states ready for `:Start()`.
 		@reads extensionParams.className, extensionParams.validStates, extensionParams.terminalStates, extensionParams.InitialState, extensionParams.Priority
 		@writes self.Id, self.Name, self.Context, self.Priority, self._states, self._transitions
-]=]
+	]=]
 
 	function Subclass.new(...)
 		local fsmArguments = {...}
@@ -466,11 +466,11 @@ end
 
 
 function BaseStateMachine.Step(dt: number)
-	GlobalFrameCount + = 1
+	GlobalFrameCount += 1
 	for machine in pairs(ActiveMachines) do
 		if machine.IsActive then
 			-- Accumulate delta time for skipped frames
-			machine._accumulatedDt + = dt
+			machine._accumulatedDt += dt
 
 			if (GlobalFrameCount + machine._offset) % machine.Priority == 0 then
 				local stepDt = machine._accumulatedDt
@@ -609,8 +609,8 @@ function BaseStateMachine:_Update(dt: number)
 		mem0 = gcinfo()
 	end
 
-	self.TotalDuration + = dt
-	self.StateDuration + = dt
+	self.TotalDuration += dt
+	self.StateDuration += dt
 
 	-- Pending one-shot timed transition (set by :ScheduleTransition).
 	-- Fire when StateDuration crosses FireAt. Auto-cleared on ChangeState
@@ -830,7 +830,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 		-- Defer this transition. WaitSpan is consumed (only after we've decided
 		-- to actually defer). The deferred task will recurse into ChangeState.
 		self.WaitSpan = 0
-		self._transitionId + = 1
+		self._transitionId += 1
 		local transitionId = self._transitionId
 		releaseTransitionGuard(self)
 		task.delay(delay, function()
@@ -892,7 +892,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 
 	-- ─── COMMIT (validation passed; side effects begin) ─────────────────
 	self.WaitSpan = 0
-	self._transitionId + = 1
+	self._transitionId += 1
 
 	if oldState and newState then
 		local duration = math.floor(self.StateDuration * 1000) / 1000
@@ -940,7 +940,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 
 	-- Update Transition Count
 	if name == self._activeStateName then
-		self.TransitionCount + = 1
+		self.TransitionCount += 1
 	else
 		self.Logger:Log
 		{
@@ -1008,7 +1008,7 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 				-- Depth cap: deeply nested tables get a summary stub.
 				if depth <= 0 then
 					local n = 0
-					for _ in pairs(value) do n + = 1 end
+					for _ in pairs(value) do n += 1 end
 					return string.format("{table %d keys}", n)
 				end
 				-- Recursive sanitize with breadth cap.
@@ -1016,10 +1016,10 @@ function BaseStateMachine:ChangeState(params: { Name: string, Args: {any}?, Wait
 				local kept = 0
 				local total = 0
 				for k, v in pairs(value) do
-					total + = 1
+					total += 1
 					if kept >= MAX_KEYS then continue end
 					out[tostring(k)] = sanitize(v, depth - 1)
-					kept + = 1
+					kept += 1
 				end
 				if total > kept then
 					out["…"] = string.format("(%d more)", total - kept)
@@ -1336,7 +1336,7 @@ function BaseStateMachine:Destroy()
 		local aliveCount = 0
 		for _, entry in ipairs(self._managedInstances) do
 			if entry.Instance and entry.Instance.Parent ~= nil then
-				aliveCount + = 1
+				aliveCount += 1
 			end
 		end
 		if aliveCount > 0 then

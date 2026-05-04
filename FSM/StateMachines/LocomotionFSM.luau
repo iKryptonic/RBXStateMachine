@@ -269,7 +269,7 @@ function LocomotionFSM:RegisterStates()
 	@description Terminal success sink reserved for explicit shutdown of the locomotion observer. Normal operation continuously cycles between `Idle`, `Walking`, `Running`, and `Airborne`.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function() end, {})
 	--[=[
@@ -277,7 +277,7 @@ function LocomotionFSM:RegisterStates()
 	@description Terminal failure sink reserved for future locomotion errors. The current movement observer never routes here, and `OnEnter` is a no-op.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Failed", function() end, {})
 end

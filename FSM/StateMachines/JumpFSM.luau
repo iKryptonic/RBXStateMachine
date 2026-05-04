@@ -433,7 +433,7 @@ function JumpFSM:RegisterStates()
 	@description Terminal success sink reserved for explicit shutdown of the jump FSM. Normal jump and flip handling returns to `Grounded` after landing cooldown rather than terminating here.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Completed", function(_fsm) end, {})
 	--[=[
@@ -441,7 +441,7 @@ function JumpFSM:RegisterStates()
 	@description Terminal failure sink reserved for future jump-processing errors. The current flow does not route here, and `OnEnter` is a no-op.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
 	self:AddState("Failed", function(_fsm) end, {})
 end

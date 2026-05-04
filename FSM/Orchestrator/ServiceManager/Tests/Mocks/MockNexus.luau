@@ -19,7 +19,7 @@ function MockNexus.new(opts: {
 	serverData: any?,
 	fps: number?,
 	withAnalytics: boolean?,
-}?): any
+	}?): any
 	opts = opts or {}
 	local store = ReactiveStore.new({})
 

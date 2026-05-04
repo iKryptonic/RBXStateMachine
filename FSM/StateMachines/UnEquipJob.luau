@@ -149,16 +149,16 @@ end
 function UnEquipJob:RegisterStates()
 
 
---[=[
+	--[=[
 	@state ValidateRequest
 	@description Validates the required runtime context and prerequisites.
 		Transitions:
 		- `AcquireEquipLock` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: stores `Context.Hand`, sets `Hand`.
-]=]
+	]=]
 
-self:AddState("ValidateRequest", {
+	self:AddState("ValidateRequest", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
@@ -179,7 +179,7 @@ self:AddState("ValidateRequest", {
 	}, {"AcquireEquipLock","Failed" })
 
 
---[=[
+	--[=[
 	@state AcquireEquipLock
 	@description On enter, stores `Context._equipLockRetryCount`, stores `Context._equipLockHeld`, sets `_equipLockRetryCount`.
 		Transitions:
@@ -187,9 +187,9 @@ self:AddState("ValidateRequest", {
 		- `ResolveExistingItem` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: stores `Context._equipLockRetryCount`, stores `Context._equipLockHeld`, sets `_equipLockRetryCount`, sets `_equipLockHeld`, sets `EquipLock`.
-]=]
+	]=]
 
-self:AddState("AcquireEquipLock", {
+	self:AddState("AcquireEquipLock", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
@@ -222,15 +222,15 @@ self:AddState("AcquireEquipLock", {
 	}, {"ResolveExistingItem","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state ResolveExistingItem
 	@description Resolves the data needed for the `ResolveExistingItem` step.
 		Transitions:
 		- `DoUnEquip` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._resolvedHandPart`, stores `Context._resolvedWeld`, stores `Context._resolvedItem`, stores `Context._resolvedItemData`, stores `Context._resolvedItemId`.
-]=]
+	]=]
 
-self:AddState("ResolveExistingItem", {
+	self:AddState("ResolveExistingItem", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
@@ -265,15 +265,15 @@ self:AddState("ResolveExistingItem", {
 	}, {"DoUnEquip","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state DoUnEquip
 	@description On enter, stores `Context._wasStowed`, sets `_wasStowed`, writes to the log.
 		Transitions:
 		- `CommitState` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._wasStowed`, sets `_wasStowed`, writes to the log.
-]=]
+	]=]
 
-self:AddState("DoUnEquip", {
+	self:AddState("DoUnEquip", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
@@ -314,15 +314,15 @@ self:AddState("DoUnEquip", {
 	}, {"CommitState","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state CommitState
 	@description On enter, sets `Equipped`, sets `WeaponEqp`, sets `Inventory`.
 		Transitions:
 		- `EmitIntent` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: sets `Equipped`, sets `WeaponEqp`, sets `Inventory`, replicates entity changes.
-]=]
+	]=]
 
-self:AddState("CommitState", {
+	self:AddState("CommitState", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
@@ -368,15 +368,15 @@ self:AddState("CommitState", {
 	}, {"EmitIntent","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state EmitIntent
 	@description On enter, emits an intent.
 		Transitions:
 		- `ReleaseEquipLock` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: emits an intent.
-]=]
+	]=]
 
-self:AddState("EmitIntent", {
+	self:AddState("EmitIntent", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
@@ -399,16 +399,16 @@ self:AddState("EmitIntent", {
 	}, {"ReleaseEquipLock","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state ReleaseEquipLock
 	@description On enter, stores `Context._equipLockHeld`, sets `EquipLock`, sets `_equipLockHeld`.
 		Transitions:
 		- `Failed` when this stage finishes its immediate work or falls through its guard checks.
 		- `Completed` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._equipLockHeld`, sets `EquipLock`, sets `_equipLockHeld`, replicates entity changes, writes to the log.
-]=]
+	]=]
 
-self:AddState("ReleaseEquipLock", {
+	self:AddState("ReleaseEquipLock", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
@@ -432,35 +432,35 @@ self:AddState("ReleaseEquipLock", {
 	}, {"Completed","Failed" })
 
 
---[=[
+	--[=[
 	@state Rollback
 	@description Runs the `rollback` stage of `UnEquipJob`.
 		Transitions:
 		- `ReleaseEquipLock` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("Rollback", {
+	self:AddState("Rollback", {
 		OnEnter = function(_, fsm)
 			fsm.State = "ReleaseEquipLock"
 		end,
 	}, {"ReleaseEquipLock" })
---[=[
+	--[=[
 	@state Completed
 	@description Terminal success sink reached after `ReleaseEquipLock` persists the unequipped state and frees the per-hand equip lock. `OnEnter` is a no-op because the entity and inventory writes already happened.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("Completed", function(_fsm) end, {})
---[=[
+	self:AddState("Completed", function(_fsm) end, {})
+	--[=[
 	@state Failed
 	@description Terminal failure sink reached when `ReleaseEquipLock` sees `Context._failureReason` after rollback. `OnEnter` is a no-op because rollback and lock release occur before entry.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("Failed", function(_fsm) end, {})
+	self:AddState("Failed", function(_fsm) end, {})
 end
 
 return UnEquipJob

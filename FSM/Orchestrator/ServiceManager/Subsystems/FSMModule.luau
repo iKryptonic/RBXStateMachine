@@ -313,14 +313,14 @@ function FSMModule:_GetGroupedFSMs(source: { [string]: any }): { any }
 		end
 
 		table.insert(group.Items, item)
-		group.TotalCount + = 1
+		group.TotalCount += 1
 
 		if item.Data.Status == "failed" or item.Data.Status == "error" then
-			group.FailedCount + = 1
+			group.FailedCount += 1
 		elseif item.Data.Status == "completed" then
-			group.CompletedCount + = 1
+			group.CompletedCount += 1
 		else
-			group.ActiveCount + = 1
+			group.ActiveCount += 1
 		end
 	end
 
@@ -387,13 +387,13 @@ function FSMModule:_BuildGroupedFSMRows(parent: Frame, groups: { any }, nexus: a
 	for _, group in ipairs(groups) do
 		local header = self:_BuildFSMGroupHeader(parent, group, nexus, order, onToggle)
 		table.insert(itemsToAnimate, header)
-		order + = 1
+		order += 1
 
 		if self._collapsedGroups[group.ClassName] ~= true then
 			for _, item in ipairs(group.Items) do
 				local row = self:_BuildFSMRow(parent, item.Id, item.Data, nexus, order)
 				table.insert(itemsToAnimate, row)
-				order + = 1
+				order += 1
 			end
 		end
 	end
@@ -469,7 +469,7 @@ function FSMModule:BuildRootLayer(frame: Frame, context: any)
 			FontSize = Theme.TextSize.Body,
 			Parent = contentFrame,
 		}).LayoutOrder = nextOrder
-		nextOrder + = 1
+		nextOrder += 1
 	end
 
 	if self._showArchived then
@@ -483,7 +483,7 @@ function FSMModule:BuildRootLayer(frame: Frame, context: any)
 				FontFace = Theme.Font.Bold,
 				Parent = contentFrame,
 			}).LayoutOrder = nextOrder
-			nextOrder + = 1
+			nextOrder += 1
 			nextOrder = self:_BuildGroupedFSMRows(contentFrame, archivedGroups, nexus, nextOrder, itemsToAnimate, rebuildRoot)
 		end
 	end
@@ -526,11 +526,11 @@ function FSMModule:_BuildSummaryStrip(parent: Frame)
 
 	local activeCount, failedCount, stalledCount, totalTransitions = 0, 0, 0, 0
 	for _, d in pairs(self._fsmCache) do
-		activeCount + = 1
-		totalTransitions + = (d.Transitions or 0)
-		if d.IsStalled then stalledCount + = 1 end
+		activeCount += 1
+		totalTransitions += (d.Transitions or 0)
+		if d.IsStalled then stalledCount += 1 end
 	end
-	for _ in pairs(self._failedFSMs) do failedCount + = 1 end
+	for _ in pairs(self._failedFSMs) do failedCount += 1 end
 
 	local metrics = {
 		{ Label = "ACTIVE", Value = tostring(activeCount), Color = Theme.Colors.Success },
@@ -1892,7 +1892,7 @@ function FSMModule:_BuildStepDetailPanel(parent: Frame, entry: any, stepIdx: num
 
 	local order = 0
 	local function lbl(text: string, color: Color3, size: number, font: Font)
-		order + = 1
+		order += 1
 		Theme.CreateLabel({
 			Text = text,
 			Size = UDim2.new(1, 0, 0, size + 2),
@@ -1928,7 +1928,7 @@ function FSMModule:_BuildStepDetailPanel(parent: Frame, entry: any, stepIdx: num
 		lbl("ARGS", Theme.Colors.TextMuted, Theme.TextSize.Tiny, Theme.Font.Bold)
 		for i, a in ipairs(entry.Args) do
 			if type(a) == "table" then
-				order + = 1
+				order += 1
 				self:_BuildContextEntryRow(scroll, string.format("[%d]", i), a, 0, order, nil)
 			else
 				lbl(string.format("[%d] %s", i, tostring(a)), Theme.Colors.TextSecondary, Theme.TextSize.Tiny, Theme.Font.Mono)
@@ -1940,9 +1940,9 @@ function FSMModule:_BuildStepDetailPanel(parent: Frame, entry: any, stepIdx: num
 		lbl("CONTEXT SNAPSHOT", Theme.Colors.TextMuted, Theme.TextSize.Tiny, Theme.Font.Bold)
 		local count = 0
 		for k, v in pairs(entry.ContextSnapshot) do
-			count + = 1
+			count += 1
 			if count > 60 then break end
-			order + = 1
+			order += 1
 			self:_BuildContextEntryRow(scroll, tostring(k), v, 0, order, nil)
 		end
 		if count == 0 then
@@ -1986,7 +1986,7 @@ function FSMModule:_BuildContextEntryRow(parent: Instance, key: string, value: a
 		Instance.new("UICorner", btn).CornerRadius = UDim.new(0, Theme.Radius.Xs)
 
 		local n = 0
-		for _ in pairs(value) do n + = 1 end
+		for _ in pairs(value) do n += 1 end
 
 		local function buildLabel(chev: string)
 			return string.format(
@@ -2035,12 +2035,12 @@ function FSMModule:_BuildContextEntryRow(parent: Instance, key: string, value: a
 				local reservedCount = n
 				for _, c in ipairs(parent:GetChildren()) do
 					if c:IsA("Frame") and c ~= row and c.LayoutOrder > myOrder then
-						c.LayoutOrder + = reservedCount
+						c.LayoutOrder += reservedCount
 					end
 				end
 				local subIdx = 0
 				for k, v in pairs(value) do
-					subIdx + = 1
+					subIdx += 1
 					self:_BuildContextEntryRow(parent, tostring(k), v, depth + 1, myOrder + subIdx, descentSubtrees)
 				end
 				label.Text = buildLabel("▾")
@@ -2066,7 +2066,7 @@ function FSMModule:_BuildContextEntryRow(parent: Instance, key: string, value: a
 				table.clear(mySubtree)
 				for _, c in ipairs(parent:GetChildren()) do
 					if c:IsA("Frame") and c ~= row and c.LayoutOrder > myOrder + removedCount then
-						c.LayoutOrder - = removedCount
+						c.LayoutOrder -= removedCount
 					end
 				end
 				label.Text = buildLabel("▸")

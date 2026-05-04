@@ -147,16 +147,16 @@ end
 function EquipJob:RegisterStates()
 
 
---[=[
+	--[=[
 	@state ValidateRequest
 	@description Validates the required runtime context and prerequisites.
 		Transitions:
 		- `AcquireEquipLock` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: stores `Context.Hand`, stores `Context.ItemId`, sets `Hand`, sets `ItemId`.
-]=]
+	]=]
 
-self:AddState("ValidateRequest", {
+	self:AddState("ValidateRequest", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
@@ -210,7 +210,7 @@ self:AddState("ValidateRequest", {
 	}, {"AcquireEquipLock","Failed" })
 
 
---[=[
+	--[=[
 	@state AcquireEquipLock
 	@description On enter, stores `Context._equipLockRetryCount`, stores `Context._equipLockHeld`, sets `_equipLockRetryCount`.
 		Transitions:
@@ -218,9 +218,9 @@ self:AddState("ValidateRequest", {
 		- `ResolveItemMeta` when this stage finishes its immediate work or falls through its guard checks.
 		- `Failed` when validation or downstream work reports an unrecoverable problem.
 		Writes: stores `Context._equipLockRetryCount`, stores `Context._equipLockHeld`, sets `_equipLockRetryCount`, sets `EquipLock`, sets `_equipLockHeld`.
-]=]
+	]=]
 
-self:AddState("AcquireEquipLock", {
+	self:AddState("AcquireEquipLock", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
@@ -256,15 +256,15 @@ self:AddState("AcquireEquipLock", {
 	}, {"ResolveItemMeta","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state ResolveItemMeta
 	@description Resolves the data needed for the `ResolveItemMeta` step.
 		Transitions:
 		- `PreUnEquip` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._clonedItem`, stores `Context._itemData`, stores `Context._handle`, sets `_clonedItem`, sets `_itemData`.
-]=]
+	]=]
 
-self:AddState("ResolveItemMeta", {
+	self:AddState("ResolveItemMeta", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local equipHelpers = getEquipHelpers(orchestrator)
@@ -307,15 +307,15 @@ self:AddState("ResolveItemMeta", {
 	}, {"PreUnEquip","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state PreUnEquip
 	@description On enter, stores `Context._previousItemId`, sets `_previousItemId`.
 		Transitions:
 		- `CloneAsset` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._previousItemId`, sets `_previousItemId`.
-]=]
+	]=]
 
-self:AddState("PreUnEquip", {
+	self:AddState("PreUnEquip", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local equipHelpers = getEquipHelpers(orchestrator)
@@ -357,15 +357,15 @@ self:AddState("PreUnEquip", {
 	}, {"CloneAsset","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state CloneAsset
 	@description Runs the `clone asset` stage of `EquipJob`.
 		Transitions:
 		- `CreateWeld` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("CloneAsset", {
+	self:AddState("CloneAsset", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local equipHelpers = getEquipHelpers(orchestrator)
@@ -387,15 +387,15 @@ self:AddState("CloneAsset", {
 	}, {"CreateWeld","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state CreateWeld
 	@description On enter, stores `Context._weld`, stores `Context._handPart`, sets `_weld`.
 		Transitions:
 		- `MountItem` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._weld`, stores `Context._handPart`, sets `_weld`, sets `_handPart`.
-]=]
+	]=]
 
-self:AddState("CreateWeld", {
+	self:AddState("CreateWeld", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local equipHelpers = getEquipHelpers(orchestrator)
@@ -426,15 +426,15 @@ self:AddState("CreateWeld", {
 	}, {"MountItem","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state MountItem
 	@description Runs the `mount item` stage of `EquipJob`.
 		Transitions:
 		- `CommitState` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("MountItem", {
+	self:AddState("MountItem", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
@@ -456,15 +456,15 @@ self:AddState("MountItem", {
 	}, {"CommitState","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state CommitState
 	@description On enter, sets `Equipped`, sets `WeaponEqp`, sets `Inventory`.
 		Transitions:
 		- `EmitIntent` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: sets `Equipped`, sets `WeaponEqp`, sets `Inventory`, replicates entity changes.
-]=]
+	]=]
 
-self:AddState("CommitState", {
+	self:AddState("CommitState", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
@@ -510,15 +510,15 @@ self:AddState("CommitState", {
 	}, {"EmitIntent","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state EmitIntent
 	@description On enter, emits an intent.
 		Transitions:
 		- `ReleaseEquipLock` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: emits an intent.
-]=]
+	]=]
 
-self:AddState("EmitIntent", {
+	self:AddState("EmitIntent", {
 		OnEnter = function(_, fsm)
 			local charEntity, playerEntity, character = ensureEntitiesAlive(fsm)
 			if not charEntity or not playerEntity or not character then
@@ -541,16 +541,16 @@ self:AddState("EmitIntent", {
 	}, {"ReleaseEquipLock","Rollback","Failed" })
 
 
---[=[
+	--[=[
 	@state ReleaseEquipLock
 	@description On enter, stores `Context._equipLockHeld`, sets `EquipLock`, sets `_equipLockHeld`.
 		Transitions:
 		- `Failed` when this stage finishes its immediate work or falls through its guard checks.
 		- `Completed` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: stores `Context._equipLockHeld`, sets `EquipLock`, sets `_equipLockHeld`, replicates entity changes, writes to the log.
-]=]
+	]=]
 
-self:AddState("ReleaseEquipLock", {
+	self:AddState("ReleaseEquipLock", {
 		OnEnter = function(_, fsm)
 			local orchestrator = fsm:GetOrchestrator()
 			local charEntity = orchestrator.GetEntity(fsm.CharacterEntityId)
@@ -574,15 +574,15 @@ self:AddState("ReleaseEquipLock", {
 	}, {"Completed","Failed" })
 
 
---[=[
+	--[=[
 	@state Rollback
 	@description On enter, writes to the log.
 		Transitions:
 		- `ReleaseEquipLock` when this stage finishes its immediate work or falls through its guard checks.
 		Writes: writes to the log.
-]=]
+	]=]
 
-self:AddState("Rollback", {
+	self:AddState("Rollback", {
 		OnEnter = function(_, fsm)
 			local clonedItem = fsm.Context._clonedItem
 			if clonedItem and clonedItem.Parent then
@@ -596,7 +596,7 @@ self:AddState("Rollback", {
 					@description Emits a rollback warning through the FSM logger when available, otherwise falls back to `warn`.
 					@param message string -- Warning message describing the rollback restoration issue.
 					@return nil -- Produces a logging side effect only.
-]=]
+	]=]
 				local function logRollbackWarning(message: string)
 					if type(fsm.Log) == "function" then
 						fsm:Log({ Level = "WARN", Message = message })
@@ -662,22 +662,22 @@ self:AddState("Rollback", {
 			fsm.State = "ReleaseEquipLock"
 		end,
 	}, {"ReleaseEquipLock" })
---[=[
+	--[=[
 	@state Completed
 	@description Terminal success sink reached after `ReleaseEquipLock` has committed the equipped item state and freed the per-hand equip lock. `OnEnter` is a no-op because replication and lock release already happened.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("Completed", function(_fsm) end, {})
---[=[
+	self:AddState("Completed", function(_fsm) end, {})
+	--[=[
 	@state Failed
 	@description Terminal failure sink reached after rollback and `ReleaseEquipLock` detect `Context._failureReason`. `OnEnter` is a no-op because cleanup, best-effort restoration, and lock release happen before entry.
 		Transitions: none.
 		Writes: none.
-]=]
+	]=]
 
-self:AddState("Failed", function(_fsm) end, {})
+	self:AddState("Failed", function(_fsm) end, {})
 end
 
 return EquipJob

@@ -659,7 +659,7 @@ function StatusEffectFSM:RegisterStates()
 	@description Terminal failure sink for bad effect input or runtime errors while applying, ticking, or removing a status effect. `OnEnter` is a no-op; `OnCleanup` reverses stat/status changes, prunes registry state, reclamps resources, and rebroadcasts the entity when anything changed.
 		Transitions: none.
 		Writes: none in-state; rollback writes may still run.
-]=]
+	]=]
 
 	self:AddState("Failed", function() end, {})
 end
