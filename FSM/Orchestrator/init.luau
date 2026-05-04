@@ -609,7 +609,7 @@ function Initialize()
 						local MAX_PENDING_ENTITIES = 256
 						if not Orchestrator._pendingUpdates[entityId] then
 							local count = 0
-							for _ in pairs(Orchestrator._pendingUpdates) do count + = 1 end
+							for _ in pairs(Orchestrator._pendingUpdates) do count += 1 end
 							if count >= MAX_PENDING_ENTITIES then
 								return
 							end
