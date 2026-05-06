@@ -1,3 +1,4 @@
+--!strict
 export type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG"
 
 -- Definition of a property in the schema
@@ -702,4 +703,4 @@ export type EntityPersistence = {
 	Update: (self: EntityPersistence, key: string, mutateFn: (data: { [string]: any }) -> { [string]: any }) -> (boolean, string?),
 }
 
-return {}
+return Types

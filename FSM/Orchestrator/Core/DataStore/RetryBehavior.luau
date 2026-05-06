@@ -3,10 +3,29 @@
 -- @Author iKrypto
 -- @Description Behavior Tree definition for DataStore request retry logic.
 
-local BehaviorTree = require(script.Parent.Parent.Factory.BehaviorTree)
+local BehaviorTree
+do
+	local factoryFolder = script.Parent.Parent:FindFirstChild("Factory")
+	if not factoryFolder then
+		factoryFolder = game:GetService("ReplicatedStorage")
+			:FindFirstChild("Orchestrator")
+		if factoryFolder then
+			factoryFolder = factoryFolder:FindFirstChild("Core")
+			factoryFolder = factoryFolder and factoryFolder:FindFirstChild("Factory")
+		end
+	end
+	BehaviorTree = factoryFolder and require(factoryFolder:FindFirstChild("BehaviorTree"))
+end
 
 local RetryBehavior = {}
 
+--[[
+	@description Builds the retry behavior tree used by RequestFSM instances.
+	@param Orchestrator any -- Shared orchestrator facade used by the surrounding FSM context
+	@return (context: any) -> string -- BehaviorTree node that mutates request context and drives FSM transitions
+	@reads BehaviorTree constructors, context.RequestFunction, context.MaxRetries, context.RetryCount, context.FSM
+	@writes context.Result, context.LastError, context.RetryCount, context.FSM.WaitSpan
+]]
 function RetryBehavior.Create(Orchestrator)
 	local BT = BehaviorTree
 
@@ -35,29 +54,27 @@ function RetryBehavior.Create(Orchestrator)
 	local function ScheduleRetry(context)
 		if context.FSM then
 			context.RetryCount = (context.RetryCount or 0) + 1
-			-- Calculate Backoff
-			local base = 2
-			local delay = math.pow(base, context.RetryCount)
-			
-			context.FSM.WaitSpan = delay -- Use FSM's built-in delay capability
-			context.FSM:ChangeState({ Name = "Retrying" })
-			return BT.BehaviorTreeStatus.Success -- We successfully scheduled it
+			local MAX_DELAY = 30
+			local jitter = math.random() * 0.5 + 0.75
+			local delay = math.min(math.pow(2, context.RetryCount) * jitter, MAX_DELAY)
+
+			context.FSM.WaitSpan = delay
+			context.FSM.State = "Retrying"
+			return BT.BehaviorTreeStatus.Success
 		end
 		return BT.BehaviorTreeStatus.Failure
 	end
 
-	-- Action: Fail Permanently
 	local function FailRequest(context)
 		if context.FSM then
-			context.FSM:Fail(tostring(context.LastError))
+			context.FSM.State = "Failed"
 		end
 		return BT.BehaviorTreeStatus.Success
 	end
 
-	-- Action: Succeed
 	local function CompleteRequest(context)
 		if context.FSM then
-			context.FSM:Finish()
+			context.FSM.State = "Success"
 		end
 		return BT.BehaviorTreeStatus.Success
 	end

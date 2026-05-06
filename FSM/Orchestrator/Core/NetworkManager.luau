@@ -1,5 +1,6 @@
 --!strict
 -- @Name Core/NetworkManager.luau
+-- @Author iKrypto
 -- @Description Handles network communications (Remotes) for the Orchestrator.
 
 local RunService = game:GetService("RunService")
@@ -20,7 +21,90 @@ local NetworkManager = {
 	ServerRequestCallbacksAsync = {} :: { [string]: (Player, ...any) -> any },
 	EntityCommandCallbacks = {} :: { [string]: { [string]: (Player, ...any) -> () } },
 	EventBuses = {} :: { [string]: any },
+
+	-- Runtime statistics (populated automatically)
+	_invokeStats = {} :: { [string]: { Count: number, LastInvoked: number } },
+	_busStats    = {} :: { [string]: { Count: number, LastFired: number, RecentCalls: { { Time: number, Args: string } }? } },
+	-- Per-remote (RemoteEvent / RemoteFunction) call tracking. Keyed by the
+	-- prefixed name used in NetworkModule's row id, e.g. "Remote:OrchestratorEvent".
+	_remoteStats = {} :: { [string]: { Count: number, LastFired: number, RecentCalls: { { Time: number, Args: string, Direction: string } } } },
+	_connections = {} :: { RBXScriptConnection },
 }
+
+-- ──────────────────────────────────────────────────────────────────────────
+-- Stats helpers
+-- ──────────────────────────────────────────────────────────────────────────
+
+local function sanitizeForReplication(value: any, depth: number): any
+	if depth > 4 then return "[...]" end
+	local t = type(value)
+	if t == "string" or t == "number" or t == "boolean" or t == "nil" then
+		return value
+	elseif t == "table" then
+		local out = {}
+		local count = 0
+		for k, v in pairs(value) do
+			count += 1
+			if count > 16 then
+				out["…"] = string.format("(+%d more)", count - 16)
+				break
+			end
+			out[tostring(k)] = sanitizeForReplication(v, depth + 1)
+		end
+		return out
+	elseif t == "userdata" then
+		-- Use [...] not <...> so RichText TextLabels (which interpret
+		-- angle brackets as font tags) render the type tag visibly.
+		local ok, n = pcall(function() return tostring(value) end)
+		return ok and ("[userdata:" .. tostring(n) .. "]") or "[userdata]"
+	else
+		return "[" .. t .. "]"
+	end
+end
+
+local function formatArgsInline(packed): string
+	local parts = {}
+	local n = packed.n or #packed
+	for i = 1, math.min(n, 4) do
+		local v = packed[i]
+		local t = type(v)
+		if t == "string" then table.insert(parts, string.format("%q", v))
+		elseif t == "number" or t == "boolean" then table.insert(parts, tostring(v))
+		elseif t == "table" then
+			-- Render a brief inline preview instead of "{table}". Show up to
+			-- 3 keys with their values truncated. Click-to-expand in the UI
+			-- shows full structure.
+			local kvs = {}
+			local kcount = 0
+			for k, val in pairs(v) do
+				kcount += 1
+				if kcount > 3 then break end
+				local vt = type(val)
+				local vstr
+				if vt == "string" then vstr = #val > 12 and (string.sub(val, 1, 10) .. "..") or val
+				elseif vt == "number" or vt == "boolean" then vstr = tostring(val)
+				elseif vt == "table" then vstr = "{...}"
+				else vstr = "[" .. vt .. "]" -- not <...> (RichText would parse as font tag)
+				end
+				table.insert(kvs, tostring(k) .. "=" .. vstr)
+			end
+			local total = 0
+			for _ in pairs(v) do total += 1 end
+			if total > 3 then table.insert(kvs, "+" .. (total - 3)) end
+			table.insert(parts, "{" .. table.concat(kvs, ", ") .. "}")
+		elseif t == "nil" then table.insert(parts, "nil")
+		else table.insert(parts, "[" .. t .. "]") end -- same RichText fix
+	end
+	if n > 4 then table.insert(parts, "...+" .. (n - 4)) end
+	return "(" .. table.concat(parts, ", ") .. ")"
+end
+
+local function formatArgs(packed): string
+	-- Legacy export — kept name for compatibility but now produces the
+	-- inline preview form (table values are summarized as {k=v, +N} instead
+	-- of useless "{table}" placeholder).
+	return formatArgsInline(packed)
+end
 
 local function ValidateRequest(context: string?)
 	assert(Initialized, "NetworkManager not initialized")
@@ -36,11 +120,11 @@ local function ValidateRequest(context: string?)
 end
 
 local function CreateRemote(name: string, className: string): any
+	if not name then return nil end
+
 	if RunService:IsClient() then
 		return ReplicatedStorage:WaitForChild(name)
 	end
-
-	if not name then return nil end
 
 	local existing = ReplicatedStorage:FindFirstChild(name)
 	if existing and existing:IsA(className) then return existing end
@@ -51,11 +135,35 @@ local function CreateRemote(name: string, className: string): any
 	return remote
 end
 
+local function DisconnectTrackedConnections()
+	for i = #NetworkManager._connections, 1, -1 do
+		local connection = NetworkManager._connections[i]
+		if connection then
+			connection:Disconnect()
+		end
+		NetworkManager._connections[i] = nil
+	end
+end
+
+--[[
+	@description Writes a log entry through the module-level logger.
+	@param params { Level: string, Message: string, OperationId: string } -- Structured log payload
+	@return ()
+	@reads NetworkManager.Logger
+	@writes None (side-effect: log output/history)
+]]
 function NetworkManager.Log(params: { Level: string, Message: string, OperationId: string })
 	ValidateRequest()
 	NetworkManager.Logger:Log(params)
 end
 
+--[[
+	@description Initializes remotes, event-bus infrastructure, and context-specific listeners.
+	@param Util any -- Orchestrator utility table containing Logger, Signal, and Settings.StaticStrings
+	@return ()
+	@reads Initialized, RunService:IsServer()
+	@writes NetworkManager.Logger, remotes, EventBusRegistered, Signal, Initialized
+]]
 function NetworkManager.Initialize(Util)
 	if Initialized then return end
 	Initialized = true
@@ -80,9 +188,12 @@ end
 
 --[[
 	@description Registers a server request callback.
-	@param name string
-	@param handler function
-	@param isAsync boolean
+	@param name string -- Request name supplied by clients via ServerRequest/ServerRequestAsync
+	@param handler function -- Callback invoked with (player, ...args)
+	@param isAsync boolean? -- When true, stores the handler in the fire-and-forget request table
+	@return ()
+	@reads None
+	@writes NetworkManager.ServerRequestCallbacksSync, NetworkManager.ServerRequestCallbacksAsync
 ]]
 function NetworkManager.RegisterServerRequest(name: string, handler: (Player, ...any) -> any, isAsync: boolean?)
 	ValidateRequest("Server")
@@ -96,9 +207,12 @@ end
 
 --[[
 	@description Registers an entity command callback.
-	@param entityId string
-	@param command string
-	@param handler function
+	@param entityId string -- Entity identifier used to namespace callbacks
+	@param command string -- Command name routed from EntityCommandEvent
+	@param handler function -- Callback invoked with (player, ...args)
+	@return ()
+	@reads NetworkManager.EntityCommandCallbacks
+	@writes NetworkManager.EntityCommandCallbacks
 ]]
 function NetworkManager.RegisterEntityCommand(entityId: string, command: string, handler: (Player, ...any) -> ())
 	ValidateRequest()
@@ -111,7 +225,10 @@ end
 
 --[[
 	@description Unregisters entity command callbacks for a specific entity.
-	@param entityId string
+	@param entityId string -- Entity identifier whose command table should be discarded
+	@return ()
+	@reads None
+	@writes NetworkManager.EntityCommandCallbacks
 ]]
 function NetworkManager.UnregisterEntityCommands(entityId: string)
 	ValidateRequest("Server")
@@ -120,54 +237,113 @@ function NetworkManager.UnregisterEntityCommands(entityId: string)
 end
 
 --[[
+	@description Internal helper that records RemoteEvent/RemoteFunction call history
+	for dashboard drill-down views.
+	@param remoteName string -- Remote/stat bucket identifier
+	@param direction string -- Human-readable traffic direction label
+	@param packedArgs table -- table.pack(...) result for the call payload
+	@return ()
+	@reads NetworkManager._remoteStats
+	@writes NetworkManager._remoteStats
+]]
+local function trackRemoteCall(remoteName: string, direction: string, packedArgs)
+	local key = "Remote:" .. remoteName
+	local stats = NetworkManager._remoteStats[key]
+	if not stats then
+		stats = { Count = 0, LastFired = 0, RecentCalls = {} }
+		NetworkManager._remoteStats[key] = stats
+	end
+	stats.Count += 1
+	stats.LastFired = os.clock()
+	if not stats.RecentCalls then stats.RecentCalls = {} end
+	-- Store both the inline summary string AND a structured (sanitized,
+	-- depth-capped) snapshot of each arg so the dashboard can render
+	-- click-to-expand drill-downs of nested table arguments instead of
+	-- showing useless "{table}" placeholders.
+	local argsStruct = {}
+	local n = packedArgs.n or #packedArgs
+	for i = 1, math.min(n, 8) do
+		argsStruct[i] = sanitizeForReplication(packedArgs[i], 0)
+	end
+	argsStruct.n = math.min(n, 8)
+	if n > 8 then argsStruct.truncated = n - 8 end
+
+	table.insert(stats.RecentCalls, {
+		Time = os.clock(),
+		Args = formatArgs(packedArgs),
+		ArgsStruct = argsStruct,
+		Direction = direction,
+	})
+	while #stats.RecentCalls > 30 do
+		table.remove(stats.RecentCalls, 1)
+	end
+end
+
+--[[
 	@description Sends a command to an entity on the server.
-	@param entityId string
-	@param command string
-	@param ... any
+	@param entityId string -- Target entity identifier
+	@param command string -- Command name resolved on the server
+	@param ... any -- Command payload forwarded to EntityCommandEvent
+	@return ()
+	@reads NetworkManager.EntityCommandEvent
+	@writes NetworkManager._remoteStats
 ]]
 function NetworkManager.ServerCommandEntity(entityId: string, command: string, ...: any)
 	ValidateRequest("Client")
 	local packed = table.pack(...)
 	if NetworkManager.EntityCommandEvent then
+		trackRemoteCall("EntityCommandEvent", "C→S", table.pack(entityId, command, table.unpack(packed, 1, packed.n)))
 		NetworkManager.EntityCommandEvent:FireServer(entityId, command, table.unpack(packed, 1, packed.n))
 	end	
 end
 
 --[[
 	@description Broadcasts an entity command to all clients.
-	@param entityId string
-	@param command string
-	@param ... any
+	@param entityId string -- Target entity identifier
+	@param command string -- Command name clients should handle
+	@param ... any -- Payload forwarded to all clients
+	@return ()
+	@reads NetworkManager.EntityCommandEvent
+	@writes NetworkManager._remoteStats
 ]]
 function NetworkManager.BroadcastEntityCommand(entityId: string, command: string, ...: any)
 	ValidateRequest("Server")
 	local packed = table.pack(...)
 	if NetworkManager.EntityCommandEvent then
+		trackRemoteCall("EntityCommandEvent", "S→All", table.pack(entityId, command, table.unpack(packed, 1, packed.n)))
 		NetworkManager.EntityCommandEvent:FireAllClients(entityId, command, table.unpack(packed, 1, packed.n))
 	end
 end
 
 --[[
 	@description Sends an entity update to all clients.
-	@param entityId string
-	@param changes table
+	@param entityId string -- Target entity identifier
+	@param changes table -- Replicated property delta payload
+	@return ()
+	@reads NetworkManager.EntityUpdateEvent
+	@writes NetworkManager._remoteStats
 ]]
 function NetworkManager.BroadcastEntityUpdate(entityId: string, changes: { [string]: any })
 	ValidateRequest("Server")
 	if NetworkManager.EntityUpdateEvent then
+		trackRemoteCall("EntityUpdateEvent", "S→All", table.pack(entityId, changes))
 		NetworkManager.EntityUpdateEvent:FireAllClients(entityId, changes)
 	end
 end
 
 --[[
 	@description Makes a server request (Synchronous).
-	@param requestName string
-	@param ... any
+	@param requestName string -- Registered server request name
+	@param ... any -- Payload forwarded through the RemoteFunction
+	@return any -- Value returned by the server handler, or nil when the remote is unavailable
+	@reads NetworkManager.OrchestratorFunction
+	@writes NetworkManager._remoteStats
 ]]
 function NetworkManager.ServerRequest(requestName: string, ...: any)
 	ValidateRequest("Client")
 	local packed = table.pack(...)
 	if NetworkManager.OrchestratorFunction then
+		trackRemoteCall("OrchestratorFunction", "C→S (sync)", table.pack(requestName, table.unpack(packed, 1, packed.n)))
 		return NetworkManager.OrchestratorFunction:InvokeServer("AppRequestSync", requestName, table.unpack(packed, 1, packed.n))
 	end
 	return nil
@@ -175,21 +351,27 @@ end
 
 --[[
 	@description Makes a server request (Asynchronous).
-	@param requestName string
-	@param ... any
+	@param requestName string -- Registered server request name
+	@param ... any -- Payload forwarded through the RemoteEvent
+	@return ()
+	@reads NetworkManager.OrchestratorEvent
+	@writes NetworkManager._remoteStats
 ]]
 function NetworkManager.ServerRequestAsync(requestName: string, ...: any)
 	ValidateRequest("Client")
 	local packed = table.pack(...)
 	if NetworkManager.OrchestratorEvent then
+		trackRemoteCall("OrchestratorEvent", "C→S (async)", table.pack(requestName, table.unpack(packed, 1, packed.n)))
 		NetworkManager.OrchestratorEvent:FireServer("AppRequestAsync", requestName, table.unpack(packed, 1, packed.n))
 	end
 end
 
 --[[ 
 	@description Registers an event bus.
-	@param name string
-	@return any
+	@param name string -- Logical bus name shared by publishers and subscribers
+	@return any -- Signal instance representing the named bus
+	@reads NetworkManager.EventBuses, NetworkManager.EventBusRegistered
+	@writes NetworkManager.EventBuses
 ]]
 function NetworkManager.RegisterEventBus(name: string)
 	ValidateRequest()
@@ -203,17 +385,25 @@ end
 
 --[[ 
 	@description Unregisters an event bus.
-	@param name string
+	@param name string -- Logical bus name to destroy and remove
+	@return ()
+	@reads NetworkManager.EventBuses
+	@writes NetworkManager.EventBuses
 ]]
 function NetworkManager.UnregisterEventBus(name: string) 
 	ValidateRequest()
+	local bus = NetworkManager.EventBuses[name]
+	if bus and type(bus.Destroy) == "function" then bus:Destroy() end
 	NetworkManager.EventBuses[name] = nil 
 	NetworkManager.Log({ Level = "INFO", Message = "Unregistered event bus " .. name })
 end
 
 --[[
 	@description Gets an event bus.
-	@param name string
+	@param name string -- Logical bus name
+	@return any -- Signal instance for the bus, or nil when not registered
+	@reads NetworkManager.EventBuses
+	@writes None
 ]] 
 function NetworkManager.GetEventBus(name: string) 
 	ValidateRequest()
@@ -222,20 +412,56 @@ end
 
 --[[
 	@description Fires an event bus.
-	@param name string
-	@param ... any
+	@param name string -- Logical bus name
+	@param ... any -- Payload forwarded to Signal listeners
+	@return ()
+	@reads NetworkManager.EventBuses, NetworkManager._busStats
+	@writes NetworkManager._busStats
 ]] 
 function NetworkManager.FireEventBus(name: string, ...) 
 	ValidateRequest()
-	if NetworkManager.EventBuses[name] then 
+	if NetworkManager.EventBuses[name] then
+		-- Track bus fire stats
+		local stats = NetworkManager._busStats[name]
+		if not stats then
+			stats = { Count = 0, LastFired = 0, RecentCalls = {} }
+			NetworkManager._busStats[name] = stats
+		end
+		stats.Count += 1
+		stats.LastFired = os.clock()
+
+		-- Track recent calls (ring buffer of 30) for the View Calls drill-down.
+		-- Use the shared formatArgs (which inline-summarizes tables) and
+		-- also store a sanitized structured snapshot for click-to-expand.
+		if not stats.RecentCalls then stats.RecentCalls = {} end
+		local args = table.pack(...)
+		local argsStr = formatArgs(args)
+		local argsStruct = {}
+		for i = 1, math.min(args.n, 8) do
+			argsStruct[i] = sanitizeForReplication(args[i], 0)
+		end
+		argsStruct.n = math.min(args.n, 8)
+		if args.n > 8 then argsStruct.truncated = args.n - 8 end
+		table.insert(stats.RecentCalls, {
+			Time = os.clock(),
+			Args = argsStr,
+			ArgsStruct = argsStruct,
+		})
+		while #stats.RecentCalls > 30 do
+			table.remove(stats.RecentCalls, 1)
+		end
+
 		NetworkManager.EventBuses[name]:Fire(...) 
 	end 
 end
 
 --[[
 	@description Awaits an event bus.
-	@param name string
-	@param timeout number?
+	@param name string -- Logical bus name
+	@param timeout number? -- Optional timeout in seconds before returning nil
+	@return any -- Signal instance for the bus, or nil when the timeout elapses
+	@reads NetworkManager.EventBuses
+	@writes None
 ]] 
 function NetworkManager.AwaitEventBus(name: string, timeout: number?)
 	ValidateRequest()
@@ -252,6 +478,7 @@ end
 -- private
 function NetworkManager._RegisterServerListeners()
 	ValidateRequest("Server")
+	DisconnectTrackedConnections()
 	local function HandleAppRequest(player, requestType, ...)
 		local requestName = select(1, ...)
 		local packed = table.pack(select(2, ...))
@@ -266,6 +493,22 @@ function NetworkManager._RegisterServerListeners()
 		end
 
 		if handler then
+			-- Track invocation stats (per-name Count + LastInvoked)
+			local stats = NetworkManager._invokeStats[requestName]
+			if not stats then
+				stats = { Count = 0, LastInvoked = 0 }
+				NetworkManager._invokeStats[requestName] = stats
+			end
+			stats.Count += 1
+			stats.LastInvoked = os.clock()
+
+			-- Track recent calls per ServerRequest name so the dashboard's
+			-- View Calls layer has data for individual requests (not just
+			-- the aggregate OrchestratorFunction/OrchestratorEvent remotes).
+			-- Direction tags: client → server inbound, request type prefix.
+			local dir = if requestType == "AppRequestSync" then "C→S (sync)" else "C→S (async)"
+			trackRemoteCall("ServerRequest:" .. requestName, dir, packed)
+
 			local success, result = pcall(handler, player, table.unpack(packed, 1, packed.n))
 			if not success then
 				NetworkManager.Log({ Level = "ERROR", Message = string.format("Request '%s' failed: %s", requestName, tostring(result)) })
@@ -281,31 +524,53 @@ function NetworkManager._RegisterServerListeners()
 	end
 
 	if NetworkManager.OrchestratorEvent then
-		NetworkManager.OrchestratorEvent.OnServerEvent:Connect(HandleAppRequest)
+		table.insert(NetworkManager._connections, NetworkManager.OrchestratorEvent.OnServerEvent:Connect(HandleAppRequest))
 		NetworkManager.Log({ Level = "INFO", Message = "Registered orchestrator RemoteEvent listeners" })
 	end
 
 	if NetworkManager.EntityCommandEvent then
-		NetworkManager.EntityCommandEvent.OnServerEvent:Connect(function(player, entityId, command, ...)
+		table.insert(NetworkManager._connections, NetworkManager.EntityCommandEvent.OnServerEvent:Connect(function(player, entityId, command, ...)
 			local handlers = NetworkManager.EntityCommandCallbacks[entityId]
 			if handlers and handlers[command] then
+				-- Track invocation stats for entity commands
+				local key = entityId .. ":" .. command
+				local stats = NetworkManager._invokeStats[key]
+				if not stats then
+					stats = { Count = 0, LastInvoked = 0 }
+					NetworkManager._invokeStats[key] = stats
+				end
+				stats.Count += 1
+				stats.LastInvoked = os.clock()
+
+				-- Per-command call history for the dashboard's "View Calls"
+				trackRemoteCall("EntityCommand:" .. key, "C→S", table.pack(...))
+
 				handlers[command](player, ...)
 			end
-		end)
+		end))
 		NetworkManager.Log({ Level = "INFO", Message = "Registered entity command listeners" })
 	end
 	NetworkManager.Log({ Level = "INFO", Message = "Registered server listeners" })
 end
 
 function NetworkManager._RegisterClientListeners()
+	DisconnectTrackedConnections()
 	if NetworkManager.EntityCommandEvent then
-		NetworkManager.EntityCommandEvent.OnClientEvent:Connect(function(entityId, command, ...)
+		table.insert(NetworkManager._connections, NetworkManager.EntityCommandEvent.OnClientEvent:Connect(function(entityId, command, ...)
+			-- Track inbound entity-command broadcast (S→C direction)
+			trackRemoteCall("EntityCommandEvent", "S→C", table.pack(entityId, command, ...))
 			local handlers = NetworkManager.EntityCommandCallbacks[entityId]
 			if handlers and handlers[command] then
 				handlers[command](nil, ...) -- No player on client
 			end
-		end)
+		end))
 		NetworkManager.Log({ Level = "INFO", Message = "Registered client listeners" })
+	end
+	-- EntityUpdateEvent listener lives in Orchestrator.init.luau, so we expose
+	-- a small helper for that consumer (and any future inbound RemoteEvent
+	-- consumer) to record receive-side calls.
+	NetworkManager.RecordInboundCall = function(remoteName: string, direction: string, ...)
+		trackRemoteCall(remoteName, direction, table.pack(...))
 	end
 end
 
